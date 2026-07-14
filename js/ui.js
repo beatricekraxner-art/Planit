@@ -2546,12 +2546,34 @@ window.saveGlobalSettings = function() {
     DB.saveGlobalSettings({ schoolYearStart: start, schoolYearEnd: end });
     alert('Schuljahr gespeichert.');
 };
+function setSyncStatus(text) {
+    const el = document.getElementById('sync-status');
+    if (el) el.textContent = text || '--';
+}
+
 window.syncNow = async function() {
-    if (FilePersist && FilePersist.saveToFile) {
-        await FilePersist.saveToFile();
-        alert('Sync abgeschlossen.');
-    } else {
+    if (!(FilePersist && FilePersist.saveToFile && FilePersist.loadFromFile)) {
+        setSyncStatus('nicht verknüpft');
         alert('Keine Datei-Speicherung verknüpft.');
+        return;
+    }
+    setSyncStatus('Sync läuft...');
+    try {
+        await FilePersist.loadFromFile();
+        await FilePersist.saveToFile();
+        setSyncStatus('gespeichert');
+        alert('Sync abgeschlossen.');
+    } catch (e) {
+        setSyncStatus('Fehler');
+        alert('Sync fehlgeschlagen: ' + (e && e.message ? e.message : e));
+    }
+};
+
+window.manualSave = async function() {
+    if (FilePersist && FilePersist.saveToFile) {
+        setSyncStatus('speichert...');
+        await FilePersist.saveToFile();
+        setSyncStatus('gespeichert');
     }
 };
 

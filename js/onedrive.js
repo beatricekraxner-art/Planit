@@ -39,6 +39,9 @@
             const res = await msal.acquireTokenSilent({ scopes: SCOPES, account: account });
             return res.accessToken;
         } catch (e) {
+            if (msal.getAllAccounts().length > 0) {
+                login();
+            }
             return null;
         }
     }
@@ -59,7 +62,7 @@
         async login() {
             ensureMsal();
             if (typeof msal.loginRedirect !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
-            msal.loginRedirect({ scopes: SCOPES });
+            msal.loginRedirect({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
         },
 
         logout() {

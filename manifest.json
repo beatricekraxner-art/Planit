@@ -7,9 +7,9 @@
   "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/icons/calendar-check.svg",
+      "src": "assets/icon.png",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/png"
     }
   ]
 }
