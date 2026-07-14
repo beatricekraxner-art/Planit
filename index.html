@@ -1,0 +1,341 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan-it</title>
+    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <ul class="nav-links">
+                <li class="active" data-view="dashboard">📅 Stundenplan</li>
+                <li data-view="classes">👥 Meine Klassen</li>
+                <li data-view="grading">📈 Unterricht & Noten</li>
+                <li data-view="grades-overview">📊 Notenübersicht</li>
+                <li data-view="todos">📝 To-do</li>
+                <li data-view="settings">⚙️ Einstellungen</li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menü">☰</button>
+                    <div class="logo">
+                        <svg width="64" height="64" viewBox="0 0 40 40" fill="none" style="vertical-align:middle;">
+                            <rect width="40" height="40" rx="8" fill="#1a1d24"/>
+                            <circle cx="20" cy="20" r="10" stroke="#2563eb" stroke-width="2" fill="none"/>
+                            <path d="M20 14V20L26 24" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <h2>Plan-it</h2>
+                    </div>
+                </div>
+                <h1 id="view-title">Stundenplan</h1>
+                <div class="topbar-actions">
+                    <span id="sync-status" class="sync-status" title="Sync-Status">--</span>
+                    <button class="btn btn-secondary" onclick="window.syncNow()">🔄 Sync</button>
+                    <button class="btn btn-secondary" onclick="window.print()">🖨️ Drucken</button>
+                    <button class="btn" id="save-btn" onclick="window.manualSave()">💾 Speichern</button>
+                    <span id="save-status" class="save-status">Bereit</span>
+                </div>
+            </header>
+
+    <div id="view-container">
+        <div id="dashboard-view" class="view active">
+                    <div class="dashboard-header">
+                        <h2>Willkommen zurück!</h2>
+                        <p class="subtitle">Ihr Stundenplan und Kalender für die aktuelle Woche.</p>
+                    </div>
+                    <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                        <button class="btn" id="open-timetable-btn" onclick="window.openTimetableEditor()">Stundenplan bearbeiten</button>
+                        <button class="btn btn-secondary" onclick="window.printTimetable()">🖨️ Stundenplan drucken</button>
+                        <select id="timetable-cutoff" onchange="window.setTimetableCutoff(this.value)" style="padding: 10px; background: var(--bg-dark); color: white; border: 1px solid var(--border-color); border-radius: 8px;">
+                            <option value="">Alle Stunden</option>
+                        </select>
+                    </div>
+                    <div class="calendar-wrapper" id="calendar-wrapper"></div>
+                </div>
+
+                <div id="classes-view" class="view">
+                    <div class="view-header">
+                        <button class="btn" id="open-classmanager-btn" onclick="window.openClassManager()">+ Neue Klasse</button>
+                    </div>
+                    <div id="classes-grid" class="grid-cards"></div>
+                </div>
+
+                <div id="grading-view" class="view">
+                    <div class="view-header">
+                        <div>
+                            <p class="subtitle">Wählen Sie einen Kurs für die Leistungsbewertung.</p>
+                        </div>
+                        <div class="grading-controls">
+                            <select id="grade-class-select" class="btn btn-secondary">
+                                <option value="">Kurs auswählen...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="grade-switcher" class="grade-switcher"></div>
+                    <div id="grading-table-container"></div>
+                </div>
+
+                <div id="grades-overview-view" class="view">
+                    <div id="grades-overview-container"></div>
+                </div>
+
+                <div id="todos-view" class="view">
+                    <div class="view-header">
+                        <div>
+                            <h2>To-do</h2>
+                            <p class="subtitle">Persönliche Aufgabenliste.</p>
+                        </div>
+                        <div class="grading-controls">
+                            <button class="btn" onclick="window.addTodo()">+ Aufgabe</button>
+                        </div>
+                    </div>
+                    <div id="todos-container"></div>
+                </div>
+
+                <div id="settings-view" class="view">
+                    <div class="view-header">
+                        <p class="subtitle">Konfigurieren Sie Schulzeiten und Ferien.</p>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Schuljahr</h3>
+                        </div>
+                        <p class="subtitle" style="margin-bottom:15px;">Gilt für alle Klassen.</p>
+                        <table class="settings-table">
+                            <thead>
+                                <tr><th>Beginn</th><th>Ende</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><input type="date" id="school-year-start"></td>
+                                    <td><input type="date" id="school-year-end"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <button class="btn" style="margin-top:15px;" onclick="window.saveGlobalSettings()">💾 Speichern</button>
+                        <div style="margin-top:20px; padding-top:15px; border-top:1px solid var(--border-color);">
+                            <h3 style="margin:0 0 8px;">Schuljahr wechseln</h3>
+                            <p class="subtitle" style="margin-bottom:12px;">Sichern Sie zuerst das aktuelle Jahr. Danach werden Klassen, Schüler, Stundenplan und Noten entfernt. Einstellungen und Zeiten bleiben erhalten.</p>
+                            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                <button class="btn btn-secondary" onclick="window.backupSchoolYear()">📁 Schuljahr sichern</button>
+                                <button class="btn" onclick="window.openNewSchoolYearModal()">🆕 Neues Schuljahr starten</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Stunden- und Pausenzeiten</h3>
+                            <button class="btn btn-secondary" onclick="window.addTimeSlot()">+ Zeile hinzufügen</button>
+                        </div>
+                        <table class="settings-table" id="times-table">
+                            <thead>
+                                <tr>
+                                    <th>Einheit</th>
+                                    <th>Beginn</th>
+                                    <th>Ende</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Frühaufsicht</td>
+                                    <td><input type="time" value="07:15"></td>
+                                    <td><input type="time" value="07:35"></td>
+                                </tr>
+                                <tr>
+                                    <td>1. Stunde</td>
+                                    <td><input type="time" value="07:35"></td>
+                                    <td><input type="time" value="08:25"></td>
+                                </tr>
+                                <tr>
+                                    <td>Pause</td>
+                                    <td><input type="time" value="08:25"></td>
+                                    <td><input type="time" value="08:30"></td>
+                                </tr>
+                                <tr>
+                                    <td>2. Stunde</td>
+                                    <td><input type="time" value="08:30"></td>
+                                    <td><input type="time" value="09:20"></td>
+                                </tr>
+                                <tr>
+                                    <td>Pause</td>
+                                    <td><input type="time" value="09:20"></td>
+                                    <td><input type="time" value="09:25"></td>
+                                </tr>
+                                <tr>
+                                    <td>3. Stunde</td>
+                                    <td><input type="time" value="09:25"></td>
+                                    <td><input type="time" value="10:15"></td>
+                                </tr>
+                                <tr>
+                                    <td>Große Pause</td>
+                                    <td><input type="time" value="10:15"></td>
+                                    <td><input type="time" value="10:30"></td>
+                                </tr>
+                                <tr>
+                                    <td>4. Stunde</td>
+                                    <td><input type="time" value="10:30"></td>
+                                    <td><input type="time" value="11:20"></td>
+                                </tr>
+                                <tr>
+                                    <td>Pause</td>
+                                    <td><input type="time" value="11:20"></td>
+                                    <td><input type="time" value="11:25"></td>
+                                </tr>
+                                <tr>
+                                    <td>5. Stunde</td>
+                                    <td><input type="time" value="11:25"></td>
+                                    <td><input type="time" value="12:15"></td>
+                                </tr>
+                                <tr>
+                                    <td>6. Stunde</td>
+                                    <td><input type="time" value="12:15"></td>
+                                    <td><input type="time" value="13:05"></td>
+                                </tr>
+                                <tr>
+                                    <td>Pause</td>
+                                    <td><input type="time" value="13:05"></td>
+                                    <td><input type="time" value="13:10"></td>
+                                </tr>
+                                <tr>
+                                    <td>7. Stunde</td>
+                                    <td><input type="time" value="13:10"></td>
+                                    <td><input type="time" value="14:00"></td>
+                                </tr>
+                                <tr>
+                                    <td>8. Stunde</td>
+                                    <td><input type="time" value="14:00"></td>
+                                    <td><input type="time" value="14:50"></td>
+                                </tr>
+                                <tr>
+                                    <td>9. Stunde</td>
+                                    <td><input type="time" value="14:50"></td>
+                                    <td><input type="time" value="15:40"></td>
+                                </tr>
+                                <tr>
+                                    <td>10. Stunde</td>
+                                    <td><input type="time" value="15:40"></td>
+                                    <td><input type="time" value="16:30"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <label class="setting-toggle"><input type="checkbox" id="show-fruehaufsicht"> Frühaufsicht im Stundenplan anzeigen (optional)</label>
+                        <div style="margin-top:12px;">
+                            <label style="display:block;margin-bottom:6px;">Unterrichtsende (Stunden danach ausblenden): <input type="time" id="timetable-end-time" value="16:30"></label>
+                            <label class="setting-toggle"><input type="checkbox" id="hide-holiday-columns" checked> Ferientage als „frei“ anzeigen</label>
+                        </div>
+                        <button class="btn" style="margin-top:20px;" onclick="window.saveTimeSettings()">💾 Speichern</button>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Notenberechnung Hausübungen</h3>
+                        </div>
+                        <p class="subtitle" style="margin-bottom:15px;">Prozentgrenzen für die Noten 1–4 bei Hausübungen (Mathe und DG).</p>
+                        <table class="settings-table">
+                            <thead>
+                                <tr><th>Note</th><th>Ab Prozent</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Note 1</td><td><input type="number" id="hw-threshold-g1" value="92" min="0" max="100"> %</td></tr>
+                                <tr><td>Note 2</td><td><input type="number" id="hw-threshold-g2" value="79" min="0" max="100"> %</td></tr>
+                                <tr><td>Note 3</td><td><input type="number" id="hw-threshold-g3" value="62" min="0" max="100"> %</td></tr>
+                                <tr><td>Note 4</td><td><input type="number" id="hw-threshold-g4" value="50" min="0" max="100"> %</td></tr>
+                            </tbody>
+                        </table>
+                        <button class="btn" style="margin-top:15px;" onclick="window.saveHwGradeThresholds()">💾 Speichern</button>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Ferien & freie Tage</h3>
+                        </div>
+                        <p class="subtitle" style="margin-bottom:15px;">Tragen Sie Ferien oder freie Tage manuell ein. Einzelne Tage können Sie auch unten als kommagetrennte Liste eingeben.</p>
+                        <div class="form-group exam-form" style="margin-bottom:12px;">
+                            <input type="text" id="holiday-name" placeholder="Bezeichnung, z.B. Sommerferien" style="flex:1;">
+                            <input type="date" id="holiday-from">
+                            <input type="date" id="holiday-to">
+                            <button class="btn btn-secondary" onclick="window.addManualHoliday()">Hinzufügen</button>
+                        </div>
+                        <div id="manual-holidays-list" class="holidays-list"></div>
+                        <div style="margin-top:15px;">
+                            <label style="display:block;margin-bottom:6px;font-weight:500;">Einzelne schulautonome Tage (kommagetrennt oder mit Zeilenumbrüchen):</label>
+                            <textarea id="autonomous-days" placeholder="JJJJ-MM-DD, JJJJ-MM-DD ..."></textarea>
+                            <button class="btn btn-secondary" style="margin-top:8px;" onclick="window.saveAutonomousDays()">Speichern</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Dauerhafte Datei-Speicherung & Sync</h3>
+                        </div>
+                        <p class="subtitle" style="margin-bottom:15px;"><strong>Tipp für mehrere Geräte:</strong> Legen Sie die gesamte <code>Antigravity_Versuch</code>-App in einen OneDrive/Dropbox/Google-Drive-Ordner. Wählen Sie dann die JSON-Datei aus diesem Ordner aus. Die Datei wird automatisch zwischen Ihren Geräten synchronisiert.</p>
+                        <p class="subtitle" style="margin-bottom:15px;">Wählen Sie einmalig eine JSON-Datei. Alle Daten werden ab dann automatisch dort gespeichert und überleben jeden Neustart – unabhängig vom Browser-Cache.</p>
+                        <div class="form-group exam-form">
+                            <button class="btn" onclick="window.linkDataFile()">📁 Datendatei auswählen / verknüpfen</button>
+                            <button class="btn btn-secondary" onclick="window.syncNow()" style="margin-left:8px;">🔄 Jetzt synchronisieren</button>
+                            <span id="datafile-status" class="subtitle" style="margin-top:8px;"></span>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Cloud-Speicherung (OneDrive)</h3>
+                        </div>
+                        <p class="subtitle" style="margin-bottom:15px;">Für PC + Tablet ohne laufenden PC. Die Daten liegen in deiner OneDrive (Datei <code>Antigravity_Versuch/planit-daten.json</code>) und synchronisieren sich zwischen allen Geräten. Kein Token im Code, keine Kreditkarte.</p>
+                        <div class="form-group exam-form">
+                            <input type="text" id="od-clientid" placeholder="Client-ID (aus Azure-App-Registrierung)">
+                            <input type="text" id="od-tenant" placeholder="Tenant (z.B. common)">
+                            <button class="btn" onclick="window.ODSaveConfig()">Konfigurieren</button>
+                        </div>
+                        <div class="form-group exam-form" style="margin-top:10px;">
+                            <button class="btn" onclick="window.ODConnect()">Mit OneDrive verbinden</button>
+                            <button class="btn btn-secondary" onclick="window.ODUseCloud()">Als Speicher verwenden</button>
+                            <button class="btn btn-secondary" onclick="window.ODDisconnect()">Trennen</button>
+                            <span id="od-status" class="subtitle" style="margin-top:8px;"></span>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <h3>Datensicherung (Export/Import)</h3>
+                        </div>
+                        <p class="subtitle" style="margin-bottom:15px;">Sichern Sie alle Daten als JSON-Datei und stellen Sie sie auf einem anderen Gerät wieder her.</p><p class="subtitle" style="margin-bottom:15px;color:var(--primary);"><strong>Tipp:</strong> Drücken Sie <strong>Ctrl+S</strong> für schnellen Export, oder lassen Sie die automatische Sicherung alle 5 Minuten laufen.</p>
+                        <div class="form-group exam-form">
+                            <button class="btn" onclick="window.exportData()">💾 Als JSON exportieren</button>
+                            <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">📂 Aus JSON importieren</button>
+                            <input type="file" id="import-file" accept="application/json,.json" style="display:none;" onchange="window.importData(this)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay" onclick="if(event.target === this) this.style.display='none'">
+        <div class="modal-content" id="modal-content"></div>
+    </div>
+    <div id="sidebar-overlay" onclick="window.closeSidebar()"></div>
+
+    <script src="js/msal-browser.min.js"></script>
+    <script src="js/lib.js"></script>
+    <script src="js/onedrive.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+                regs.forEach(function (r) { r.unregister(); });
+            });
+        }
+    </script>
+</body>
+</html>
