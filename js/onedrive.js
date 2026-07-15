@@ -26,12 +26,16 @@
                 clientId: cid,
                 authority: 'https://login.microsoftonline.com/' + getTenant(),
                 redirectUri: getRedirectUri()
+            },
+            cache: {
+                cacheLocation: 'localStorage',
+                storeAuthStateInCookie: false
             }
         });
         return msal;
     }
 
-    async function getTokenSilent() {
+    async function getTokenSilent(allowLoginOnFail) {
         try {
             ensureMsal();
             const account = msal.getAllAccounts()[0];
@@ -39,7 +43,7 @@
             const res = await msal.acquireTokenSilent({ scopes: SCOPES, account: account });
             return res.accessToken;
         } catch (e) {
-            if (msal.getAllAccounts().length > 0) {
+            if (allowLoginOnFail && msal.getAllAccounts().length > 0) {
                 login();
             }
             return null;
@@ -76,11 +80,13 @@
         async bootstrap() {
             try {
                 if (this.isConnected()) {
-                    const token = await getTokenSilent();
+                    const token = await getTokenSilent(true);
                     if (token) {
                         const text = await this._download(token);
                         if (text && text.trim() && text.trim() !== '{}') DB.importAll(text);
                     }
+                } else {
+                    login();
                 }
             } catch (e) { console.error('OneDrive load failed', e); }
             this.startAutoSave();
@@ -104,7 +110,7 @@
         async saveToFile() {
             try {
                 if (!this.isConnected()) return;
-                const token = await getTokenSilent();
+                const token = await getTokenSilent(true);
                 if (!token) return;
                 const data = DB.exportAll();
                 const resp = await fetch(GRAPH, {
@@ -112,9 +118,19 @@
                     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
                     body: data
                 });
-                if (resp.ok) console.log('OneDrive: gespeichert.');
-                else console.error('OneDrive save failed', resp.status);
-            } catch (e) { console.error('OneDrive saveToFile failed', e); }
+                if (resp.ok) {
+                    console.log('OneDrive: gespeichert.');
+                    const localData = JSON.parse(data);
+                    if (localData._lastModified) localStorage.setItem('_lastModified', localData._lastModified);
+                }
+                else {
+                    console.error('OneDrive save failed', resp.status);
+                    window.dispatchEvent(new CustomEvent('od-save-error', { detail: 'OneDrive: ' + resp.status }));
+                }
+            } catch (e) {
+                console.error('OneDrive saveToFile failed', e);
+                window.dispatchEvent(new CustomEvent('od-save-error', { detail: 'OneDrive: ' + (e && e.message ? e.message : e) }));
+            }
         },
 
         async loadFromFile() {
@@ -123,7 +139,22 @@
                 const token = await getTokenSilent();
                 if (!token) return;
                 const text = await this._download(token);
-                if (text && text.trim() && text.trim() !== '{}') DB.importAll(text);
+                if (text && text.trim() && text.trim() !== '{}') {
+                    let shouldWarn = false;
+                    let serverData = null;
+                    try { serverData = JSON.parse(text); } catch (e) {}
+                    const localModified = localStorage.getItem('_lastModified');
+                    const serverModified = serverData && serverData._lastModified ? serverData._lastModified : null;
+                    if (serverModified && localModified && localModified !== serverModified) {
+                        shouldWarn = true;
+                    }
+                    if (shouldWarn) {
+                        const proceed = confirm('Achtung: Die lokalen Daten und der Server haben unterschiedliche Versionsstände (zuletzt geändert: ' + (serverModified || 'unbekannt') + '). Wenn Sie fortfahren, werden die lokalen Daten überschrieben. Fortfahren?');
+                        if (!proceed) return;
+                    }
+                    DB.importAll(text);
+                    if (serverData && serverData._lastModified) localStorage.setItem('_lastModified', serverData._lastModified);
+                }
             } catch (e) { console.error('OneDrive loadFromFile failed', e); }
         },
 

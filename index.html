@@ -37,10 +37,15 @@
                 </div>
                 <h1 id="view-title">Stundenplan</h1>
                 <div class="topbar-actions">
+                    <span id="offline-indicator" class="offline-indicator" title="Verbindungsstatus">Online</span>
                     <span id="sync-status" class="sync-status" title="Sync-Status">--</span>
-                    <button class="btn btn-secondary" onclick="window.syncNow()">🔄 Sync</button>
-                    <button class="btn btn-secondary" onclick="window.print()">🖨️ Drucken</button>
-                    <button class="btn" id="save-btn" onclick="window.manualSave()">💾 Speichern</button>
+                    <button class="btn btn-secondary" id="undo-btn" onclick="window.UndoManager.undo()" disabled title="Rückgängig (Ctrl+Z)">↶<span class="button-text"> Rückgängig</span></button>
+                    <button class="btn btn-secondary" id="redo-btn" onclick="window.UndoManager.redo()" disabled title="Wiederholen (Ctrl+Shift+Z)">↷<span class="button-text"> Wiederholen</span></button>
+                    <div id="loading-overlay" class="loading-overlay" style="display:none;"><div class="loading-spinner"></div><span class="loading-text">Speichert...</span></div>
+                    <button class="btn btn-secondary" onclick="window.syncNow()">🔄<span class="button-text"> Sync</span></button>
+                    <button class="btn btn-secondary" onclick="window.ODConnect()">☁️<span class="button-text"> OneDrive</span></button>
+                    <button class="btn btn-secondary" onclick="window.print()">🖨️<span class="button-text"> Drucken</span></button>
+                    <button class="btn" id="save-btn" onclick="window.manualSave()">💾<span class="button-text"> Speichern</span></button>
                     <span id="save-status" class="save-status">Bereit</span>
                 </div>
             </header>
@@ -127,6 +132,7 @@
                             <p class="subtitle" style="margin-bottom:12px;">Sichern Sie zuerst das aktuelle Jahr. Danach werden Klassen, Schüler, Stundenplan und Noten entfernt. Einstellungen und Zeiten bleiben erhalten.</p>
                             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                                 <button class="btn btn-secondary" onclick="window.backupSchoolYear()">📁 Schuljahr sichern</button>
+                                <button class="btn btn-secondary" onclick="window.restoreBackup()">📂 Backup einspielen</button>
                                 <button class="btn" onclick="window.openNewSchoolYearModal()">🆕 Neues Schuljahr starten</button>
                             </div>
                         </div>
@@ -328,6 +334,7 @@
 
     <script src="js/msal-browser.min.js"></script>
     <script src="js/lib.js"></script>
+    <script src="js/undo.js"></script>
     <script src="js/onedrive.js"></script>
     <script src="js/ui.js"></script>
     <script>

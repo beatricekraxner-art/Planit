@@ -1,4 +1,113 @@
-﻿function subjectAbbr(subject) {
+﻿function showLoading(text) {
+    const el = document.getElementById('loading-overlay');
+    if (el) {
+        el.style.display = 'inline-flex';
+        const txt = el.querySelector('.loading-text');
+        if (txt && text) txt.textContent = text;
+    }
+}
+function hideLoading() {
+    const el = document.getElementById('loading-overlay');
+    if (el) el.style.display = 'none';
+}
+function setSaveStatus(text) {
+    const el = document.getElementById('save-status');
+    if (el) el.textContent = text || 'Bereit';
+}
+
+function captureUndo() {
+    try { if (window.UndoManager && window.UndoManager.capture) window.UndoManager.capture(); } catch (e) {}
+}
+
+function isValidGrade(val) {
+    if (val === '' || val === null || val === undefined) return true;
+    const n = parseInt(val, 10);
+    return !isNaN(n) && n >= 1 && n <= 5;
+}
+
+function markInvalidGradeInputs(container) {
+    if (!container) return;
+    container.querySelectorAll('.grade-input').forEach(inp => {
+        if (!isValidGrade(inp.value)) inp.classList.add('invalid');
+        else inp.classList.remove('invalid');
+    });
+}
+
+function validateGradeInputs(container) {
+    if (!container) return false;
+    let valid = true;
+    container.querySelectorAll('.grade-input').forEach(inp => {
+        if (!isValidGrade(inp.value)) {
+            inp.classList.add('invalid');
+            valid = false;
+        } else {
+            inp.classList.remove('invalid');
+        }
+    });
+    return valid;
+}
+
+window.exportGradesCSV = function() {
+    const classes = DB.getSortedClasses();
+    classes.forEach(cls => {
+        const students = DB.loadStudents().filter(s => s.classId === cls.id);
+        if (!students.length) return;
+        const classId = cls.id;
+        const worksheets = getGZPlannedWorksheets(classId);
+        const status = DB.loadWorksheetStatus(classId);
+        const weights = DB.loadGZGradeWeights(classId);
+        const mitarbeit = DB.loadMitarbeit(classId);
+        const project = DB.loadProjectGrades(classId);
+        const semesterManual = DB.loadSemesterManualGrades(classId);
+        const isYear = gradeOverviewScope === 'year';
+        const lines = ['Schüler;Ø ÜB;Mappe 1. Sem.;Fehlend;Laptop vergessen;Berechnet;Note (1. Sem.)'];
+        if (isYear) lines[0] += ';Projekt;Note (Jahr)';
+        students.forEach(s => {
+            const st = status[s.id] || {};
+            const m = mitarbeit[s.id] || {};
+            let wsSum = 0, wsCount = 0, missingCount = 0, laptopCount = 0;
+            worksheets.forEach(w => {
+                const cell = st[w.nr] || {};
+                const grade = cell.grade || '';
+                if (grade && grade !== 'missing') { wsSum += parseFloat(grade); wsCount++; }
+                else if (grade === '' || grade === 'missing') missingCount++;
+            });
+            const avg = wsCount > 0 ? (wsSum / wsCount).toFixed(2) : '';
+            const folder = m.folder1 != null ? m.folder1 : '';
+            const pr = project[s.id] || {};
+            const proj = pr.grade != null ? pr.grade : '';
+            const manualGrade = semesterManual[s.id] != null ? semesterManual[s.id] : '';
+            let sum = 0, totalWeight = 0;
+            if (wsCount > 0) { sum += wsSum; totalWeight += wsCount; }
+            const folderGrade = parseFloat(m.folder1);
+            if (weights.portfolio && !isNaN(folderGrade)) { sum += folderGrade * weights.portfolio; totalWeight += weights.portfolio; }
+            const attendanceGrade = parseFloat(st.attendance);
+            if (weights.attendance && !isNaN(attendanceGrade)) { sum += attendanceGrade * weights.attendance; totalWeight += weights.attendance; }
+            const projectGrade = parseFloat(st.project);
+            if (weights.project && !isNaN(projectGrade)) { sum += projectGrade * weights.project; totalWeight += weights.project; }
+            const computed = totalWeight > 0 ? (sum / totalWeight).toFixed(2) : '';
+            const forgot = getGZForgottenCounts(classId, s.id);
+            const forgotMat = forgot.material || 0;
+            const forgotLap = forgot.laptop || 0;
+            const name = s.name.replace(/"/g, '""');
+            let row = '"' + name + '";' + avg + ';' + folder + ';' + forgotMat + ';' + forgotLap + ';' + computed + ';' + manualGrade;
+            if (isYear) row += ';' + proj + ';' + manualGrade;
+            lines.push(row);
+        });
+        const csv = lines.join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'notenuebersicht_' + cls.name.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+};
+
+function subjectAbbr(subject) {
     if (!subject) return '';
     const s = subject.toLowerCase();
     if (s.indexOf('mathematik') !== -1) return 'M';
@@ -72,12 +181,18 @@ document.addEventListener('click', function(e) {
 });
 
 function initSidebar() {
-    if (window.innerWidth <= 768) {
-        window.closeSidebar();
-    } else {
-        window.openSidebar();
-    }
+    window.closeSidebar();
+    document.querySelectorAll('.nav-links li').forEach(li => {
+        li.addEventListener('click', () => {
+            window.closeSidebar();
+        });
+    });
 }
+
+window.addEventListener('od-save-error', (e) => {
+    setSyncStatus('Fehler: ' + (e.detail || 'OneDrive'));
+    setTimeout(() => setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected()), 2000);
+});
 
 function renderClasses() {
     const grid = document.getElementById('classes-grid');
@@ -196,6 +311,7 @@ function getClassManagerContent(cls, students) {
 }
 
 function saveClassDetails(classId) {
+    captureUndo();
     const name = document.getElementById('edit-class-name-input').value;
     const subject = document.getElementById('edit-class-subject-input').value;
     const color = document.getElementById('edit-class-color-input').value;
@@ -226,6 +342,7 @@ function saveClassDetails(classId) {
 }
 
 function createNewClass() {
+    captureUndo();
     const name = document.getElementById('class-name-input').value;
     const subject = document.getElementById('class-subject-input').value;
     const color = document.getElementById('class-color-input').value;
@@ -252,6 +369,7 @@ function subjectToType(subject) {
 }
 
 function addStudentToClass(classId) {
+    captureUndo();
     const name = document.getElementById('new-student-input').value;
     if (name) {
         DB.addStudent(classId, name);
@@ -268,6 +386,7 @@ function addStudentToClass(classId) {
 }
 
 function deleteStudent(id, classId) {
+    captureUndo();
     DB.deleteStudent(id);
     hideModal();
     const cls = DB.loadClasses().find(c => c.id === classId);
@@ -306,6 +425,7 @@ function saveStudentEdit(id, classId) {
 }
 
 function deleteClass(id) {
+    captureUndo();
     if (!confirm('Möchten Sie den Kurs wirklich löschen? Alle zugehörigen Daten (Schüler, Stundenplan, Noten) werden unwiderruflich entfernt.')) return;
     DB.deleteClass(id);
     hideModal();
@@ -598,6 +718,7 @@ function editTimetableEntry(id) {
 }
 
 function updateTimetableEntry(id) {
+    captureUndo();
     const timetable = DB.getTimetable();
     const entry = timetable.find(e => e.id === id);
     const courseVal = document.getElementById('edit-course').value;
@@ -934,7 +1055,64 @@ function renderGrading() {
         ];
     }
     switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
-    container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + '</div>' + renderGradeContent(classId);
+    container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
+    if (currentGradeTab === 'gz-grades' || currentGradeTab === 'hw') {
+        setTimeout(() => {
+            const wrap = document.querySelector('.hw-grid-wrap');
+            const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : (wrap ? wrap.querySelector('table') : null);
+            if (wrap && table) {
+                const firstDataRow = table.querySelector('tbody tr');
+                if (firstDataRow) {
+                    const cells = firstDataRow.querySelectorAll('td');
+                    if (currentGradeTab === 'gz-grades') {
+                        const students = DB.loadStudents().filter(s => s.classId === classId);
+                        const worksheets = getGZPlannedWorksheets(classId);
+                        if (students.length && worksheets.length) {
+                            const targetCol = 1 + (worksheets.length - 1) * 4;
+                            const targetCell = cells[targetCol];
+                            if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                        }
+                    } else {
+                        const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
+                        if (hws.length) {
+                            const targetCol = 1 + (hws.length - 1);
+                            const targetCell = cells[targetCol];
+                            if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                        }
+                    }
+                }
+            }
+        }, 50);
+    }
+    attachGradeValidation(container);
+}
+
+function attachGradeValidation(container) {
+    if (!container) return;
+    container.querySelectorAll('.grade-input').forEach(inp => {
+        if (inp.dataset.gvAttached) return;
+        inp.dataset.gvAttached = '1';
+        const validate = function() {
+            if (!isValidGrade(inp.value)) inp.classList.add('invalid');
+            else inp.classList.remove('invalid');
+        };
+        inp.addEventListener('input', validate);
+        inp.addEventListener('change', validate);
+        inp.addEventListener('blur', validate);
+    });
+}
+
+function validateAllGrades() {
+    let valid = true;
+    document.querySelectorAll('.grade-input').forEach(inp => {
+        if (!isValidGrade(inp.value)) {
+            inp.classList.add('invalid');
+            valid = false;
+        } else {
+            inp.classList.remove('invalid');
+        }
+    });
+    return valid;
 }
 
 function setGradeTab(tab) {
@@ -961,6 +1139,17 @@ function renderGradeContent(classId) {
 /* ============ STUNDENPLANUNG ============ */
 function sortedPlan(classId) {
     return DB.loadTeachingPlan(classId).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+function getCurrentSchoolYearDates() {
+    const globalSettings = DB.loadGlobalSettings();
+    return { start: globalSettings.schoolYearStart || '', end: globalSettings.schoolYearEnd || '' };
+}
+
+function filterPlanBySchoolYear(plan) {
+    const { start, end } = getCurrentSchoolYearDates();
+    if (!start || !end) return plan;
+    return plan.filter(e => !e.date || (e.date >= start && e.date <= end));
 }
 
 function generateRegularDates(startDate, lessonDays, schoolYearEnd) {
@@ -1241,6 +1430,7 @@ function openPlanModal(classId, id, date) {
 }
 
 function savePlanEntry(classId, id) {
+    captureUndo();
     const date = document.getElementById('plan-date').value;
     if (!date) { alert('Bitte Datum angeben'); return; }
     const isDG = isDGClass(classId);
@@ -1287,6 +1477,7 @@ function savePlanEntry(classId, id) {
 }
 
 function deletePlanEntry(classId, id) {
+    captureUndo();
     DB.deleteTeachingPlanEntry(classId, id);
     renderGrading();
 }
@@ -1409,9 +1600,15 @@ function renderHomework(classId) {
     const students = DB.loadStudents().filter(s => s.classId === classId);
     const plan = sortedPlan(classId);
     const isDG = isDGClass(classId);
+    const globalSettings = DB.loadGlobalSettings();
+    const schoolYearStart = globalSettings.schoolYearStart || '';
+    const schoolYearEnd = globalSettings.schoolYearEnd || '';
     let hws = plan.filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
     if (isDG) {
         hws = plan.filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date, sheets: (e.homeworkSheets || '') }));
+    }
+    if (schoolYearStart && schoolYearEnd) {
+        hws = hws.filter(h => h.date >= schoolYearStart && h.date <= schoolYearEnd);
     }
     const seen = new Set();
     hws = hws.filter(h => {
@@ -1482,7 +1679,7 @@ function renderHomeworkDetailed(classId, students, hws) {
                 '<br><label class="hw-corr" title="von mir korrigiert / abgesammelt"><input type="checkbox" ' + corr + ' onchange="toggleHwCorrected(\'' + classId + '\',' + h.nr + ',this.checked)"> korr.</label></th>';
         });
     }
-    html += '<th>Fehlend</th><th>Note</th></tr></thead><tbody>';
+    html += '<th class="hw-sticky-right">Fehlend</th><th class="hw-sticky-right-last">Note</th></tr></thead><tbody>';
     students.forEach(s => {
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>';
         if (isDG) {
@@ -1511,8 +1708,8 @@ function renderHomeworkDetailed(classId, students, hws) {
             });
         }
         const calc = computeHwGrade(classId, s.id, hws);
-        html += '<td class="' + gradeClass(calc.missing) + ' grade-cell"><button class="btn btn-secondary" onclick="showMissingHwModal(\'' + classId + '\',\'' + s.id + '\')">' + (calc.missing != null ? calc.missing : '–') + '</button></td>';
-        html += '<td class="' + gradeClass(calc.grade) + ' grade-cell">' + (calc.grade != null ? calc.grade : '–') + '</td>';
+        html += '<td class="hw-sticky-right ' + gradeClass(calc.missing) + ' grade-cell"><button class="btn btn-secondary" onclick="showMissingHwModal(\'' + classId + '\',\'' + s.id + '\')">' + (calc.missing != null ? calc.missing : '–') + '</button></td>';
+        html += '<td class="hw-sticky-right-last ' + gradeClass(calc.grade) + ' grade-cell">' + (calc.grade != null ? calc.grade : '–') + '</td>';
         html += '</tr>';
     });
     html += '</tbody></table></div>';
@@ -1520,6 +1717,7 @@ function renderHomeworkDetailed(classId, students, hws) {
 }
 
 function toggleHwCorrected(classId, hwNr, val) {
+    captureUndo();
     const wrap = document.querySelector('.hw-grid-wrap');
     const scrollLeft = wrap ? wrap.scrollLeft : 0;
     const obj = DB.loadHwCorrected(classId);
@@ -1533,7 +1731,7 @@ function toggleHwCorrected(classId, hwNr, val) {
 }
 
 function showMissingHwModal(classId, studentId) {
-    const plan = sortedPlan(classId).filter(e => e.homeworkNr);
+    const plan = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr));
     const isDG = isDGClass(classId);
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
@@ -1578,7 +1776,7 @@ function showMissingHwModal(classId, studentId) {
 }
 
 function showAllMissingHwModal(classId) {
-    const plan = sortedPlan(classId).filter(e => e.homeworkNr);
+    const plan = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr));
     const isDG = isDGClass(classId);
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
@@ -1643,7 +1841,7 @@ function showAllMissingHwModal(classId) {
 }
 
 function renderMissingHwOverview(classId) {
-    const plan = sortedPlan(classId).filter(e => e.homeworkNr);
+    const plan = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr));
     const isDG = isDGClass(classId);
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
@@ -1727,7 +1925,7 @@ function renderMissingHwOverview(classId) {
 }
 
 function openHwListModal(classId) {
-    const hws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date, sheets: e.homeworkSheets || '' }));
+    const hws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date, sheets: e.homeworkSheets || '' }));
     const expired = DB.loadHwExpired(classId);
     const isDG = isDGClass(classId);
     let html = '<div class="modal-header"><h2>Hausübungs-Liste</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
@@ -1744,16 +1942,19 @@ function openHwListModal(classId) {
 }
 
 function setHwStatus(classId, studentId, hwNr, status) {
+    captureUndo();
     DB.setHwStatus(classId, studentId, hwNr, status, undefined);
     renderGrading();
 }
 
 function setHwCollected(classId, studentId, hwNr, collected) {
+    captureUndo();
     DB.setHwStatus(classId, studentId, hwNr, undefined, collected);
     renderGrading();
 }
 
 function setExamExamplePoints(classId, studentId, examId, exampleId, points, inputEl) {
+    captureUndo();
     DB.setExamExamplePoints(classId, studentId, examId, exampleId, points);
     const exam = (DB.loadExams(classId) || []).find(e => e.id === examId);
     if (inputEl) {
@@ -1799,6 +2000,7 @@ function setExamExamplePoints(classId, studentId, examId, exampleId, points, inp
 }
 
 function setExamReturned(classId, studentId, examId, returned, inputEl) {
+    captureUndo();
     DB.setExamReturned(classId, studentId, examId, returned);
     if (inputEl) {
         const row = inputEl.closest('tr');
@@ -1819,6 +2021,7 @@ function setExamReturned(classId, studentId, examId, returned, inputEl) {
 }
 
 function setExamAbsent(classId, studentId, examId, absent, inputEl) {
+    captureUndo();
     DB.setExamAbsent(classId, studentId, examId, absent);
     if (inputEl) {
         const row = inputEl.closest('tr');
@@ -1870,6 +2073,7 @@ function sumPointsForRec(rec, exam) {
 }
 
 function toggleHwExpired(classId, hwNr, val) {
+    captureUndo();
     const obj = DB.loadHwExpired(classId);
     if (val) obj[hwNr] = true; else delete obj[hwNr];
     DB.saveHwExpired(classId, obj);
@@ -1921,6 +2125,7 @@ function addExamExampleRow() {
 }
 
 function saveExam(classId, id) {
+    captureUndo();
     const title = document.getElementById('exam-title').value;
     const date = document.getElementById('exam-date').value;
     if (!title) { alert('Titel angeben'); return; }
@@ -1965,6 +2170,7 @@ function saveExam(classId, id) {
 }
 
 function deleteExamConfirm(classId, examId) {
+    captureUndo();
     if (confirm('Schularbeit wirklich löschen?')) {
         DB.deleteExam(classId, examId);
         currentExamId = null;
@@ -2112,6 +2318,7 @@ function renderPruefungen(classId) {
 }
 
 function setPruefung(classId, studentId, field, value) {
+    captureUndo();
     const data = DB.loadPruefung(classId);
     if (!data[studentId]) data[studentId] = {};
     data[studentId][field] = (field === 'grade') ? (value === '' ? null : parseInt(value)) : value;
@@ -2123,23 +2330,29 @@ function setPruefung(classId, studentId, field, value) {
 function renderMitarbeit(classId) {
     const students = DB.loadStudents().filter(s => s.classId === classId);
     const data = DB.loadMitarbeit(classId);
+    const status = DB.loadWorksheetStatus(classId);
     const mitTitle = isGZClass(classId) ? 'Mitarbeit und Mappe' : 'Mitarbeit';
     let html = '<div class="view-header"><div><h2>' + mitTitle + '</h2><p class="subtitle">Mappe (1. Semester und 2. Semester), Verhalten.</p></div></div>';
-    html += '<table class="grading-table" id="mitarbeit-table"><thead><tr><th>Schüler</th><th>Mappe 1. Semester</th><th>Bemerkung 1. Sem.</th><th>Mappe 2. Semester</th><th>Bemerkung 2. Sem.</th><th>Verhalten (positiv/negativ)</th></tr></thead><tbody>';
+    html += '<table class="grading-table" id="mitarbeit-table"><thead><tr><th>Schüler</th><th>Mappe 1. Semester</th><th>Bemerkung 1. Sem.</th><th>Mappe 2. Semester</th><th>Bemerkung 2. Sem.</th><th>Verhalten (positiv/negativ)</th>' +
+        (isGZClass(classId) ? '<th>Mitarbeit</th>' : '') + '</tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
+        const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)") + '</td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.folderNote1 || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)"></td>' +
             '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)") + '</td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.folderNote2 || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)"></td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td></tr>';
+            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td>' +
+            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
+            '</tr>';
     });
     html += '</tbody></table>';
     return html;
 }
 
 function setMitarbeit(classId, studentId, field, value) {
+    captureUndo();
     const data = DB.loadMitarbeit(classId);
     if (!data[studentId]) data[studentId] = {};
     data[studentId][field] = value;
@@ -2175,6 +2388,7 @@ function renderProjects(classId) {
 }
 
 function setProjectGrade(classId, studentId, value, field) {
+    captureUndo();
     const data = DB.loadProjectGrades(classId);
     if (!data[studentId]) data[studentId] = {};
     if (field === 'note') data[studentId].note = value;
@@ -2184,6 +2398,7 @@ function setProjectGrade(classId, studentId, value, field) {
 }
 
 window.toggleProjectOnTime = function(classId, studentId) {
+    captureUndo();
     const data = DB.loadProjectGrades(classId);
     if (!data[studentId]) data[studentId] = {};
     const cur = data[studentId].onTime || '';
@@ -2194,7 +2409,7 @@ window.toggleProjectOnTime = function(classId, studentId) {
 
 function renderOverview(classId) {
     const students = DB.loadStudents().filter(s => s.classId === classId);
-    const allHws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    const allHws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date }));
     const exams = DB.loadExams(classId);
     const cutoff = DB.loadSemesterCutoff(classId);
     const scopeData = (gradeOverviewScope === 'semester') ? filterByScope(allHws, exams, cutoff) : { hws: allHws, exams: exams };
@@ -2268,8 +2483,9 @@ function renderOverview(classId) {
 
 function setOverviewScope(scope) { gradeOverviewScope = scope; renderGrading(); }
 function setSemesterCutoff(classId, val) { DB.saveSemesterCutoff(classId, val); renderGrading(); }
-function setWeight(classId, key, val) { const w = DB.loadWeights(classId); w[key] = parseFloat(val) || 0; DB.saveWeights(classId, w); renderGrading(); }
+function setWeight(classId, key, val) { captureUndo(); const w = DB.loadWeights(classId); w[key] = parseFloat(val) || 0; DB.saveWeights(classId, w); renderGrading(); }
 function setManualGrade(classId, studentId, val) {
+    captureUndo();
     if (gradeOverviewScope === 'semester') {
         const m = DB.loadSemesterManualGrades(classId);
         if (val === '') delete m[studentId];
@@ -2301,6 +2517,7 @@ window.openWeightsModal = function(classId) {
 };
 
 window.saveWeights = function(classId) {
+    captureUndo();
     const weights = {
         hw: parseFloat(document.getElementById('dg-w-hw').value) || 0,
         exam: parseFloat(document.getElementById('dg-w-exam').value) || 0,
@@ -2334,6 +2551,7 @@ function addTimeSlot() {
 }
 
 function saveTimeSettings() {
+    captureUndo();
     const rows = document.querySelectorAll('#times-table tbody tr');
     const slots = [];
     rows.forEach(row => {
@@ -2421,6 +2639,29 @@ function backupSchoolYear() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+window.restoreBackup = function() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        try {
+            const data = JSON.parse(text);
+            if (!confirm('Achtung: Dies überschreibt alle aktuellen Daten (Klassen, Schüler, Stundenplan, Noten). Fortfahren?')) return;
+            DB.importAll(text);
+            alert('Backup erfolgreich eingespielt.');
+            renderDashboard();
+            renderClasses();
+            renderGrading();
+        } catch (err) {
+            alert('Ungültige Backup-Datei: ' + err.message);
+        }
+    };
+    input.click();
+};
 
 function openNewSchoolYearModal() {
     const html = '<div class="modal-header">' +
@@ -2533,6 +2774,7 @@ window.addExamExampleRow = addExamExampleRow;
 window.hideModal = hideModal;
 window.showModal = showModal;
 window.saveHwGradeThresholds = function() {
+    captureUndo();
     const g1 = parseInt(document.getElementById('hw-threshold-g1').value, 10);
     const g2 = parseInt(document.getElementById('hw-threshold-g2').value, 10);
     const g3 = parseInt(document.getElementById('hw-threshold-g3').value, 10);
@@ -2541,6 +2783,7 @@ window.saveHwGradeThresholds = function() {
     alert('Notengrenzen gespeichert.');
 };
 window.saveGlobalSettings = function() {
+    captureUndo();
     const start = document.getElementById('school-year-start').value;
     const end = document.getElementById('school-year-end').value;
     DB.saveGlobalSettings({ schoolYearStart: start, schoolYearEnd: end });
@@ -2548,7 +2791,18 @@ window.saveGlobalSettings = function() {
 };
 function setSyncStatus(text) {
     const el = document.getElementById('sync-status');
-    if (el) el.textContent = text || '--';
+    if (el) {
+        el.textContent = text || '--';
+        el.className = 'sync-status';
+    }
+}
+
+function setODStatus(connected) {
+    const el = document.getElementById('sync-status');
+    if (el) {
+        el.className = 'sync-status ' + (connected ? 'od-connected' : 'od-disconnected');
+        el.textContent = connected ? 'OneDrive: verbunden' : 'OneDrive: nicht verbunden';
+    }
 }
 
 window.syncNow = async function() {
@@ -2557,6 +2811,11 @@ window.syncNow = async function() {
         alert('Keine Datei-Speicherung verknüpft.');
         return;
     }
+    if (!validateAllGrades()) {
+        alert('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
+        return;
+    }
+    showLoading('Sync läuft...');
     setSyncStatus('Sync läuft...');
     try {
         await FilePersist.loadFromFile();
@@ -2567,13 +2826,20 @@ window.syncNow = async function() {
         setSyncStatus('Fehler');
         alert('Sync fehlgeschlagen: ' + (e && e.message ? e.message : e));
     }
+    hideLoading();
 };
 
 window.manualSave = async function() {
     if (FilePersist && FilePersist.saveToFile) {
+        if (!validateAllGrades()) {
+            alert('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
+            return;
+        }
+        showLoading('Speichert...');
         setSyncStatus('speichert...');
         await FilePersist.saveToFile();
         setSyncStatus('gespeichert');
+        hideLoading();
     }
 };
 
@@ -2658,6 +2924,7 @@ function getDGHwCellStatus(cell, sheetNames) {
 }
 
 window.setHwSheetStatus = function(classId, studentId, hwNr, sheetName, value) {
+    captureUndo();
     const all = DB.loadHwStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     if (!all[studentId][hwNr]) all[studentId][hwNr] = {};
@@ -2726,7 +2993,7 @@ function renderGZWorksheets(classId) {
     const planned = getGZPlannedWorksheets(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? cls.name : '';
-    let html = '<div class="view-header"><div><h2>Liste der ÜB – ' + escapeHtml(className) + '</h2></div></div>';
+    let html = '<div class="view-header print-keep"><div><h2>Liste der ÜB – ' + escapeHtml(className) + '</h2></div></div>';
     if (!planned.length) {
         html += '<p class="subtitle">Noch keine Übungsblätter in der Stundenplanung vorhanden.</p>';
         return html;
@@ -2745,18 +3012,18 @@ function renderGZGrades(classId) {
     const worksheets = getGZPlannedWorksheets(classId);
     const status = DB.loadWorksheetStatus(classId);
     const weights = DB.loadGZGradeWeights(classId);
-    let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen. Berechnete Note ist nur ein Vorschlag.</p></div></div>';
+    let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen.</p></div></div>';
     if (!students.length) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
     }
-    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2">Schüler</th>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left">Schüler</th>';
     worksheets.forEach(w => {
         html += '<th colspan="4" class="gz-ws-sep">' + w.nr + '<br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small></th>';
     });
-    html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2">Fehlend</th><th rowspan="2">Vorschlag</th></tr><tr>';
+    html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
     worksheets.forEach(w => {
-        html += '<th class="gz-ws-sep">Note</th><th>k</th><th>Abgabe</th><th>Vergessen</th>';
+        html += '<th class="gz-ws-sep">Note</th><th>k</th><th>Abg</th><th class="gz-ws-last">Verg.</th>';
     });
     html += '</tr></thead><tbody>';
     students.forEach(s => {
@@ -2780,21 +3047,20 @@ function renderGZGrades(classId) {
             const recvClass = received === 'x' ? 'gz-recv-x' : (received === 'ng' ? 'gz-recv-ng' : '');
             const forgotLabel = matOn ? 'Mat' : (lapOn ? 'Lap' : '');
             const forgotClass = (matOn || lapOn) ? 'gz-mat active' : '';
-            html += '<td class="gz-ws-sep"><select onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',this.value)">' +
+            const gradeSelectClass = grade ? ' gz-grade-' + grade : '';
+            html += '<td class="gz-ws-sep"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',this.value)">' +
                 '<option value="">–</option>' +
                 [1,2,3,4,5].map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
                 '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>nur gesehen</option>' +
                 '</select></td>';
             html += '<td style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',' + (!absent) + ')">k</button></td>';
             html += '<td style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ')">' + recvLabel + '</button></td>';
-            html += '<td style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
+            html += '<td class="gz-ws-last" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
         });
         const avg = count > 0 ? (sum / count).toFixed(2) : '–';
-        const calc = calcGZGrade(s.id, classId, weights);
         const missingJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
         html += '<td class="gz-ws-sep">' + avg + '</td>' +
-            '<td><button class="btn btn-secondary" onclick="showMissingWorksheetsModal(\'' + classId + '\',\'' + s.id + '\',' + missingCount + ',\'' + missingJson + '\')">' + missingCount + '</button></td>' +
-            '<td>' + (calc != null ? calc.toFixed(2) : '–') + '</td>';
+            '<td class="hw-sticky-right-last"><button class="btn btn-secondary" onclick="showMissingWorksheetsModal(\'' + classId + '\',\'' + s.id + '\',' + missingCount + ',\'' + missingJson + '\')">' + missingCount + '</button></td>';
         html += '</tr>';
     });
     html += '</tbody></table></div>';
@@ -2822,6 +3088,7 @@ function calcGZGrade(studentId, classId, weights, includeProject) {
 }
 
 window.setGZWorksheetGrade = function(classId, studentId, wsNr, value) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     if (!all[studentId][wsNr]) all[studentId][wsNr] = {};
@@ -2831,6 +3098,7 @@ window.setGZWorksheetGrade = function(classId, studentId, wsNr, value) {
 };
 
 window.setGZAbsent = function(classId, studentId, wsNr, value) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     if (!all[studentId][wsNr]) all[studentId][wsNr] = {};
@@ -2840,6 +3108,7 @@ window.setGZAbsent = function(classId, studentId, wsNr, value) {
 };
 
 window.setGZReceived = function(classId, studentId, wsNr) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     if (!all[studentId][wsNr]) all[studentId][wsNr] = {};
@@ -2850,6 +3119,7 @@ window.setGZReceived = function(classId, studentId, wsNr) {
 };
 
 window.setGZPortfolioGrade = function(classId, studentId, value) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     all[studentId].portfolio = value === '' ? '' : value;
@@ -2858,6 +3128,7 @@ window.setGZPortfolioGrade = function(classId, studentId, value) {
 };
 
 window.setGZAttendanceGrade = function(classId, studentId, value) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     all[studentId].attendance = value === '' ? '' : value;
@@ -2866,6 +3137,7 @@ window.setGZAttendanceGrade = function(classId, studentId, value) {
 };
 
 window.setGZProjectGrade = function(classId, studentId, value, field) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     if (field === 'note') all[studentId].projectNote = value;
@@ -2900,6 +3172,7 @@ function renderGZProject(classId) {
 }
 
 window.toggleGZProjectOnTime = function(classId, studentId) {
+    captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     const cur = all[studentId].projectOnTime || '';
@@ -2933,6 +3206,7 @@ window.openGZWeightsModal = function(classId) {
 };
 
 window.saveGZWeights = function(classId) {
+    captureUndo();
     const weights = {
         worksheets: parseFloat(document.getElementById('gz-w-worksheets').value) || 0,
         portfolio: parseFloat(document.getElementById('gz-w-portfolio').value) || 0,
@@ -3032,56 +3306,52 @@ function gzForgottenHas(classId, date, studentId, kind) {
     return !!(d && d[kind] && d[kind].indexOf(studentId) !== -1);
 }
 
-let gzForgottenDate = '';
-
 function renderGZForgotten(classId) {
     normalizeGZForgotten(classId);
     const students = DB.loadStudents().filter(s => s.classId === classId);
     const worksheets = getGZPlannedWorksheets(classId);
-    const dates = worksheets.map(w => w.date);
-    if (!dates.length) {
-        return '<div class="view-header"><div><h2>Vergessenes Material</h2></div></div>' +
-            '<p class="subtitle">Es sind noch keine Übungsblätter in der Stundenplanung vorhanden. Vergessenes wird pro Übungsblatt-Tag erfasst.</p>';
-    }
-    const today = new Date();
-    const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-    if (!gzForgottenDate || dates.indexOf(gzForgottenDate) === -1) {
-        const past = dates.filter(dt => dt <= todayStr);
-        gzForgottenDate = past.length ? past[past.length - 1] : dates[dates.length - 1];
-    }
+    const wsDates = new Set(worksheets.map(w => w.date));
     const data = DB.loadForgotMaterial(classId);
-    const dayData = data[gzForgottenDate] || { material: [], laptop: [] };
-    const matSet = new Set(dayData.material || []);
-    const lapSet = new Set(dayData.laptop || []);
-    const dateOptions = worksheets.map(w => '<option value="' + w.date + '"' + (w.date === gzForgottenDate ? ' selected' : '') + '>ÜB ' + w.nr + ' – ' + formatDateDE(w.date) + (w.title ? ' (' + escapeHtml(w.title) + ')' : '') + '</option>').join('');
+    const studentMap = {};
+    students.forEach(s => { studentMap[s.id] = s; });
+    const studentEntries = {};
+    Object.keys(data).forEach(date => {
+        if (!wsDates.has(date)) return;
+        const d = data[date];
+        (d.material || []).forEach(sid => {
+            if (!studentMap[sid]) return;
+            if (!studentEntries[sid]) studentEntries[sid] = [];
+            studentEntries[sid].push({ date, kind: 'material' });
+        });
+        (d.laptop || []).forEach(sid => {
+            if (!studentMap[sid]) return;
+            if (!studentEntries[sid]) studentEntries[sid] = [];
+            studentEntries[sid].push({ date, kind: 'laptop' });
+        });
+    });
+    Object.keys(studentEntries).forEach(sid => {
+        studentEntries[sid].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    const sortedStudents = students.filter(s => studentEntries[s.id]).sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
     let html = '<div class="view-header"><div><h2>Vergessenes Material</h2>' +
-        '<p class="subtitle">Halten Sie pro Übungsblatt-Tag fest, wer Zeichenmaterial oder den Laptop vergessen hat.</p></div>' +
-        '<div class="grading-controls"><label style="display:flex;align-items:center;gap:8px;">Übungsblatt: ' +
-        '<select id="gz-forgotten-date" class="btn btn-secondary" onchange="setGZForgottenDate(\'' + classId + '\',this.value)">' + dateOptions + '</select></label></div></div>';
-    if (!students.length) {
-        html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
+        '<p class="subtitle">Pro Schüler: welche Übungstage mit Material- oder Laptop-Vergessen.</p></div></div>';
+    if (!sortedStudents.length) {
+        html += '<p class="subtitle">Keine Einträge vorhanden.</p>';
         return html;
     }
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Zeichenmaterial vergessen</th><th>Laptop vergessen</th></tr></thead><tbody>';
-    students.forEach(s => {
-        const hasMat = matSet.has(s.id);
-        const hasLap = lapSet.has(s.id);
+    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Vorkommnisse</th></tr></thead><tbody>';
+    sortedStudents.forEach(s => {
+        const entries = studentEntries[s.id] || [];
+        const parts = entries.length + 'x: ' + entries.map(e => '<span class="gz-forgot-date">' + formatDateDE(e.date) + '</span> ' + (e.kind === 'material' ? 'Mat' : 'Lap')).join(', ');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td style="text-align:center;"><input type="checkbox"' + (hasMat ? ' checked' : '') + ' onchange="toggleGZForgotten(\'' + classId + '\',\'' + gzForgottenDate + '\',\'' + s.id + '\',\'material\',this.checked)"></td>' +
-            '<td style="text-align:center;"><input type="checkbox"' + (hasLap ? ' checked' : '') + ' onchange="toggleGZForgotten(\'' + classId + '\',\'' + gzForgottenDate + '\',\'' + s.id + '\',\'laptop\',this.checked)"></td></tr>';
+            '<td>' + parts + '</td></tr>';
     });
-    html += '</tbody><tfoot><tr><td><strong>Summe</strong></td>' +
-        '<td style="text-align:center;"><strong>' + matSet.size + '</strong></td>' +
-        '<td style="text-align:center;"><strong>' + lapSet.size + '</strong></td></tr></tfoot></table>';
+    html += '</tbody></table>';
     return html;
 }
 
-window.setGZForgottenDate = function(classId, date) {
-    gzForgottenDate = date;
-    renderGrading();
-};
-
 window.toggleGZForgotten = function(classId, date, studentId, kind, checked) {
+    captureUndo();
     const data = DB.loadForgotMaterial(classId);
     if (!data[date]) data[date] = { material: [], laptop: [] };
     if (!data[date].material) data[date].material = [];
@@ -3103,6 +3373,7 @@ window.toggleGZForgotten = function(classId, date, studentId, kind, checked) {
 };
 
 window.cycleGZForgotten = function(classId, date, studentId) {
+    captureUndo();
     const data = DB.loadForgotMaterial(classId);
     if (!data[date]) data[date] = { material: [], laptop: [] };
     const mat = data[date].material || [];
@@ -3132,9 +3403,10 @@ function renderGZOverview(classId) {
     const weights = DB.loadGZGradeWeights(classId);
     const manualGrades = DB.loadManualGrades(classId);
     const semesterManualGrades = DB.loadSemesterManualGrades(classId);
-    const portfolio = DB.loadPortfolioGrades(classId);
+    const mitarbeit = DB.loadMitarbeit(classId);
     const project = DB.loadProjectGrades(classId);
     const isYear = gradeOverviewScope === 'year';
+    const includeProject = isYear;
     let html = '<div class="view-header"><div><h2>Übersicht – ' + (isYear ? 'Ganzes Jahr' : '1. Semester') + '</h2>' +
         '<p class="subtitle">Gewichtung der Noten frei wählbar. Manuelle Note überschreibt die Berechnung.</p></div>' +
         '<div class="grading-controls">' +
@@ -3152,29 +3424,39 @@ function renderGZOverview(classId) {
         '</tr></thead><tbody>';
     students.forEach(s => {
         const st = status[s.id] || {};
-        let sum = 0, count = 0;
+        const m = mitarbeit[s.id] || {};
+        let wsSum = 0, wsCount = 0;
+        let sum = 0, totalWeight = 0;
         worksheets.forEach(w => {
             const cell = st[w.nr] || {};
             const grade = cell.grade || '';
-            if (grade && grade !== 'missing') { sum += parseFloat(grade); count++; }
+            if (grade && grade !== 'missing') { wsSum += parseFloat(grade); wsCount++; }
         });
-        const avg = count > 0 ? (sum / count).toFixed(2) : '–';
-        const calcSemester = calcGZGrade(s.id, classId, weights, false);
-        const calcYear = calcGZGrade(s.id, classId, weights, true);
+        const avg = wsCount > 0 ? (wsSum / wsCount).toFixed(2) : '–';
+        let calcSemester = null, calcYear = null;
+        if (wsCount > 0) { sum += wsSum; totalWeight += wsCount; }
+        const folderGrade = parseFloat(m.folder1);
+        if (weights.portfolio && !isNaN(folderGrade)) { sum += folderGrade * weights.portfolio; totalWeight += weights.portfolio; }
+        const attendanceGrade = parseFloat(st.attendance);
+        if (weights.attendance && !isNaN(attendanceGrade)) { sum += attendanceGrade * weights.attendance; totalWeight += weights.attendance; }
+        const projectGrade = parseFloat(st.project);
+        if (includeProject && weights.project && !isNaN(projectGrade)) { sum += projectGrade * weights.project; totalWeight += weights.project; }
+        const finalGrade = totalWeight > 0 ? sum / totalWeight : null;
+        calcSemester = !isYear ? finalGrade : null;
+        calcYear = isYear ? finalGrade : null;
         const semesterManual = semesterManualGrades[s.id] != null ? semesterManualGrades[s.id] : null;
         const manual = manualGrades[s.id] != null ? manualGrades[s.id] : null;
-        const p = portfolio[s.id] || {};
         const pr = project[s.id] || {};
         const forgot = getGZForgottenCounts(classId, s.id);
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + avg + '</td>' +
-            '<td>' + gradeSelect(p.grade, "setGZPortfolioGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td>' + (m.folder1 != null ? m.folder1 : '–') + '</td>' +
             '<td style="text-align:center;">' + (forgot.material || 0) + '</td>' +
             '<td style="text-align:center;">' + (forgot.laptop || 0) + '</td>' +
             '<td>' + (calcSemester != null ? calcSemester.toFixed(2) : '–') + '</td>' +
-            '<td>' + gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
-            (isYear ? '<td>' + gradeSelect(pr.grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
-            (isYear ? '<td>' + gradeSelect(manual, "setManualGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
+            '<td>' + (!isYear ? gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)") : (semesterManual != null ? semesterManual : '–')) + '</td>' +
+            (isYear ? '<td>' + (st.project != null ? st.project : '–') + '</td>' : '') +
+            (isYear ? '<td>' + (manual != null ? manual : '–') + '</td>' : '') +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -3182,6 +3464,7 @@ function renderGZOverview(classId) {
 }
 
 window.setSemesterManualGrade = function(classId, studentId, val) {
+    captureUndo();
     const m = DB.loadSemesterManualGrades(classId);
     if (val === '') delete m[studentId];
     else m[studentId] = parseFloat(val);
@@ -3203,6 +3486,7 @@ function renderGradesOverview() {
     const classes = DB.getSortedClasses();
     let html = '<div class="view-header" style="display:block;"><div><p class="subtitle">Alle Noten aller Klassen und Schüler.</p></div>' +
         '<div class="grading-controls" style="margin-bottom:15px;">' +
+        '<button class="btn no-print" onclick="window.exportGradesCSV()" style="margin-right:10px;">CSV Export</button>' +
         '<button class="btn ' + (isYear ? 'btn-secondary' : '') + '" onclick="setAllGradesOverviewScope(\'semester\')">1. Semester</button>' +
         '<button class="btn ' + (isYear ? '' : 'btn-secondary') + '" onclick="setAllGradesOverviewScope(\'year\')">Ganzes Jahr</button>' +
         '<button class="btn no-print" onclick="window.openGradesOverviewPrint()" style="margin-left:10px;">🖨️ Drucken</button>' +
@@ -3269,7 +3553,7 @@ window.openGradesOverviewPrint = function() {
 
 function renderStandardAllOverview(cls, students, isYear) {
     const classId = cls.id;
-    const allHws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    const allHws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date }));
     const allExams = DB.loadExams(classId);
     const cutoff = DB.loadSemesterCutoff(classId);
     const exams = (!isYear && cutoff) ? allExams.filter(e => !e.date || e.date <= cutoff) : allExams;
@@ -3372,8 +3656,24 @@ function renderGZAllOverview(cls, students) {
 }
 
 window.renderGradesOverview = renderGradesOverview;
+window.exportGradesCSV = window.exportGradesCSV;
 
 document.addEventListener('DOMContentLoaded', async function() {
+    const offlineEl = document.getElementById('offline-indicator');
+    function updateOfflineStatus() {
+        if (!offlineEl) return;
+        if (navigator.onLine) {
+            offlineEl.textContent = 'Online';
+            offlineEl.className = 'offline-indicator online';
+        } else {
+            offlineEl.textContent = 'Offline';
+            offlineEl.className = 'offline-indicator offline';
+        }
+    }
+    updateOfflineStatus();
+    window.addEventListener('online', updateOfflineStatus);
+    window.addEventListener('offline', updateOfflineStatus);
+
     const diag = document.getElementById('diagnose');
     if (diag) {
         try {
@@ -3487,6 +3787,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     try { renderODConfig(); } catch (e) {}
     await FilePersist.bootstrap();
+    if (typeof setODStatus === 'function') {
+        setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
+    }
+    setInterval(() => {
+        if (typeof setODStatus === 'function') {
+            setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
+        }
+    }, 30000);
     const classes = DB.loadClasses();
     classes.forEach(c => {
         const sem = DB.loadSemesterManualGrades(c.id);

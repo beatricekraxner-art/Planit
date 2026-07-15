@@ -328,8 +328,9 @@ const DB = {
         const data = {};
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
-            if (k) data[k] = localStorage.getItem(k);
+            if (k && k !== '_lastModified') data[k] = localStorage.getItem(k);
         }
+        data._lastModified = new Date().toISOString();
         return JSON.stringify(data, null, 2);
     },
     importAll: function(json) {
