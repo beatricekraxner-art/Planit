@@ -4221,12 +4221,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
     });
     const isWebApp = !window.location.hostname.startsWith('localhost') && !window.location.hostname.startsWith('127.0.0.1');
+    let usedOneDriveInDesktop = false;
     if (window.OD) {
         try { await window.OD.init(); } catch (e) { console.error('OD init failed', e); }
         const odConfigured = !!(window.OD.getClientId && window.OD.getClientId());
         const odConnected = !!(window.OD.isConnected && window.OD.isConnected());
         if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
             if (window.OD.useCloud) window.OD.useCloud();
+            usedOneDriveInDesktop = true;
         } else if (window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
             window.FilePersist = window.OneDrivePersist;
             if (window.OD.setProvider) window.OD.setProvider('onedrive');
@@ -4256,7 +4258,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
     try { renderODConfig(); } catch (e) {}
-    await FilePersist.bootstrap();
+    if (!usedOneDriveInDesktop) {
+        await FilePersist.bootstrap();
+    }
     if (typeof setODStatus === 'function') {
         setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
     }

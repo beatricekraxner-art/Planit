@@ -1,0 +1,37 @@
+{
+  "name": "plan-it",
+  "version": "1.0.0",
+  "description": "Plan-it Desktop App",
+  "main": "main.js",
+  "author": "beatr",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "postinstall": "node generate-icon.js"
+  },
+  "build": {
+    "appId": "com.planit.app",
+    "productName": "Plan-it",
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.png"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "manifest.json",
+      "sw.js",
+      "js/**/*",
+      "start.ps1",
+      "assets/**/*"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}
