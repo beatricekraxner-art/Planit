@@ -1940,9 +1940,7 @@ select.grade-input option {
 }
 
 .plan-table .row-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 4px;
+    text-align: right;
 }
 
 .plan-table:not(.plan-table-dg):not(.plan-table-gz) td:nth-child(1),
@@ -1999,7 +1997,7 @@ select.grade-input option {
 
 .plan-table.plan-table-other th.plan-content-other,
 .plan-table.plan-table-other td.plan-content-other {
-    width: auto;
+    width: 55%;
     text-align: left;
 }
 
