@@ -53,7 +53,12 @@
 
     function getClientId() { return (localStorage.getItem(CLIENT_KEY) || '').trim(); }
     function getTenant() { return (localStorage.getItem(TENANT_KEY) || 'common').trim(); }
-    function getRedirectUri() { return window.location.origin + window.location.pathname; }
+    function getRedirectUri() {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'http://localhost:9014/';
+        }
+        return window.location.origin + window.location.pathname;
+    }
 
     function ensureMsal() {
         if (msal) return msal;

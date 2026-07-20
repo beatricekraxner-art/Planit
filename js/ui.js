@@ -4275,8 +4275,41 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (typeof setODStatus === 'function') {
         setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
     }
-    if (isWebApp && !(window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected && window.OD.isConnected())) {
-        alert('Achtung: OneDrive ist nicht verbunden. Bitte verbinden Sie sich mit OneDrive (☁️), um die Daten zu synchronisieren.');
+    const webNeedOD = isWebApp && !(window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected && window.OD.isConnected());
+    if (webNeedOD) {
+        await new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = '<div style="background:var(--bg-panel);color:var(--text-main);max-width:520px;width:100%;border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,0.35);">' +
+                '<h2 style="margin-top:0;">OneDrive-Anmeldung erforderlich</h2>' +
+                '<p class="subtitle">Bitte verbinden Sie sich mit OneDrive, um Ihre Daten zu laden und zu speichern. Ohne Anmeldung kann die App nicht verwendet werden.</p>' +
+                '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">' +
+                '<button class="btn" id="od-start-btn">Mit OneDrive verbinden</button>' +
+                '</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            const btn = overlay.querySelector('#od-start-btn');
+            const finish = () => { overlay.remove(); resolve(); };
+            btn.onclick = async () => {
+                try {
+                    if (window.OD && window.OD.connect) {
+                        await window.OD.connect();
+                        if (window.OD.isConnected && window.OD.isConnected() && window.OneDrivePersist) {
+                            window.FilePersist = window.OneDrivePersist;
+                            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+                            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+                            await window.OneDrivePersist.loadFromFile();
+                            window.OneDrivePersist.startAutoSave();
+                            if (typeof setODStatus === 'function') setODStatus(true);
+                        }
+                    }
+                } catch (e) {
+                    console.error('OD connect from startup modal failed', e);
+                } finally {
+                    finish();
+                }
+            };
+        });
     }
     setInterval(() => {
         if (typeof setODStatus === 'function') {
