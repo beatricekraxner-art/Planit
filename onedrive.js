@@ -90,20 +90,15 @@
                         if (text && text.trim() && text.trim() !== '{}') {
                             let serverData = null;
                             try { serverData = JSON.parse(text); } catch (e) {}
-                            const localModified = localStorage.getItem('_lastModified');
-                            const serverModified = serverData && serverData._lastModified ? serverData._lastModified : null;
-                            if (serverModified && localModified && localModified !== serverModified) {
-                                if (localModified > serverModified) {
-                                    console.log('OneDrive bootstrap: lokale Daten neuer als Server, lade hoch...');
-                                    await this.saveToFile();
-                                } else {
-                                    console.log('OneDrive bootstrap: Server-Daten neuer als lokal, lade herunter...');
+                            if (serverData && serverData._lastModified) {
+                                const localModified = localStorage.getItem('_lastModified');
+                                if (!localModified || localModified !== serverData._lastModified) {
+                                    console.log('OneDrive bootstrap: lade aktuelle Daten vom Server...');
                                     DB.importAll(text);
-                                    if (serverData && serverData._lastModified) localStorage.setItem('_lastModified', serverData._lastModified);
+                                    localStorage.setItem('_lastModified', serverData._lastModified);
+                                } else {
+                                    console.log('OneDrive bootstrap: lokale Daten sind aktuell.');
                                 }
-                            } else if (serverData) {
-                                DB.importAll(text);
-                                if (serverData && serverData._lastModified) localStorage.setItem('_lastModified', serverData._lastModified);
                             }
                         }
                     }
@@ -172,20 +167,16 @@
                 }
                 const text = await this._download(token);
                 if (text && text.trim() && text.trim() !== '{}') {
-                    let shouldWarn = false;
                     let serverData = null;
                     try { serverData = JSON.parse(text); } catch (e) {}
-                    const localModified = localStorage.getItem('_lastModified');
-                    const serverModified = serverData && serverData._lastModified ? serverData._lastModified : null;
-                    if (serverModified && localModified && localModified !== serverModified) {
-                        shouldWarn = true;
+                    if (serverData && serverData._lastModified) {
+                        const localModified = localStorage.getItem('_lastModified');
+                        if (!localModified || localModified !== serverData._lastModified) {
+                            DB.importAll(text);
+                            localStorage.setItem('_lastModified', serverData._lastModified);
+                            console.log('OneDrive: Daten vom Server geladen.');
+                        }
                     }
-                    if (shouldWarn) {
-                        const proceed = confirm('Achtung: Die lokalen Daten und der Server haben unterschiedliche Versionsstände (zuletzt geändert: ' + (serverModified || 'unbekannt') + '). Wenn Sie fortfahren, werden die lokalen Daten überschrieben. Fortfahren?');
-                        if (!proceed) return;
-                    }
-                    DB.importAll(text);
-                    if (serverData && serverData._lastModified) localStorage.setItem('_lastModified', serverData._lastModified);
                 }
             } catch (e) { console.error('OneDrive loadFromFile failed', e); }
         },
