@@ -1612,7 +1612,7 @@ function openPlanModal(classId, id, date) {
     }
     const exContentHtml = '<label>Inhalt</label><textarea id="plan-excontent" rows="4" style="white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea>';
     let wsHtml = '';
-    if (isGZ && showHomework) {
+    if (isGZ) {
         const wsNr = e ? (e.homeworkNr || '') : '';
         const wsTitle = e ? (e.homeworkContent || '') : '';
         wsHtml = '<label>Übungsblatt-Nummer</label><input type="number" id="plan-wsnr" value="' + (wsNr || '') + '">' +
@@ -4211,16 +4211,40 @@ document.addEventListener('DOMContentLoaded', async function() {
         e.preventDefault();
         pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
     });
+    const isWebApp = !window.location.hostname.startsWith('localhost') && !window.location.hostname.startsWith('127.0.0.1');
     if (window.OD) {
         try { await window.OD.init(); } catch (e) { console.error('OD init failed', e); }
         if (window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected() && window.OneDrivePersist) {
             window.FilePersist = window.OneDrivePersist;
+        } else if (isWebApp) {
+            window.FilePersist = {
+                available: true,
+                scheduleSave: function() {},
+                startAutoSave: function() {},
+                stopAutoSave: function() {},
+                chooseFile: async function() {
+                    alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu speichern.');
+                    return false;
+                },
+                bootstrap: async function() {
+                    alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu laden und zu speichern.');
+                },
+                saveToFile: async function() {
+                    alert('Achtung: OneDrive ist nicht verbunden. Speichern nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
+                },
+                loadFromFile: async function() {
+                    alert('Achtung: OneDrive ist nicht verbunden. Laden nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
+                }
+            };
         }
     }
     try { renderODConfig(); } catch (e) {}
     await FilePersist.bootstrap();
     if (typeof setODStatus === 'function') {
         setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
+    }
+    if (isWebApp && !(window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected && window.OD.isConnected())) {
+        alert('Achtung: OneDrive ist nicht verbunden. Bitte verbinden Sie sich mit OneDrive (☁️), um die Daten zu synchronisieren.');
     }
     setInterval(() => {
         if (typeof setODStatus === 'function') {
