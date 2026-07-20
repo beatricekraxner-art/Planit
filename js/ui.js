@@ -150,7 +150,10 @@ function switchView(viewName) {
     }
     if (viewName === 'grades-overview') renderGradesOverview();
     if (viewName === 'todos') renderTodos();
-    if (viewName === 'settings') loadTimeSlotsTable();
+    if (viewName === 'settings') {
+        loadTimeSlotsTable();
+        try { renderODConfig(); } catch (e) {}
+    }
     if (window.innerWidth <= 768) window.closeSidebar();
 }
 

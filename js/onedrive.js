@@ -197,13 +197,6 @@
             el.textContent = 'Noch nicht konfiguriert. Client-ID und Tenant eintragen und auf „Konfigurieren".';
             return;
         }
-    function renderODStatus() {
-        const el = document.getElementById('od-status');
-        if (!el) return;
-        if (!getClientId()) {
-            el.textContent = 'Noch nicht konfiguriert. Client-ID und Tenant eintragen und auf „Konfigurieren".';
-            return;
-        }
         if (OneDrivePersist.isConnected()) {
             const active = (window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive');
             el.textContent = active
@@ -212,7 +205,6 @@
         } else {
             el.textContent = '⚠️ Nicht verbunden. Auf „Mit OneDrive verbinden" klicken. Prüfe auch die Redirect URI in der Azure-App-Registrierung.';
         }
-    }
     }
 
     async function applyCloud() {
@@ -226,6 +218,9 @@
         await OneDrivePersist.loadFromFile();
         OneDrivePersist.startAutoSave();
         renderODStatus();
+        setTimeout(function() {
+            if (typeof renderODConfig === 'function') renderODConfig();
+        }, 0);
         alert('OneDrive-Speicherung aktiv. Daten werden jetzt in deiner OneDrive gespeichert.');
         if (typeof renderDashboard === 'function') renderDashboard();
         if (typeof renderClasses === 'function') renderClasses();
