@@ -43,6 +43,7 @@
             const res = await msal.acquireTokenSilent({ scopes: SCOPES, account: account });
             return res.accessToken;
         } catch (e) {
+            console.error('getTokenSilent failed', e);
             if (allowLoginOnFail && msal.getAllAccounts().length > 0) {
                 login();
             }
@@ -59,7 +60,10 @@
         isConnected() {
             try {
                 ensureMsal();
-                return msal.getAllAccounts().length > 0;
+                const account = msal.getAllAccounts()[0];
+                if (!account) return false;
+                const token = getTokenSilent(false);
+                return !!token;
             } catch (e) { return false; }
         },
 
@@ -79,14 +83,14 @@
 
         async bootstrap() {
             try {
+                await ensureMsal();
+                await msal.handleRedirectPromise();
                 if (this.isConnected()) {
                     const token = await getTokenSilent(true);
                     if (token) {
                         const text = await this._download(token);
                         if (text && text.trim() && text.trim() !== '{}') DB.importAll(text);
                     }
-                } else {
-                    login();
                 }
             } catch (e) { console.error('OneDrive load failed', e); }
             this.startAutoSave();
@@ -109,9 +113,15 @@
 
         async saveToFile() {
             try {
-                if (!this.isConnected()) return;
+                if (!this.isConnected()) {
+                    console.error('OneDrive saveToFile: not connected');
+                    return;
+                }
                 const token = await getTokenSilent(true);
-                if (!token) return;
+                if (!token) {
+                    console.error('OneDrive saveToFile: no token');
+                    return;
+                }
                 const data = DB.exportAll();
                 const resp = await fetch(GRAPH, {
                     method: 'PUT',
@@ -135,9 +145,15 @@
 
         async loadFromFile() {
             try {
-                if (!this.isConnected()) return;
+                if (!this.isConnected()) {
+                    console.error('OneDrive loadFromFile: not connected');
+                    return;
+                }
                 const token = await getTokenSilent();
-                if (!token) return;
+                if (!token) {
+                    console.error('OneDrive loadFromFile: no token');
+                    return;
+                }
                 const text = await this._download(token);
                 if (text && text.trim() && text.trim() !== '{}') {
                     let shouldWarn = false;
@@ -181,14 +197,22 @@
             el.textContent = 'Noch nicht konfiguriert. Client-ID und Tenant eintragen und auf „Konfigurieren".';
             return;
         }
+    function renderODStatus() {
+        const el = document.getElementById('od-status');
+        if (!el) return;
+        if (!getClientId()) {
+            el.textContent = 'Noch nicht konfiguriert. Client-ID und Tenant eintragen und auf „Konfigurieren".';
+            return;
+        }
         if (OneDrivePersist.isConnected()) {
-            const active = (window.OD && window.OD.getProvider() === 'onedrive');
+            const active = (window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive');
             el.textContent = active
                 ? '✅ Mit OneDrive verbunden und als Speicher aktiv.'
                 : '✅ Mit OneDrive verbunden. Auf „Als Speicher verwenden" klicken.';
         } else {
-            el.textContent = '⚠️ Nicht verbunden. Auf „Mit OneDrive verbinden" klicken.';
+            el.textContent = '⚠️ Nicht verbunden. Auf „Mit OneDrive verbinden" klicken. Prüfe auch die Redirect URI in der Azure-App-Registrierung.';
         }
+    }
     }
 
     async function applyCloud() {
@@ -251,6 +275,31 @@
         useCloud() { applyCloud(); },
         disconnect() { disconnect(); },
         async pull() { await OneDrivePersist.loadFromFile(); },
-        async sync() { await OneDrivePersist.saveToFile(); }
+        async sync() { await OneDrivePersist.saveToFile(); },
+        diagnose: async function() {
+            const out = [];
+            out.push('=== OneDrive Diagnose ===');
+            out.push('MSAL geladen: ' + (typeof Msal !== 'undefined' || typeof msal !== 'undefined'));
+            out.push('Client-ID: ' + (getClientId() ? 'konfiguriert' : 'FEHLT'));
+            out.push('Tenant: ' + getTenant());
+            out.push('Redirect URI: ' + getRedirectUri());
+            out.push('Provider: ' + (window.OD ? window.OD.getProvider() : 'unbekannt'));
+            try {
+                ensureMsal();
+                const accounts = msal.getAllAccounts();
+                out.push('Konten: ' + accounts.length);
+                if (accounts.length > 0) {
+                    const token = await getTokenSilent(false);
+                    out.push('Token: ' + (token ? 'gültig' : 'ungültig/abgelaufen'));
+                }
+            } catch (e) {
+                out.push('MSAL Fehler: ' + e.message);
+            }
+            out.push('OneDrive verbunden: ' + OneDrivePersist.isConnected());
+            out.push('PENDING_KEY: ' + localStorage.getItem(PENDING_KEY));
+            out.push('========================');
+            console.log(out.join('\n'));
+            alert(out.join('\n'));
+        }
     };
 })();
