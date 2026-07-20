@@ -1231,6 +1231,7 @@ function populateGradeClassSelect() {
 }
 
 let currentGradeTab = 'plan';
+let hwScrollRestored = false;
 let gradeOverviewScope = 'semester';
 let currentExamId = null;
 let examPointGrid = [];
@@ -1244,6 +1245,8 @@ function renderGrading() {
         container.innerHTML = '';
         return;
     }
+    const prevWrap = document.querySelector('.hw-grid-wrap');
+    const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     switcher.style.display = 'flex';
     const cls = DB.loadClasses().find(c => c.id === classId);
     const planMode = cls ? (cls.planMode || (cls.type === 'gz' ? 'gz' : (cls.type === 'dg' ? 'dg' : 'mathe'))) : 'mathe';
@@ -1278,32 +1281,39 @@ function renderGrading() {
     switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
     container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
     if (currentGradeTab === 'gz-grades' || currentGradeTab === 'hw') {
-        setTimeout(() => {
-            const wrap = document.querySelector('.hw-grid-wrap');
-            const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : (wrap ? wrap.querySelector('table') : null);
-            if (wrap && table) {
-                const firstDataRow = table.querySelector('tbody tr');
-                if (firstDataRow) {
-                    const cells = firstDataRow.querySelectorAll('td');
-                    if (currentGradeTab === 'gz-grades') {
-                        const students = DB.getStudentsForClass(classId);
-                        const worksheets = getGZPlannedWorksheets(classId);
-                        if (students.length && worksheets.length) {
-                            const targetCol = 1 + (worksheets.length - 1) * 4;
-                            const targetCell = cells[targetCol];
-                            if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+        if (hwScrollRestored && savedScrollLeft) {
+            const wrapNow = document.querySelector('.hw-grid-wrap');
+            if (wrapNow) wrapNow.scrollLeft = savedScrollLeft;
+        }
+        if (!hwScrollRestored) {
+            setTimeout(() => {
+                const wrap = document.querySelector('.hw-grid-wrap');
+                const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : (wrap ? wrap.querySelector('table') : null);
+                if (wrap && table) {
+                    const firstDataRow = table.querySelector('tbody tr');
+                    if (firstDataRow) {
+                        const cells = firstDataRow.querySelectorAll('td');
+                        if (currentGradeTab === 'gz-grades') {
+                            const students = DB.getStudentsForClass(classId);
+                            const worksheets = getGZPlannedWorksheets(classId);
+                            if (students.length && worksheets.length) {
+                                const targetCol = 1 + (worksheets.length - 1) * 4;
+                                const targetCell = cells[targetCol];
+                                if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                            }
+                        } else {
+                            const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
+                            if (hws.length) {
+                                const targetCol = 1 + (hws.length - 1);
+                                const targetCell = cells[targetCol];
+                                if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                            }
                         }
-                    } else {
-                        const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
-                        if (hws.length) {
-                            const targetCol = 1 + (hws.length - 1);
-                            const targetCell = cells[targetCol];
-                            if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
-                        }
+                        hwScrollRestored = true;
                     }
                 }
-            }
-        }, 50);
+            }, 50);
+        }
     }
     attachGradeValidation(container);
 }
@@ -1338,6 +1348,7 @@ function validateAllGrades() {
 
 function setGradeTab(tab) {
     currentGradeTab = tab;
+    hwScrollRestored = false;
     renderGrading();
 }
 

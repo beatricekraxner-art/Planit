@@ -263,7 +263,12 @@ function createTray() {
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
     if (!fs.existsSync(iconPath)) return;
 
-    tray = new Tray(iconPath);
+    try {
+        tray = new Tray(iconPath);
+    } catch (e) {
+        console.error('Tray icon failed:', e.message);
+        return;
+    }
     const contextMenu = Menu.buildFromTemplate([
         {
             label: 'Plan-it anzeigen',

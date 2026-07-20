@@ -8,8 +8,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build-win": "electron-builder --win",
-    "postinstall": "node generate-icon.js"
+    "build-win": "electron-builder --win"
   },
   "build": {
     "appId": "com.planit.app",
