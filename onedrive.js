@@ -10,6 +10,46 @@
     const GRAPH = 'https://graph.microsoft.com/v1.0/me/drive/root:/' + FILE_PATH + ':/content';
 
     let msal = null;
+    let _loginPromise = null;
+
+    function saveSession(account, accessToken) {
+        try {
+            if (account) localStorage.setItem(OD_SESSION_KEY, JSON.stringify({
+                username: account.username,
+                name: account.name,
+                tenantId: account.tenantId
+            }));
+            if (accessToken) localStorage.setItem(OD_TOKEN_KEY, accessToken);
+        } catch (e) { console.error('saveSession failed', e); }
+    }
+
+    function clearSession() {
+        try {
+            localStorage.removeItem(OD_SESSION_KEY);
+            localStorage.removeItem(OD_TOKEN_KEY);
+        } catch (e) { console.error('clearSession failed', e); }
+    }
+
+    async function tryRestoreSession() {
+        try {
+            ensureMsal();
+            const accounts = msal.getAllAccounts();
+            if (accounts.length > 0) {
+                const token = await getTokenSilent(false);
+                if (token) {
+                    saveSession(accounts[0], token);
+                    return true;
+                }
+                clearSession();
+            }
+        } catch (e) {
+            console.error('tryRestoreSession failed', e);
+        }
+        return false;
+    }
+
+    const OD_SESSION_KEY = 'onedrive_session_account';
+    const OD_TOKEN_KEY = 'onedrive_session_token';
 
     function getClientId() { return (localStorage.getItem(CLIENT_KEY) || '').trim(); }
     function getTenant() { return (localStorage.getItem(TENANT_KEY) || 'common').trim(); }
@@ -29,7 +69,7 @@
             },
             cache: {
                 cacheLocation: 'localStorage',
-                storeAuthStateInCookie: false
+                storeAuthStateInCookie: true
             }
         });
         return msal;
@@ -68,7 +108,8 @@
         async login() {
             ensureMsal();
             if (typeof msal.loginRedirect !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
-            msal.loginRedirect({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
+            _loginPromise = msal.loginRedirect({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
+            try { await _loginPromise; } catch (e) { _loginPromise = null; throw e; }
         },
 
         logout() {
@@ -77,6 +118,7 @@
                 const acc = msal.getAllAccounts()[0];
                 if (acc) msal.logoutRedirect();
             } catch (e) { console.error('OD logout', e); }
+            clearSession();
         },
 
         async bootstrap() {
@@ -143,6 +185,7 @@
                     console.log('OneDrive: gespeichert.');
                     const localData = JSON.parse(data);
                     if (localData._lastModified) localStorage.setItem('_lastModified', localData._lastModified);
+                    saveSession(msal.getAllAccounts()[0], token);
                 }
                 else {
                     console.error('OneDrive save failed', resp.status);
@@ -259,11 +302,14 @@
             try {
                 ensureMsal();
                 await msal.handleRedirectPromise();
+                if (OneDrivePersist.isConnected()) {
+                    await tryRestoreSession();
+                    if (localStorage.getItem(PENDING_KEY) === '1') {
+                        localStorage.removeItem(PENDING_KEY);
+                        try { await applyCloud(); } catch (e) { console.error('OD auto-apply', e); }
+                    }
+                }
             } catch (e) { console.error('OD init', e); }
-            if (OneDrivePersist.isConnected() && localStorage.getItem(PENDING_KEY) === '1') {
-                localStorage.removeItem(PENDING_KEY);
-                try { await applyCloud(); } catch (e) { console.error('OD auto-apply', e); }
-            }
             renderODStatus();
         },
         connect() {
