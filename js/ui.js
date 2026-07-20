@@ -463,6 +463,7 @@ window.importStudentsFromCsv = function(input, classId) {
 };
 
 function deleteStudent(id, classId) {
+    if (!confirm('Schüler wirklich löschen?')) return;
     captureUndo();
     DB.deleteStudent(id);
     hideModal();
@@ -568,6 +569,7 @@ function addManualHoliday() {
 
 window.deleteManualHoliday = function(index) {
     if (!confirm('Eintrag löschen?')) return;
+    captureUndo();
     DB.deleteManualHoliday(index);
     renderHolidays();
     if (window.FilePersist) FilePersist.scheduleSave();
@@ -861,6 +863,8 @@ function addTimetableEntryModal() {
 }
 
 function deleteTimetableEntry(id) {
+    if (!confirm('Eintrag wirklich löschen?')) return;
+    captureUndo();
     DB.deleteTimetableEntry(id);
     hideModal();
     renderDashboard();
@@ -1694,6 +1698,7 @@ function savePlanEntry(classId, id) {
 }
 
 function deletePlanEntry(classId, id) {
+    if (!confirm('Eintrag wirklich löschen?')) return;
     captureUndo();
     DB.deleteTeachingPlanEntry(classId, id);
     renderGrading();
@@ -3077,6 +3082,7 @@ window.updateAppointment = function(id) {
 };
 window.deleteAppointment = function(id) {
     if (!confirm('Termin wirklich löschen?')) return;
+    captureUndo();
     DB.deleteAppointment(id);
     hideModal();
     renderAppointmentsList();
@@ -4217,8 +4223,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     const isWebApp = !window.location.hostname.startsWith('localhost') && !window.location.hostname.startsWith('127.0.0.1');
     if (window.OD) {
         try { await window.OD.init(); } catch (e) { console.error('OD init failed', e); }
-        if (window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected() && window.OneDrivePersist) {
+        const odConfigured = !!(window.OD.getClientId && window.OD.getClientId());
+        const odConnected = !!(window.OD.isConnected && window.OD.isConnected());
+        if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
+            if (window.OD.useCloud) window.OD.useCloud();
+        } else if (window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
             window.FilePersist = window.OneDrivePersist;
+            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+            await window.OneDrivePersist.loadFromFile();
+            window.OneDrivePersist.startAutoSave();
         } else if (isWebApp) {
             window.FilePersist = {
                 available: true,
