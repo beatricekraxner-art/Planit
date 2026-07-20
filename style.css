@@ -1,4 +1,4 @@
-/* =============================================
+﻿/* =============================================
    VARIABLES & THEME (Premium Dark Mode)
    ============================================= */
 :root {
@@ -22,6 +22,34 @@
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+[data-theme="light"] {
+    color-scheme: light;
+    --bg-dark: #f1f5f9;
+    --bg-panel: #ffffff;
+    --bg-panel-hover: #e2e8f0;
+    
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --secondary: #0891b2;
+    
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    
+    --border-color: #cbd5e1;
+
+    .grade-1 {
+        color: #065f46 !important;
+    }
+
+    .grade-4 {
+        color: #713f12 !important;
+    }
+
+    .grade-5 {
+        color: #7f1d1d !important;
+    }
+}
+
 /* =============================================
    RESET & BASE
    ============================================= */
@@ -40,7 +68,6 @@ body {
 }
 
 select {
-    color-scheme: dark;
     background-color: var(--bg-dark);
     color: var(--text-main);
     border: 1px solid var(--border-color);
@@ -415,6 +442,27 @@ select option:hover {
     margin-bottom: 20px;
 }
 
+.settings-section-body {
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 2000px;
+    opacity: 1;
+}
+
+.settings-section.collapsed .settings-section-body {
+    max-height: 0;
+    opacity: 0;
+}
+
+.settings-toggle-icon {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.settings-section.collapsed .settings-toggle-icon {
+    transform: rotate(-90deg);
+}
+
 .section-header {
     display: flex;
     justify-content: space-between;
@@ -680,6 +728,14 @@ select option:hover {
     position: relative;
 }
 
+.tt-patrol {
+    background: rgba(148, 163, 184, 0.25) !important;
+    border-left: 4px solid #64748b !important;
+    cursor: pointer;
+    display: block;
+    position: relative;
+}
+
 .tt-sprechstunde:hover {
     opacity: 0.85;
     transform: scale(1.02);
@@ -687,6 +743,10 @@ select option:hover {
 
 .tt-sprechstunde strong {
     color: #cbd5e1;
+}
+
+.tt-patrol strong {
+    color: #1e293b;
 }
 
 .tt-pause-entry small {
@@ -716,6 +776,21 @@ select option:hover {
 
 .tt-day-holiday {
     color: #f59e0b !important;
+}
+
+.tt-day-appointment {
+    background: rgba(249, 115, 22, 0.4) !important;
+    position: relative;
+}
+.tt-day-appointment::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: #f97316;
+    border-radius: 4px 4px 0 0;
 }
 
 .tt-holiday-row .tt-day-col {
@@ -749,7 +824,7 @@ select option:hover {
 .supplier-marker {
     display: inline-block;
     background: rgba(59, 130, 246, 0.2);
-    color: #1d4ed8;
+    color: #2563eb;
     padding: 2px 8px;
     border-radius: 12px;
     font-size: 12px;
@@ -847,9 +922,21 @@ select option:hover {
     font-size: 13px;
 }
 
+.timetable-free.timetable-edit-mode {
+    background: rgba(99, 102, 241, 0.08);
+    border: 2px dashed rgba(99, 102, 241, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.timetable-free.timetable-edit-mode:hover {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(99, 102, 241, 0.8);
+}
+
 .timetable-free strong {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 /* =============================================
@@ -926,9 +1013,9 @@ select option:hover {
 }
 
 .grade-input {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid transparent;
-    color: white;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
     width: 60px;
     padding: 8px;
     border-radius: 6px;
@@ -1010,6 +1097,18 @@ select.grade-input option {
     border-right: 2px solid rgba(255,255,255,0.45);
 }
 
+#gz-grades-table .gz-computer-only {
+    background: rgba(22, 163, 74, 0.12) !important;
+    color: #16a34a !important;
+    font-style: italic;
+}
+
+#gz-grades-table .gz-computer-only .gz-grade-select {
+    background: rgba(22, 163, 74, 0.18) !important;
+    color: #16a34a !important;
+    font-style: italic;
+}
+
 .gz-toggle {
     font-size: 13px;
     min-width: 24px;
@@ -1048,9 +1147,9 @@ select.grade-input option {
 }
 
 #gz-grades-table .gz-recv-ng {
-    background: #60a5fa;
+    background: #2563eb;
     color: #1a1d24;
-    border-color: #60a5fa;
+    border-color: #2563eb;
     font-weight: 700;
 }
 
@@ -1083,9 +1182,9 @@ select.grade-input option {
 }
 
 .gz-toggle.gz-recv-ng {
-    background: #60a5fa;
+    background: #2563eb;
     color: #1a1d24;
-    border-color: #60a5fa;
+    border-color: #2563eb;
     font-weight: 700;
 }
 
@@ -1198,7 +1297,7 @@ select.grade-input option {
     border-radius: 8px;
     border: 1px solid var(--border-color);
     background: var(--bg-dark);
-    color: white;
+    color: var(--text-main);
 }
 
 .student-list {
@@ -1219,6 +1318,12 @@ select.grade-input option {
     gap: 10px;
     padding: 12px 15px;
     border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.student-list li.selected {
+    background: var(--primary);
+    color: #fff;
 }
 
 .stu-name {
@@ -1284,9 +1389,9 @@ select.grade-input option {
 
 .stu-edit-input {
     flex: 1;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-dark);
     border: 1px solid var(--primary);
-    color: white;
+    color: var(--text-main);
     padding: 8px;
     border-radius: 6px;
     outline: none;
@@ -1533,7 +1638,7 @@ select.grade-input option {
 
 .missing-hw-table .hw-status-improve {
     background-color: rgba(59, 130, 246, 0.25) !important;
-    color: #93c5fd !important;
+    color: #3b82f6 !important;
     font-weight: 600;
 }
 
@@ -1562,13 +1667,41 @@ select.grade-input option {
 .hw-status-improve {
     background-color: rgba(59, 130, 246, 0.25) !important;
     border-color: #3b82f6 !important;
-    color: #93c5fd !important;
+    color: #3b82f6 !important;
 }
 
 .hw-status-sick {
     background-color: rgba(234, 179, 8, 0.25) !important;
     border-color: #eab308 !important;
     color: #fde047 !important;
+}
+
+.hw-status-k {
+    background-color: rgba(234, 179, 8, 0.25) !important;
+    border-color: #eab308 !important;
+    color: #fde047 !important;
+}
+
+.hw-status-0 {
+    background-color: rgba(239, 68, 68, 0.25) !important;
+    border-color: #ef4444 !important;
+    color: #fca5a5 !important;
+}
+
+.hw-opt-0 {
+    color: #fca5a5;
+    background-color: rgba(239, 68, 68, 0.25);
+}
+
+.hw-status-k {
+    background-color: rgba(234, 179, 8, 0.25) !important;
+    border-color: #eab308 !important;
+    color: #fde047 !important;
+}
+
+.hw-opt-k {
+    color: #fde047;
+    background-color: rgba(234, 179, 8, 0.25);
 }
 
 .hw-expired-col {
@@ -1589,7 +1722,7 @@ select.grade-input option {
 }
 
 .hw-opt-improve {
-    color: #93c5fd;
+    color: #3b82f6;
     background-color: rgba(59, 130, 246, 0.25);
 }
 
@@ -1655,18 +1788,21 @@ select.grade-input option {
 }
 
 .grade-4 {
-    background: rgba(234, 179, 8, 0.22) !important;
+    background: rgba(234, 179, 8, 0.35) !important;
     color: #fde047 !important;
+    font-weight: 700;
 }
 
 .grade-5 {
-    background: rgba(239, 68, 68, 0.22) !important;
+    background: rgba(239, 68, 68, 0.35) !important;
     color: #fca5a5 !important;
+    font-weight: 700;
 }
 
 .grade-absent {
     background: rgba(148, 163, 184, 0.15) !important;
     color: #94a3b8 !important;
+    border-left: 3px solid #ef4444 !important;
 }
 
 .stats-grid {
@@ -2050,7 +2186,9 @@ select.grade-input option {
     #grading-table-container > h3,
     .topbar,
     .dashboard-header,
-    .no-print {
+    .no-print,
+    .tt-edit-btn,
+    .plan-table .row-actions {
         display: none !important;
     }
     .main-content {
@@ -2136,6 +2274,7 @@ select.grade-input option {
     .exam-table .grade-cell.grade-absent {
         color: #374151 !important;
         background: #e5e7eb !important;
+        border-left: 3px solid #ef4444 !important;
     }
     .timetable-grid {
         display: flex;
@@ -2148,75 +2287,94 @@ select.grade-input option {
     }
     .tt-row {
         display: grid;
-        grid-template-columns: 70px repeat(5, minmax(0, 1fr));
+        grid-template-columns: 90px repeat(5, minmax(0, 1fr));
         gap: 1px;
     }
     .tt-time-col {
-        padding: 3px 2px;
-        font-size: 9px;
+        padding: 6px 4px;
+        font-size: 11px;
         font-weight: 600;
         color: #222;
         background: #f4f4f4;
         border-radius: 2px;
         text-align: center;
-        line-height: 1.1;
+        line-height: 1.2;
     }
     .tt-day-col {
-        padding: 3px;
+        padding: 6px;
         border-radius: 2px;
-        min-height: 28px;
+        min-height: 48px;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        font-size: 10px;
-        line-height: 1.15;
+        font-size: 12px;
+        line-height: 1.25;
     }
     .tt-head .tt-day-col {
         font-weight: 700;
         text-transform: uppercase;
-        font-size: 10px;
+        font-size: 12px;
         color: #111;
-        padding: 5px 3px;
+        padding: 8px 6px;
         text-align: center;
     }
 .tt-head .tt-day-col small {
     display: inline;
     text-transform: none;
     font-weight: 500;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-main);
     letter-spacing: 0;
 }
     .timetable-entry {
         background: rgba(99, 102, 241, 0.15);
         border-left: 3px solid #6366f1;
-        padding: 2px 4px;
-        font-size: 10px;
-        line-height: 1.15;
+        padding: 4px 6px;
+        font-size: 12px;
+        line-height: 1.25;
     }
     .timetable-entry strong {
-        font-size: 10px;
+        font-size: 12px;
     }
     .timetable-entry small {
-        font-size: 9px;
+        font-size: 11px;
     }
     .tt-edit-btn {
         display: none !important;
     }
-    .tt-holiday {
-        background: rgba(245, 158, 11, 0.18) !important;
-        border: 1px solid #f59e0b !important;
-        font-size: 10px;
-        padding: 4px;
-        text-align: center;
+    .tt-patrol,
+    .tt-sprechstunde {
+        background: #e2e8f0 !important;
+        border-left: 3px solid #475569 !important;
+        font-weight: 600 !important;
+        color: #000 !important;
+        min-height: 24px !important;
+        padding: 3px 6px !important;
+        font-size: 11px !important;
     }
-    .timetable-free {
-        background: #fafafa;
-        border: 1px solid #eee;
+    .tt-patrol strong,
+    .tt-sprechstunde strong,
+    .tt-patrol small,
+    .tt-sprechstunde small {
+        color: #000 !important;
+        font-size: 11px !important;
     }
-    .tt-pause-entry {
-        background: #eee !important;
-        border-left: 3px solid #94a3b8 !important;
+    .timetable-entry {
+        background: rgba(99, 102, 241, 0.15);
+        border-left: 3px solid #6366f1;
+        padding: 4px 6px;
+        font-size: 12px;
+        line-height: 1.25;
+    }
+    .timetable-entry strong {
+        font-size: 12px;
+    }
+    .timetable-entry small {
+        font-size: 11px;
+    }
+    .tt-patrol .tt-edit-btn,
+    .tt-sprechstunde .tt-edit-btn {
+        display: none !important;
     }
     .tt-pause-row .tt-day-col,
     .tt-pause-row .tt-time-col {

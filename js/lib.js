@@ -112,9 +112,15 @@ const DB = {
     },
     loadStudents: function() { return this.load('students', []); },
     saveStudents: function(students) { this.save('students', students); },
-    addStudent: function(classId, name) {
+    getStudentsForClass: function(classId) {
+        return this.loadStudents().filter(s => s.classId === classId).sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    },
+    getStudentsSorted: function() {
+        return this.loadStudents().sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    },
+    addStudent: function(classId, name, lastName) {
         const students = this.loadStudents();
-        students.push({ id: Date.now().toString(), classId: classId, name: name });
+        students.push({ id: Date.now().toString(), classId: classId, name: name, lastName: lastName || '' });
         this.saveStudents(students);
     },
     deleteStudent: function(id) { this.saveStudents(this.loadStudents().filter(s => s.id !== id)); },
@@ -126,6 +132,19 @@ const DB = {
         this.saveTimetable(timetable);
     },
     deleteTimetableEntry: function(id) { this.saveTimetable(this.getTimetable().filter(e => e.id !== id)); },
+    loadAppointments: function() { return this.load('appointments', []); },
+    saveAppointments: function(list) { this.save('appointments', list); },
+    addAppointment: function(appt) {
+        const list = this.loadAppointments();
+        list.push({ id: Date.now().toString(), ...appt });
+        this.saveAppointments(list);
+    },
+    updateAppointment: function(id, data) {
+        const list = this.loadAppointments();
+        const idx = list.findIndex(a => a.id === id);
+        if (idx >= 0) { list[idx] = { ...list[idx], ...data }; this.saveAppointments(list); }
+    },
+    deleteAppointment: function(id) { this.saveAppointments(this.loadAppointments().filter(a => a.id !== id)); },
     getSprechstunden: function() { return this.load('sprechstunden', []); },
     saveSprechstunden: function(sprechstunden) { this.save('sprechstunden', sprechstunden); },
     addSprechstunde: function(e) {
@@ -324,6 +343,8 @@ const DB = {
         return legacy || {};
     },
     saveSemesterManualGrades: function(classId, m) { this.save('semester_manual_grades_' + classId, m); },
+    loadSemesterRemarks: function(classId) { return this.load('semester_remarks_' + classId, {}); },
+    saveSemesterRemarks: function(classId, m) { this.save('semester_remarks_' + classId, m); },
     exportAll: function() {
         const data = {};
         for (let i = 0; i < localStorage.length; i++) {

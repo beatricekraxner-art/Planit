@@ -50,7 +50,7 @@ function validateGradeInputs(container) {
 window.exportGradesCSV = function() {
     const classes = DB.getSortedClasses();
     classes.forEach(cls => {
-        const students = DB.loadStudents().filter(s => s.classId === cls.id);
+        const students = DB.getStudentsForClass(cls.id);
         if (!students.length) return;
         const classId = cls.id;
         const worksheets = getGZPlannedWorksheets(classId);
@@ -197,7 +197,7 @@ window.addEventListener('od-save-error', (e) => {
 function renderClasses() {
     const grid = document.getElementById('classes-grid');
     const classes = DB.getSortedClasses();
-    const students = DB.loadStudents();
+    const students = DB.getStudentsSorted();
     grid.innerHTML = '';
     const subjectOrder = { math: 'Mathematik', gz: 'Geometrisches Zeichnen', dg: 'Darstellende Geometrie', other: 'Andere Fächer' };
     let currentType = null;
@@ -231,7 +231,7 @@ function openClassManager(classId) {
         return;
     }
     const cls = DB.loadClasses().find(c => c.id === classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     showModal(getClassManagerContent(cls, students));
 }
 
@@ -256,17 +256,19 @@ function getClassForm() {
 function getClassManagerContent(cls, students) {
     let studentList = '<ul class="student-list">';
     students.forEach(s => {
-        studentList += '<li>' +
+        studentList += '<li data-student-id="' + s.id + '" data-class-id="' + cls.id + '" onclick="selectStudent(this, \'' + s.id + '\', \'' + cls.id + '\')">' +
             studentAvatarHtml(s, 34) +
             '<span class="stu-name" id="stu-name-' + s.id + '">' + escapeHtml(s.name) + '</span>' +
             '<span class="stu-actions">' +
             '<input type="file" accept="image/*" style="display:none;" id="stu-photo-input-' + s.id + '" onchange="uploadStudentPhoto(this, \'' + s.id + '\', \'' + cls.id + '\')">' +
             '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="document.getElementById(\'stu-photo-input-' + s.id + '\').click()">📷</button>' +
+            '<button class="btn btn-secondary" title="Screenshot einfügen (Strg+V)" onclick="pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
             (s.photo ? '<button class="btn btn-secondary" title="Foto entfernen" onclick="removeStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">🗑️</button>' : '') +
             '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">✎</button>' +
             '<button class="btn btn-secondary" title="Löschen" onclick="deleteStudent(\'' + s.id + '\', \'' + cls.id + '\')">×</button>' +
             '</span></li>';
     });
+    studentList += '</ul>';
     studentList += '</ul>';
     if (students.length === 0) studentList = '<p>Keine Schüler vorhanden</p>';
     const clsColor = cls.color || '#6366f1';
@@ -298,7 +300,11 @@ function getClassManagerContent(cls, students) {
         '<button class="btn" onclick="saveClassDetails(\'' + cls.id + '\')">Speichern</button>' +
         '</div>' +
         '<div class="student-section">' +
-        '<h3>Schüler</h3>' + studentList +
+        '<h3>Schüler <span class="class-count" style="font-size:13px;margin-left:8px;">' + studentCount + ' Schüler</span></h3>' + studentList +
+        '</div>' +
+        '<div class="form-group exam-form" style="margin-top:10px;">' +
+        '<button class="btn btn-secondary" onclick="document.getElementById(\'csv-import-' + cls.id + '\').click()">Schüler importieren</button>' +
+        '<input type="file" id="csv-import-' + cls.id + '" accept=".csv" style="display:none;" onchange="window.importStudentsFromCsv(this, \'' + cls.id + '\')">' +
         '</div>' +
         '<div class="class-manager-footer">' +
         '<div class="form-group exam-form">' +
@@ -370,27 +376,95 @@ function subjectToType(subject) {
 
 function addStudentToClass(classId) {
     captureUndo();
-    const name = document.getElementById('new-student-input').value;
+    const name = document.getElementById('new-student-input').value.trim();
     if (name) {
-        DB.addStudent(classId, name);
-        document.getElementById('new-student-input').value = '';
+        const parts = name.split(' ').filter(Boolean);
+        const lastName = parts.length > 1 ? parts[0] : (parts[0] || name);
+        DB.addStudent(classId, name, lastName);
         const cls = DB.loadClasses().find(c => c.id === classId);
-        const students = DB.loadStudents().filter(s => s.classId === classId);
+        const students = DB.getStudentsForClass(classId);
         const content = getClassManagerContent(cls, students);
         showModal(content);
         setTimeout(function() {
             const list = document.querySelector('.student-list');
             if (list) list.scrollTop = list.scrollHeight;
+            const input = document.getElementById('new-student-input');
+            if (input) input.focus();
         }, 100);
     }
 }
+
+window.importStudentsFromCsv = function(input, classId) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const lines = e.target.result.split(/\r?\n/);
+            let added = 0;
+            const classes = DB.loadClasses();
+            let headerSkipped = false;
+            lines.forEach((line, index) => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                const parts = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+                if (!headerSkipped && parts.length >= 2) {
+                    const first = (parts[0] || '').toLowerCase();
+                    const second = (parts[1] || '').toLowerCase();
+                    if (first.indexOf('name') !== -1 || first.indexOf('vorname') !== -1 || first.indexOf('schüler') !== -1 || first.indexOf('schueler') !== -1 || second.indexOf('nachname') !== -1 || second.indexOf('klasse') !== -1) {
+                        headerSkipped = true;
+                        return;
+                    }
+                }
+                if (parts.length === 0) return;
+                let fullName = '';
+                let lastName = '';
+                let targetClassId = classId;
+                if (parts.length >= 3) {
+                    const vorname = parts[0] || '';
+                    const nachname = parts[1] || '';
+                    fullName = (vornname + ' ' + nachname).trim();
+                    lastName = nachname;
+                    if (parts[2]) {
+                        const classIdOrName = parts[2];
+                        const foundClass = classes.find(c => c.id === classIdOrName || c.name === classIdOrName);
+                        if (foundClass) targetClassId = foundClass.id;
+                    }
+                } else if (parts.length >= 2) {
+                    fullName = parts[0];
+                    const nameParts = fullName.split(' ').filter(Boolean);
+                    lastName = nameParts.length > 1 ? nameParts[0] : (nameParts[0] || fullName);
+                    const classIdOrName = parts[1];
+                    const foundClass = classes.find(c => c.id === classIdOrName || c.name === classIdOrName);
+                    if (foundClass) targetClassId = foundClass.id;
+                } else {
+                    fullName = parts[0];
+                    lastName = fullName;
+                }
+                if (fullName) {
+                    DB.addStudent(targetClassId, fullName, lastName);
+                    added++;
+                }
+            });
+            input.value = '';
+            const cls = DB.loadClasses().find(c => c.id === classId);
+            const students = DB.getStudentsForClass(classId);
+            showModal(getClassManagerContent(cls, students));
+            if (added > 0) alert(added + ' Schüler importiert.');
+            else alert('Keine Schüler gefunden.');
+        } catch (err) {
+            alert('CSV-Import fehlgeschlagen: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+};
 
 function deleteStudent(id, classId) {
     captureUndo();
     DB.deleteStudent(id);
     hideModal();
     const cls = DB.loadClasses().find(c => c.id === classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     showModal(getClassManagerContent(cls, students));
 }
 
@@ -417,7 +491,7 @@ function saveStudentEdit(id, classId) {
     if (!input) return;
     const name = input.value.trim();
     if (name) {
-        const students = DB.loadStudents();
+        const students = DB.getStudentsSorted();
         const stu = students.find(s => s.id === id);
         if (stu) { stu.name = name; DB.saveStudents(students); }
     }
@@ -433,6 +507,9 @@ function deleteClass(id) {
 }
 
 let currentWeekStart = null;
+let timetableViewMode = 'week';
+let currentSelectedDate = null;
+let timetableEditMode = false;
 
 function getMonday(d) {
     const date = new Date(d);
@@ -493,6 +570,28 @@ window.deleteManualHoliday = function(index) {
     if (window.FilePersist) FilePersist.scheduleSave();
 };
 
+window.setTimetableEditMode = function(active) {
+    timetableEditMode = active;
+    const btn = document.getElementById('open-timetable-btn');
+    if (btn) {
+        if (active) {
+            btn.classList.add('btn-secondary');
+            btn.textContent = 'Bearbeitung beenden';
+        } else {
+            btn.classList.remove('btn-secondary');
+            btn.textContent = 'Stundenplan bearbeiten';
+        }
+    }
+    renderDashboard();
+};
+
+window.toggleSettingsSection = function(header) {
+    const section = header.closest('.settings-section');
+    if (section) {
+        section.classList.toggle('collapsed');
+    }
+};
+
 const STEIERMARK_SCHOOL_HOLIDAYS = [
     { name: 'Herbstferien Steiermark', start: '2025-10-27', end: '2025-10-31' },
     { name: 'Weihnachtsferien Steiermark', start: '2025-12-24', end: '2026-01-06' },
@@ -527,10 +626,69 @@ function expandSchoolHolidays(list) {
     return out;
 }
 
+function goToToday() {
+    currentWeekStart = getMonday(new Date());
+    if (timetableViewMode === 'day') currentSelectedDate = new Date();
+    renderDashboard();
+}
+
+function applyTheme(theme) {
+    if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) btn.innerHTML = (theme === 'light' ? '☀️' : '🌙') + '<span class="button-text"> Design</span>';
+}
+
+window.toggleTheme = function() {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+    DB.save('theme', next);
+};
+
 function shiftWeek(delta) {
     if (!currentWeekStart) currentWeekStart = getMonday(new Date());
     currentWeekStart.setDate(currentWeekStart.getDate() + delta * 7);
+    if (timetableViewMode === 'day' && currentSelectedDate) {
+        currentSelectedDate = new Date(currentWeekStart);
+        currentSelectedDate.setDate(currentSelectedDate.getDate() + (new Date().getDay() || 7) - 1);
+    }
     renderDashboard();
+}
+
+function setTimetableViewMode(mode) {
+    timetableViewMode = mode;
+    renderDashboard();
+}
+
+function shiftDay(delta) {
+    const base = currentSelectedDate || currentWeekStart || new Date();
+    base.setDate(base.getDate() + delta);
+    currentSelectedDate = base;
+    renderDashboard();
+}
+
+function getSelectedDate() {
+    if (timetableViewMode === 'day') {
+        if (!currentSelectedDate) currentSelectedDate = new Date();
+        return currentSelectedDate;
+    }
+    return currentWeekStart;
+}
+
+function getDaysForView() {
+    if (timetableViewMode === 'day') {
+        const d = getSelectedDate();
+        return [d];
+    }
+    return daysOfWeek.map((_, i) => {
+        const d = new Date(currentWeekStart);
+        d.setDate(d.getDate() + i);
+        return d;
+    });
 }
 
 function renderDashboard() {
@@ -555,31 +713,35 @@ function renderDashboard() {
     const hideHolidays = DB.loadHideHolidayColumns();
     const classes = DB.loadClasses();
     const holidayMap = buildHolidayMap();
+    const appointments = DB.loadAppointments();
 
-    const weekDates = daysOfWeek.map((_, i) => {
-        const d = new Date(currentWeekStart);
-        d.setDate(d.getDate() + i);
-        return d;
-    });
+    const viewDates = getDaysForView();
+    const isDayView = timetableViewMode === 'day';
 
     let html = '<div class="tt-nav">' +
-        '<button class="btn btn-secondary" onclick="shiftWeek(-1)">‹ Vorige Woche</button>' +
-        '<span class="tt-nav-label">' + formatDateShort(weekDates[0]) + ' – ' + formatDateShort(weekDates[4]) + '</span>' +
-        '<button class="btn btn-secondary" onclick="shiftWeek(1)">Nächste Woche ›</button>' +
+        '<button class="btn btn-secondary" onclick="' + (isDayView ? 'shiftDay(-1)' : 'shiftWeek(-1)') + '">‹ ' + (isDayView ? 'Voriger Tag' : 'Vorige Woche') + '</button>' +
+        '<span class="tt-nav-label">' + formatDateShort(viewDates[0]) + (isDayView ? '' : ' – ' + formatDateShort(viewDates[viewDates.length - 1])) + '</span>' +
+        '<button class="btn btn-secondary" onclick="' + (isDayView ? 'shiftDay(1)' : 'shiftWeek(1)') + '">' + (isDayView ? 'Nächster Tag' : 'Nächste Woche') + ' ›</button>' +
+        '<button class="btn btn-secondary" onclick="setTimetableViewMode(\'week\')" ' + (!isDayView ? 'disabled' : '') + '>Woche</button>' +
+        '<button class="btn btn-secondary" onclick="setTimetableViewMode(\'day\')" ' + (isDayView ? 'disabled' : '') + '>Tag</button>' +
+        '<button class="btn" onclick="goToToday()">📍 Heute</button>' +
+        '<button class="btn btn-secondary" onclick="window.openAppointmentModal()">📅 Termin</button>' +
         '</div>';
 
     html += '<div class="timetable-grid">';
     html += '<div class="tt-row tt-head"><div class="tt-time-col"></div>';
-    weekDates.forEach((d, i) => {
+    viewDates.forEach((d, i) => {
         const key = formatDateKey(d);
         const isHol = holidayMap[key];
-        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '');
-        const dayName = daysOfWeek[i];
-        const abbr = dayName.substring(0, 2);
+        const dayAppts = appointments.filter(a => a.date === key);
+        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '') + (dayAppts.length && !isHol ? ' tt-day-appointment' : '');
+        const dayName = isDayView ? formatDateDE(d) : daysOfWeek[i];
+        const abbr = isDayView ? formatDateShort(d) : dayName.substring(0, 2);
         if (isHol) {
-            html += '<div class="' + cls + '">' + abbr + ' <small>' + formatDateShort(d) + '</small> <small style="font-weight:600;color:#d97706;">' + escapeHtml(isHol) + '</small></div>';
+            html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#d97706;">' + escapeHtml(isHol) + '</small></div>';
         } else {
-            html += '<div class="' + cls + '">' + abbr + ' <small>' + formatDateShort(d) + '</small></div>';
+            const apptHtml = dayAppts.length ? dayAppts.map(a => '<div style="text-align:left;font-size:11px;color:#fff;font-weight:400;">• ' + escapeHtml(a.title || 'Termin') + '</div>').join('') : '';
+            html += '<div class="' + cls + '"' + (dayAppts.length ? ' title="' + escapeHtml(dayAppts.map(a => (a.description || a.title || 'Termin')).join(' | ')) + '"' : '') + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + '</div>';
         }
     });
     html += '</div>';
@@ -594,8 +756,8 @@ function renderDashboard() {
             timeCellHtml = slot.start + '<br>' + lessonLabel + '<br>' + slot.end;
         }
         html += '<div class="tt-row' + (isPause ? ' tt-pause-row' : '') + '"><div class="tt-time-col">' + timeCellHtml + '</div>';
-        weekDates.forEach((d, i) => {
-            const day = daysOfWeek[i];
+        viewDates.forEach((d, i) => {
+            const day = isDayView ? daysOfWeek[new Date(d).getDay() === 0 ? 6 : new Date(d).getDay() - 1] : daysOfWeek[i];
             const key = formatDateKey(d);
             const isHol = holidayMap[key];
             if (isHol && hideHolidays) {
@@ -607,11 +769,12 @@ function renderDashboard() {
                     const className = cls ? cls.name : '';
                     const isPatrol = entry.subject.toLowerCase() === 'gangaufsicht';
                     const isSprechstunde = entry.subject.toLowerCase() === 'sprechstunde';
-                    const entryClass = 'tt-day-col' + (isPause ? ' tt-pause-entry' : ' timetable-entry') + (isPatrol ? ' tt-patrol' : '') + (isSprechstunde ? ' tt-sprechstunde' : '');
+                    const isBibliothek = entry.subject.toLowerCase() === 'bibliothek';
+                    const entryClass = 'tt-day-col' + (isPause ? ' tt-pause-entry' : ' timetable-entry') + (isPatrol ? ' tt-patrol' : '') + (isSprechstunde || isBibliothek ? ' tt-sprechstunde' : '');
                     if (isPatrol) {
-                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Aufsicht bearbeiten"><small>' + entry.room + '</small></div>';
-                    } else if (isSprechstunde) {
-                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Sprechstunde bearbeiten"><div><strong>Sprstde</strong></div><small>' + entry.room + '</small></div>';
+                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Aufsicht bearbeiten"><small>' + escapeHtml(entry.room || '') + '</small></div>';
+                    } else if (isSprechstunde || isBibliothek) {
+                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="' + escapeHtml(entry.subject) + ' bearbeiten"><div><strong>' + escapeHtml(entry.subject === 'Sprechstunde' ? 'Sprstde' : 'Bibl') + '</strong></div><small>' + entry.room + '</small></div>';
                     } else {
                         const color = cls ? cls.color : null;
                         const styleAttr = color ? ' style="background-color:' + color + '66;border-left:8px solid ' + color + ';"' : '';
@@ -625,7 +788,7 @@ function renderDashboard() {
                             '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
                     }
                 } else {
-                    html += '<div class="tt-day-col timetable-free"></div>';
+                    html += '<div class="tt-day-col timetable-free' + (timetableEditMode ? ' timetable-edit-mode' : '') + '"' + (timetableEditMode ? ' onclick="window.openTimetableEditorFromCell(\'' + day + '\', \'' + slot.start + '\')"' : '') + '></div>';
                 }
             }
         });
@@ -635,7 +798,9 @@ function renderDashboard() {
     wrapper.innerHTML = html;
 }
 
-function openTimetableEditor() {
+function openTimetableEditor(preDay, prePeriod) {
+    timetableEditMode = false;
+    if (typeof setTimetableEditMode === 'function') setTimetableEditMode(false);
     const timetable = DB.getTimetable();
     const classes = DB.loadClasses();
     const timeSlots = DB.loadTimeSlots();
@@ -643,12 +808,13 @@ function openTimetableEditor() {
     let html = '<div class="modal-header">' +
         '<h2>Stundenplan bearbeiten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
     html += '<div class="form-group exam-form">' +
-        '<select id="tt-day">' + daysOfWeek.map(d => '<option value="' + d + '">' + d + '</option>').join('') + '</select>' +
-        '<select id="tt-period">' + timeSlots.map(s => '<option value="' + s.start + '">' + s.name + ' (' + s.start + '–' + s.end + ')</option>').join('') + '</select>' +
+        '<select id="tt-day">' + daysOfWeek.map(d => '<option value="' + d + '"' + (preDay && d === preDay ? ' selected' : '') + '>' + d + '</option>').join('') + '</select>' +
+        '<select id="tt-period">' + timeSlots.map(s => '<option value="' + s.start + '"' + (prePeriod && s.start === prePeriod ? ' selected' : '') + '>' + s.name + ' (' + s.start + '–' + s.end + ')</option>').join('') + '</select>' +
         '<select id="tt-course">' +
         getClassesSortedByName().map(function(c) { return '<option value="' + c.id + '">' + c.name + ' – ' + classSubjectAbbr(c) + '</option>'; }).join('') +
         '<option value="Gangaufsicht">Gangaufsicht (Pause)</option>' +
         '<option value="Sprechstunde">Sprechstunde</option>' +
+        '<option value="Bibliothek">Bibliothek</option>' +
         '</select>' +
         '<input type="text" id="tt-room" name="tt-room" placeholder="Raum/Bereich" autocomplete="off">' +
         '<button class="btn" onclick="addTimetableEntryModal()">Hinzufügen</button>' +
@@ -674,15 +840,15 @@ function addTimetableEntryModal() {
     let subject = '';
     if (courseVal === 'Gangaufsicht') {
         subject = 'Gangaufsicht';
-    } else if (courseVal === 'Sprechstunde') {
-        subject = 'Sprechstunde';
+    } else if (courseVal === 'Sprechstunde' || courseVal === 'Bibliothek') {
+        subject = courseVal;
     } else {
         const cls = DB.loadClasses().find(c => c.id === courseVal);
         if (!cls) return;
         classId = cls.id;
         subject = cls.subject;
     }
-    if (day && period && subject && room) {
+    if (day && period && subject) {
         const timeSlots = DB.loadTimeSlots();
         const slot = timeSlots.find(s => s.start === period);
         DB.addTimetableEntry({ day: day, period: period, start: period, subject: subject, room: room, classId: classId });
@@ -702,11 +868,13 @@ function editTimetableEntry(id) {
     const classes = DB.loadClasses();
     const isPatrol = entry.subject.toLowerCase() === 'gangaufsicht';
     const isSprechstunde = entry.subject.toLowerCase() === 'sprechstunde';
+    const isBibliothek = entry.subject.toLowerCase() === 'bibliothek';
     const sortedClasses = getClassesSortedByName();
     const classOpts = sortedClasses.map(c => '<option value="' + c.id + '"' + (c.id === entry.classId ? ' selected' : '') + '>' + c.name + ' – ' + classSubjectAbbr(c) + '</option>').join('');
-    let courseOptions = '<option value="Gangaufsicht">Gangaufsicht (Pause)</option><option value="Sprechstunde">Sprechstunde</option>' + classOpts;
-    if (isPatrol) courseOptions = '<option value="Gangaufsicht" selected>Gangaufsicht (Pause)</option><option value="Sprechstunde">Sprechstunde</option>' + classOpts;
-    if (isSprechstunde) courseOptions = '<option value="Gangaufsicht">Gangaufsicht (Pause)</option><option value="Sprechstunde" selected>Sprechstunde</option>' + classOpts;
+    let courseOptions = '<option value="Gangaufsicht">Gangaufsicht (Pause)</option><option value="Sprechstunde">Sprechstunde</option><option value="Bibliothek">Bibliothek</option>' + classOpts;
+    if (isPatrol) courseOptions = '<option value="Gangaufsicht" selected>Gangaufsicht (Pause)</option><option value="Sprechstunde">Sprechstunde</option><option value="Bibliothek">Bibliothek</option>' + classOpts;
+    if (isSprechstunde) courseOptions = '<option value="Gangaufsicht">Gangaufsicht (Pause)</option><option value="Sprechstunde" selected>Sprechstunde</option><option value="Bibliothek">Bibliothek</option>' + classOpts;
+    if (isBibliothek) courseOptions = '<option value="Gangaufsicht">Gangaufsicht (Pause)</option><option value="Sprechstunde">Sprechstunde</option><option value="Bibliothek" selected>Bibliothek</option>' + classOpts;
     showModal('<div class="modal-header">' +
         '<h2>Eintrag bearbeiten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
         '<div class="form-group exam-form">' +
@@ -726,8 +894,8 @@ function updateTimetableEntry(id) {
     if (courseVal === 'Gangaufsicht') {
         entry.subject = 'Gangaufsicht';
         entry.classId = '';
-    } else if (courseVal === 'Sprechstunde') {
-        entry.subject = 'Sprechstunde';
+    } else if (courseVal === 'Sprechstunde' || courseVal === 'Bibliothek') {
+        entry.subject = courseVal;
         entry.classId = '';
     } else {
         const cls = DB.loadClasses().find(c => c.id === courseVal);
@@ -741,6 +909,13 @@ function updateTimetableEntry(id) {
 
 function escapeHtml(str) {
     return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getLastName(name) {
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '';
+    if (parts.length === 1) return parts[0];
+    return parts[0];
 }
 
 function studentInitials(name) {
@@ -822,18 +997,53 @@ window.uploadStudentPhoto = function(input, studentId, classId) {
     if (!file) return;
     resizeImageFile(file, 160, function(dataUrl) {
         if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
-        const students = DB.loadStudents();
+        const students = DB.getStudentsSorted();
         const stu = students.find(s => s.id === studentId);
         if (stu) { stu.photo = dataUrl; DB.saveStudents(students); }
         openClassManager(classId);
     });
 };
 
+window.pasteStudentPhoto = function(studentId, classId) {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+        alert('Zwischenablage kann nicht gelesen werden. Bitte erneut versuchen oder Bild-Datei verwenden.');
+        return;
+    }
+    navigator.clipboard.read().then(clipboardItems => {
+        for (const item of clipboardItems) {
+            for (const type of item.types) {
+                if (type.startsWith('image/')) {
+                    item.getType(type).then(blob => {
+                        resizeImageFile(blob, 160, function(dataUrl) {
+                            if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
+                            const students = DB.getStudentsSorted();
+                            const stu = students.find(s => s.id === studentId);
+                            if (stu) { stu.photo = dataUrl; DB.saveStudents(students); }
+                            openClassManager(classId);
+                        });
+                    });
+                    return;
+                }
+            }
+        }
+        alert('Kein Bild in der Zwischenablage gefunden.');
+    }).catch(err => {
+        alert('Zugriff auf Zwischenablage fehlgeschlagen: ' + err.message);
+    });
+};
+
 window.removeStudentPhoto = function(studentId, classId) {
-    const students = DB.loadStudents();
+    const students = DB.getStudentsSorted();
     const stu = students.find(s => s.id === studentId);
     if (stu) { delete stu.photo; DB.saveStudents(students); }
     openClassManager(classId);
+};
+
+window.selectStudent = function(el, studentId, classId) {
+    document.querySelectorAll('.student-list li.selected').forEach(li => li.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+    window._selectedStudentId = studentId;
+    window._selectedClassId = classId;
 };
 
 
@@ -859,21 +1069,23 @@ window.printTimetable = function() {
         'h2 { font-size: 16px; margin-bottom: 8px; color: #000 !important; }',
         '#tt-print-wrap { width: 100%; }',
         '.timetable-grid { display: flex; flex-direction: column; gap: 1px; border: 1px solid #888; border-radius: 4px; overflow: hidden; background: #fff; }',
-        '.tt-row { display: grid; grid-template-columns: 70px repeat(5, minmax(0, 1fr)); gap: 1px; }',
-        '.tt-time-col { padding: 3px 2px; font-size: 9px; font-weight: 600; color: #222; background: #f4f4f4; border-radius: 2px; text-align: center; line-height: 1.1; }',
-        '.tt-day-col { padding: 3px; border-radius: 2px; min-height: 28px; display: flex; flex-direction: column; justify-content: center; font-size: 10px; line-height: 1.15; }',
-        '.tt-head .tt-day-col { font-weight: 700; text-transform: uppercase; font-size: 10px; color: #111; padding: 5px 3px; text-align: center; }',
-        '.tt-head .tt-day-col small { display: inline; font-size: 9px; color: #444; }',
-        '.timetable-entry { background: rgba(99, 102, 241, 0.15); border-left: 3px solid #6366f1; padding: 2px 4px; font-size: 10px; line-height: 1.15; }',
-        '.timetable-entry strong { font-size: 10px; }',
-        '.timetable-entry small { font-size: 9px; }',
+        '.tt-row { display: grid; grid-template-columns: 90px repeat(5, minmax(0, 1fr)); gap: 1px; }',
+        '.tt-time-col { padding: 6px 4px; font-size: 11px; font-weight: 600; color: #222; background: #f4f4f4; border-radius: 2px; text-align: center; line-height: 1.2; }',
+        '.tt-day-col { padding: 6px; border-radius: 2px; min-height: 48px; display: flex; flex-direction: column; justify-content: center; font-size: 12px; line-height: 1.25; }',
+        '.tt-head .tt-day-col { font-weight: 700; text-transform: uppercase; font-size: 12px; color: #111; padding: 8px 6px; text-align: center; }',
+        '.tt-head .tt-day-col small { display: inline; font-size: 12px; color: #333; }',
+        '.timetable-entry { background: rgba(99, 102, 241, 0.15); border-left: 3px solid #6366f1; padding: 4px 6px; font-size: 12px; line-height: 1.25; }',
+        '.timetable-entry strong { font-size: 12px; }',
+        '.timetable-entry small { font-size: 11px; }',
         '.tt-edit-btn { display: none !important; }',
-        '.tt-holiday { background: rgba(245, 158, 11, 0.18) !important; border: 1px solid #f59e0b; font-size: 10px; padding: 4px; text-align: center; }',
+        '.tt-holiday { background: rgba(245, 158, 11, 0.18) !important; border: 1px solid #f59e0b; font-size: 12px; padding: 6px; text-align: center; }',
         '.timetable-free { background: #fafafa; border: 1px solid #eee; }',
         '.tt-pause-entry { background: #eee !important; border-left: 3px solid #94a3b8 !important; }',
         '.tt-pause-row .tt-day-col, .tt-pause-row .tt-time-col { min-height: 0; padding: 0 4px; font-size: 0; }',
         '.tt-holiday-row .tt-day-col { min-height: 0; padding: 0; background: transparent; border: none; }',
-        '.tt-row.tt-head .tt-day-col small { display: inline; font-size: 9px; color: #333; }'
+        '.tt-patrol, .tt-sprechstunde { background: #e2e8f0 !important; border-left: 3px solid #475569 !important; font-weight: 600 !important; color: #000 !important; min-height: 24px !important; padding: 3px 6px !important; font-size: 11px !important; }',
+        '.tt-patrol strong, .tt-sprechstunde strong, .tt-patrol small, .tt-sprechstunde small { color: #000 !important; font-size: 11px !important; }',
+        '.tt-row.tt-head .tt-day-col small { display: inline; font-size: 12px; color: #333; }'
     ].join('\n');
 
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stundenplan</title>' +
@@ -1031,28 +1243,30 @@ function renderGrading() {
     const showExams = cls ? (cls.showExams !== false) : true;
     const showExerciseNr = cls ? (cls.showExerciseNr !== false) : true;
     const showHomework = cls ? (cls.showHomework !== false) : true;
-    if (planMode === 'gz' && (currentGradeTab === 'hw' || currentGradeTab === 'exam' || currentGradeTab === 'pruef')) {
+    if (planMode === 'gz' && ((currentGradeTab === 'exam' || currentGradeTab === 'pruef') || (currentGradeTab === 'hw' && !showHomework))) {
         currentGradeTab = 'plan';
     }
     let tabs = [
         ['plan', 'Stundenplanung']
     ];
     if (showHomework) tabs.push(['hw', 'Hausübungen']);
-    if (showExams) tabs.push(['exam', 'Schularbeiten']);
+    if (showExams || planMode === 'dg') tabs.push(['exam', 'Schularbeiten']);
     tabs.push(['pruef', 'Prüfungen']);
     tabs.push(['mit', 'Mitarbeit']);
     tabs.push(['overview', 'Übersicht']);
     if (planMode === 'dg') tabs.push(['project', 'Projekt']);
     if (planMode === 'gz') {
-        tabs = [
-            ['plan', 'Stundenplanung'],
-            ['gz-grades', 'ÜB Noten'],
-            ['gz-project', 'Projekt'],
-            ['mit', 'Mitarbeit und Mappe'],
-            ['gz-forgotten', 'Vergessenes'],
-            ['worksheets', 'Liste der ÜB'],
-            ['gz-overview', 'Übersicht']
+        const gzTabs = [
+            ['plan', 'Stundenplanung']
         ];
+        if (showHomework) gzTabs.push(['hw', 'Hausübungen']);
+        gzTabs.push(['gz-grades', 'ÜB Noten']);
+        gzTabs.push(['gz-project', 'Projekt']);
+        gzTabs.push(['mit', 'Mitarbeit und Mappe']);
+        gzTabs.push(['gz-forgotten', 'Vergessenes']);
+        gzTabs.push(['worksheets', 'Liste der ÜB']);
+        gzTabs.push(['gz-overview', 'Übersicht']);
+        tabs = gzTabs;
     }
     switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
     container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
@@ -1065,7 +1279,7 @@ function renderGrading() {
                 if (firstDataRow) {
                     const cells = firstDataRow.querySelectorAll('td');
                     if (currentGradeTab === 'gz-grades') {
-                        const students = DB.loadStudents().filter(s => s.classId === classId);
+                        const students = DB.getStudentsForClass(classId);
                         const worksheets = getGZPlannedWorksheets(classId);
                         if (students.length && worksheets.length) {
                             const targetCol = 1 + (worksheets.length - 1) * 4;
@@ -1552,8 +1766,8 @@ window.saveSupplierEntry = function(classId) {
 /* ============ HAUSÜBUNGEN ============ */
 function hwStatusOptions(sel, classId) {
     if (isDGClass(classId)) {
-        const opts = [['', '–'], ['4', '4'], ['3', '3'], ['2', '2'], ['1', '1'], ['0', '0'], ['k', 'k']];
-        return opts.map(o => '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+        const opts = [['', '–', ''], ['4', '4', ''], ['3', '3', ''], ['2', '2', ''], ['1', '1', ''], ['0', '0', 'hw-opt-0'], ['k', 'k', 'hw-opt-k']];
+        return opts.map(o => '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + (o[2] ? ' class="' + o[2] + '"' : '') + '>' + o[1] + '</option>').join('');
     }
     const opts = [['', '–'], ['forgotten', 'x'], ['improve', 'V!'], ['improved', 'Vg'], ['sick', 'k'], ['collected', 'ab']];
     return opts.map(o => '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + ' class="hw-opt-' + o[0] + '">' + o[1] + '</option>').join('');
@@ -1597,7 +1811,7 @@ function computeHwGrade(classId, studentId, hws) {
 let hwViewMode = 'detailed';
 
 function renderHomework(classId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const plan = sortedPlan(classId);
     const isDG = isDGClass(classId);
     const globalSettings = DB.loadGlobalSettings();
@@ -1693,7 +1907,7 @@ function renderHomeworkDetailed(classId, students, hws) {
             columns.forEach(col => {
                 const cell = status[s.id] && status[s.id][col.hwNr] ? status[s.id][col.hwNr] : {};
                 const val = getDGHwSheetValue(cell, col.sheet);
-                const selClass = val ? ' hw-status-' + val : '';
+                const selClass = (val === '0' || val === 'k') ? ' hw-status-' + val : '';
                 html += '<td class="hw-cell">' +
                     '<select class="hw-status' + selClass + '" onchange="window.setHwSheetStatus(\'' + classId + '\',\'' + s.id + '\',' + col.hwNr + ',\'' + col.sheet.replace(/'/g, "\\'") + '\',this.value)">' + hwStatusOptions(val, classId) + '</select>' +
                     '</td>';
@@ -1780,7 +1994,7 @@ function showAllMissingHwModal(classId) {
     const isDG = isDGClass(classId);
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     
     if (!students.length || !plan.length) {
         showModal('<div class="modal-header"><h2>Fehlende Hausübungen</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div><p>Keine Daten vorhanden.</p>');
@@ -1845,7 +2059,7 @@ function renderMissingHwOverview(classId) {
     const isDG = isDGClass(classId);
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? escapeHtml(cls.name) : '';
     
@@ -2193,7 +2407,7 @@ function hasExamPoints(rec, exam) {
 }
 
 function renderExamTable(classId, exam) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const records = DB.loadExamRecords(classId);
     const subs = (exam.subtotals || []).filter(p => p >= 1 && p < exam.examples.length);
     const subSet = new Set(subs);
@@ -2254,7 +2468,7 @@ function renderExamTable(classId, exam) {
 }
 
 function renderExamStats(classId, exam, containerId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const records = DB.loadExamRecords(classId);
     const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     students.forEach(s => {
@@ -2302,7 +2516,7 @@ function printExam() { window.print(); }
 
 /* ============ PRÜFUNGEN ============ */
 function renderPruefungen(classId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const data = DB.loadPruefung(classId);
     let html = '<div class="view-header"><div><h2>Prüfungen</h2><p class="subtitle">Pro Schüler eine mündliche Prüfung mit Datum und Note.</p></div></div>';
     html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Note</th><th>Notiz</th></tr></thead><tbody>';
@@ -2328,7 +2542,7 @@ function setPruefung(classId, studentId, field, value) {
 
 /* ============ MITARBEIT ============ */
 function renderMitarbeit(classId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const data = DB.loadMitarbeit(classId);
     const status = DB.loadWorksheetStatus(classId);
     const mitTitle = isGZClass(classId) ? 'Mitarbeit und Mappe' : 'Mitarbeit';
@@ -2369,7 +2583,7 @@ function filterByScope(hws, exams, cutoff) {
 }
 
 function renderProjects(classId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const data = DB.loadProjectGrades(classId);
     let html = '<div class="view-header"><div><h2>Projekt</h2></div></div>';
     html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
@@ -2408,7 +2622,7 @@ window.toggleProjectOnTime = function(classId, studentId) {
 };
 
 function renderOverview(classId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const allHws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date }));
     const exams = DB.loadExams(classId);
     const cutoff = DB.loadSemesterCutoff(classId);
@@ -2664,20 +2878,95 @@ window.restoreBackup = function() {
 };
 
 function openNewSchoolYearModal() {
+    const classes = DB.getSortedClasses();
+    if (!classes.length) {
+        showModal('<div class="modal-header"><h2>Neues Schuljahr starten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div><p>Keine Klassen vorhanden.</p>');
+        return;
+    }
+    const classListHtml = classes.map(cls =>
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:8px;background:var(--bg-dark);border-radius:8px;">' +
+        '<input type="checkbox" id="sy-class-' + cls.id + '" checked style="accent-color:var(--primary);">' +
+        '<span style="flex:1;font-weight:500;">' + escapeHtml(cls.name) + ' <small style="color:var(--text-muted);">' + escapeHtml(cls.subject) + '</small></span>' +
+        '<input type="text" id="sy-new-name-' + cls.id + '" placeholder="Neuer Name (z.B. 5A)" style="width:140px;padding:6px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">' +
+        '</div>'
+    ).join('');
     const html = '<div class="modal-header">' +
         '<h2>Neues Schuljahr starten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
         '<p>Damit Sie das aktuelle Jahr nicht verlieren, empfehle ich zuerst:<br><strong>📁 Schuljahr sichern</strong>.</p>' +
-        '<p style="color:var(--danger);">Wenn Sie fortfahren, werden <strong>alle Klassen, Schüler, Stundenplan und Noten</strong> gelöscht. Einstellungen, Zeiten und Feiertage bleiben erhalten.</p>' +
+        '<div class="form-group exam-form">' +
+        '<h3>Klassen auswählen und umbenennen</h3>' +
+        '<p class="subtitle" style="font-size:12px;">Markieren Sie Klassen, die Sie ins nächste Schuljahr übernehmen möchten. Optional können Sie einen neuen Namen eingeben (z.B. 4A → 5A).</p>' +
+        classListHtml +
+        '<label style="display:flex;align-items:center;gap:6px;margin-top:12px;width:auto;"><input type="checkbox" id="archive-school-year"> Aktuelles Jahr vorher archivieren</label>' +
+        '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;width:auto;"><input type="checkbox" id="clear-timetable" checked> Stundenplan leeren</label>' +
+        '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;width:auto;"><input type="checkbox" id="clear-grades" checked> Noten und Prüfungen löschen</label>' +
+        '</div>' +
         '<div style="display:flex; gap:10px; justify-content:flex-end; margin-top:15px;">' +
         '<button class="btn btn-secondary" onclick="hideModal()">Abbrechen</button>' +
-        '<button class="btn" onclick="startNewSchoolYear()">Neues Schuljahr starten</button>' +
+        '<button class="btn" onclick="executeSchoolYearChange()">Neues Schuljahr starten</button>' +
         '</div>';
     showModal(html);
 }
 
-function startNewSchoolYear() {
-    if (!confirm('Wirklich alle schulbezogenen Daten löschen? Dies kann nicht rückgängig gemacht werden.')) return;
-    DB.clearSchoolData();
+function executeSchoolYearChange() {
+    const classes = DB.loadClasses();
+    const toKeep = [];
+    const toDelete = [];
+    classes.forEach(cls => {
+        const cb = document.getElementById('sy-class-' + cls.id);
+        if (cb && cb.checked) {
+            const newNameInput = document.getElementById('sy-new-name-' + cls.id);
+            const newName = newNameInput ? newNameInput.value.trim() : '';
+            toKeep.push({ id: cls.id, newName: newName });
+        } else {
+            toDelete.push(cls.id);
+        }
+    });
+    if (toKeep.length === 0) {
+        alert('Bitte mindestens eine Klasse auswählen.');
+        return;
+    }
+    if (!confirm('Wirklich das Schuljahr wechseln? Nicht ausgewählte Klassen werden gelöscht.')) return;
+    const archive = document.getElementById('archive-school-year') && document.getElementById('archive-school-year').checked;
+    const clearTimetable = document.getElementById('clear-timetable') && document.getElementById('clear-timetable').checked;
+    const clearGrades = document.getElementById('clear-grades') && document.getElementById('clear-grades').checked;
+    if (archive) {
+        backupSchoolYear();
+    }
+    toDelete.forEach(id => {
+        DB.deleteClass(id);
+    });
+    const remainingClasses = classes.filter(c => !toDelete.includes(c.id));
+    remainingClasses.forEach(cls => {
+        const keep = toKeep.find(k => k.id === cls.id);
+        if (keep && keep.newName) {
+            cls.name = keep.newName;
+        }
+    });
+    DB.saveClasses(remainingClasses);
+    if (clearTimetable) {
+        DB.saveTimetable([]);
+    }
+    if (clearGrades) {
+        remainingClasses.forEach(cls => {
+            DB.saveExams(cls.id, []);
+            DB.saveTeachingPlan(cls.id, []);
+            DB.saveHwStatus(cls.id, {});
+            DB.saveHwCorrected(cls.id, {});
+            DB.saveHwExpired(cls.id, {});
+            DB.saveMitarbeit(cls.id, {});
+            DB.saveManualGrades(cls.id, {});
+            DB.saveSemesterManualGrades(cls.id, {});
+            DB.saveWorksheets(cls.id, []);
+            DB.saveWorksheetStatus(cls.id, {});
+            DB.saveAttendance(cls.id, []);
+            DB.savePortfolioGrades(cls.id, {});
+            DB.saveProjectGrades(cls.id, {});
+            DB.saveProjects(cls.id, []);
+            DB.savePruefungen(cls.id, []);
+            DB.savePruefung(cls.id, {});
+        });
+    }
     hideModal();
     switchView('dashboard');
     renderDashboard();
@@ -2732,6 +3021,77 @@ function loadTimeSlotsTable() {
 }
 
 window.openTimetableEditor = openTimetableEditor;
+window.openTimetableEditorFromCell = function(day, period) {
+    openTimetableEditor(day, period);
+};
+window.openAppointmentModal = function(date) {
+    const html = '<div class="modal-header"><h2>Termin hinzufügen</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<label>Datum</label><input type="date" id="appt-date" value="' + (date || '') + '">' +
+        '<label>Titel</label><input type="text" id="appt-title" placeholder="z.B. Elternabend">' +
+        '<label>Beschreibung (optional)</label><input type="text" id="appt-desc" placeholder="z.B. 18:00, Aula">' +
+        '<button class="btn" onclick="saveAppointment()">Speichern</button>' +
+        '</div>' +
+        '<h3 style="margin-top:15px;">Termine</h3>' +
+        '<div id="appointments-list"></div>';
+    showModal(html);
+    renderAppointmentsList();
+};
+window.saveAppointment = function() {
+    captureUndo();
+    const date = document.getElementById('appt-date').value;
+    const title = document.getElementById('appt-title').value.trim();
+    const desc = document.getElementById('appt-desc').value.trim();
+    if (!date || !title) { alert('Bitte Datum und Titel angeben.'); return; }
+    DB.addAppointment({ date: date, title: title, description: desc });
+    document.getElementById('appt-title').value = '';
+    document.getElementById('appt-desc').value = '';
+    renderAppointmentsList();
+    renderDashboard();
+};
+window.editAppointment = function(id) {
+    const appt = DB.loadAppointments().find(a => a.id === id);
+    if (!appt) return;
+    showModal('<div class="modal-header"><h2>Termin bearbeiten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<label>Datum</label><input type="date" id="edit-appt-date" value="' + appt.date + '">' +
+        '<label>Titel</label><input type="text" id="edit-appt-title" value="' + escapeHtml(appt.title || '') + '">' +
+        '<label>Beschreibung (optional)</label><input type="text" id="edit-appt-desc" value="' + escapeHtml(appt.description || '') + '">' +
+        '<button class="btn" onclick="updateAppointment(\'' + id + '\')">Speichern</button>' +
+        '<button class="btn btn-secondary" onclick="deleteAppointment(\'' + id + '\')">Löschen</button>' +
+        '</div>');
+};
+window.updateAppointment = function(id) {
+    captureUndo();
+    const date = document.getElementById('edit-appt-date').value;
+    const title = document.getElementById('edit-appt-title').value.trim();
+    const desc = document.getElementById('edit-appt-desc').value.trim();
+    if (!date || !title) { alert('Bitte Datum und Titel angeben.'); return; }
+    DB.updateAppointment(id, { date: date, title: title, description: desc });
+    hideModal();
+    renderAppointmentsList();
+    renderDashboard();
+};
+window.deleteAppointment = function(id) {
+    if (!confirm('Termin wirklich löschen?')) return;
+    DB.deleteAppointment(id);
+    hideModal();
+    renderAppointmentsList();
+    renderDashboard();
+};
+function renderAppointmentsList() {
+    const list = DB.loadAppointments() || [];
+    const container = document.getElementById('appointments-list');
+    if (!container) return;
+    if (!list.length) { container.innerHTML = '<p class="subtitle" style="font-size:12px;">Keine Termine eingetragen.</p>'; return; }
+    let html = '<table class="settings-table" style="width:100%;"><thead><tr><th>Datum</th><th>Titel</th><th>Beschreibung</th><th></th></tr></thead><tbody>';
+    list.sort((a, b) => a.date.localeCompare(b.date)).forEach(a => {
+        html += '<tr><td>' + formatDateDE(a.date) + '</td><td>' + escapeHtml(a.title || '') + '</td><td>' + escapeHtml(a.description || '') + '</td>' +
+            '<td><button class="btn btn-secondary" onclick="editAppointment(\'' + a.id + '\')">Bearbeiten</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
 window.openClassManager = openClassManager;
 window.editStudent = editStudent;
 window.saveStudentEdit = saveStudentEdit;
@@ -2743,7 +3103,7 @@ window.saveAutonomousDays = saveAutonomousDays;
 window.exportData = exportData;
 window.backupSchoolYear = backupSchoolYear;
 window.openNewSchoolYearModal = openNewSchoolYearModal;
-window.startNewSchoolYear = startNewSchoolYear;
+window.executeSchoolYearChange = executeSchoolYearChange;
 window.importData = importData;
 window.linkDataFile = linkDataFile;
 window.addManualHoliday = addManualHoliday;
@@ -2959,6 +3319,7 @@ function getGZPlannedWorksheets(classId) {
     const globalSettings = DB.loadGlobalSettings();
     const schoolYearStart = globalSettings.schoolYearStart || '';
     const schoolYearEnd = globalSettings.schoolYearEnd || '';
+    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
     if (!schoolYearStart || !schoolYearEnd || !firstLessonDate) return [];
     const startDate = firstLessonDate;
     const regularDates = [];
@@ -2983,7 +3344,8 @@ function getGZPlannedWorksheets(classId) {
         const entry = worksheetEntries.find(e => e.date === date);
         if (entry && !seen.has(entry.homeworkNr)) {
             seen.add(entry.homeworkNr);
-            result.push({ nr: parseInt(entry.homeworkNr, 10), title: entry.homeworkContent || '', date: entry.date });
+            const nr = parseInt(entry.homeworkNr, 10);
+            result.push({ nr: nr, title: entry.homeworkContent || '', date: entry.date, isComputerOnly: computerOnly.indexOf(nr) !== -1 });
         }
     });
     return result;
@@ -2993,22 +3355,70 @@ function renderGZWorksheets(classId) {
     const planned = getGZPlannedWorksheets(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? cls.name : '';
-    let html = '<div class="view-header print-keep"><div><h2>Liste der ÜB – ' + escapeHtml(className) + '</h2></div></div>';
+    const globalSettings = DB.loadGlobalSettings();
+    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
+    let html = '<div class="view-header print-keep"><div><h2>Liste der ÜB – ' + escapeHtml(className) + '</h2></div>' +
+        '<button class="btn btn-secondary" onclick="window.exportWorksheetsCSV(\'' + classId + '\')">📊 Als CSV exportieren</button></div>';
     if (!planned.length) {
         html += '<p class="subtitle">Noch keine Übungsblätter in der Stundenplanung vorhanden.</p>';
         return html;
     }
-    html += '<table class="grading-table"><thead><tr><th>Nr.</th><th>Titel</th><th>Datum</th></tr></thead><tbody>';
+    html += '<table class="grading-table"><thead><tr><th>Nr.</th><th>Titel</th><th>Datum</th><th>Nur Computer</th></tr></thead><tbody>';
     planned.forEach(w => {
-        html += '<tr><td>' + w.nr + '</td><td>' + escapeHtml(w.title || '') + '</td><td>' + formatDateDE(w.date || '') + '</td></tr>';
+        const isComputer = computerOnly.indexOf(w.nr) !== -1;
+        const rowStyle = isComputer ? 'style="color:#16a34a;font-style:italic;"' : '';
+        const toggleLabel = isComputer ? 'Als Mappe markieren' : 'Als Nur-Computer markieren';
+        html += '<tr ' + rowStyle + '><td>' + w.nr + '</td><td>' + escapeHtml(w.title || '') + '</td><td>' + formatDateDE(w.date || '') + '</td>' +
+            '<td style="text-align:center;"><button class="btn btn-secondary" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + toggleLabel + '</button></td></tr>';
     });
     html += '</tbody></table>';
     return html;
 }
 
+window.toggleComputerOnly = function(classId, worksheetNr) {
+    const globalSettings = DB.loadGlobalSettings();
+    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
+    const idx = computerOnly.indexOf(worksheetNr);
+    if (idx >= 0) computerOnly.splice(idx, 1);
+    else computerOnly.push(worksheetNr);
+    globalSettings.computerWorksheets = globalSettings.computerWorksheets || {};
+    globalSettings.computerWorksheets[classId] = computerOnly;
+    DB.saveGlobalSettings(globalSettings);
+    renderGrading();
+};
+
+window.exportWorksheetsCSV = function(classId) {
+    const planned = getGZPlannedWorksheets(classId);
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const className = cls ? cls.name : 'Klasse';
+    const globalSettings = DB.loadGlobalSettings();
+    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
+    if (!planned.length) {
+        alert('Keine Übungsblätter zum Exportieren vorhanden.');
+        return;
+    }
+    const lines = ['Nr.;Titel;Datum;Nur Computer'];
+    planned.forEach(w => {
+        const title = (w.title || '').replace(/"/g, '""');
+        const date = formatDateDE(w.date || '');
+        const isComputer = computerOnly.indexOf(w.nr) !== -1;
+        lines.push('"' + w.nr + '";"' + title + '";"' + date + '";' + (isComputer ? 'Ja' : 'Nein'));
+    });
+    const csv = lines.join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'uebungsliste_' + className.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
 function renderGZGrades(classId) {
     normalizeGZForgotten(classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const worksheets = getGZPlannedWorksheets(classId);
     const status = DB.loadWorksheetStatus(classId);
     const weights = DB.loadGZGradeWeights(classId);
@@ -3019,7 +3429,9 @@ function renderGZGrades(classId) {
     }
     html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left">Schüler</th>';
     worksheets.forEach(w => {
-        html += '<th colspan="4" class="gz-ws-sep">' + w.nr + '<br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small></th>';
+        const co = w.isComputerOnly ? ' <small style="color:#16a34a;font-style:italic;">(nur Computer)</small>' : '';
+        const toggleBtn = '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? '✓ Nur Computer' : '○ Ausgeteilt') + '</button>';
+        html += '<th colspan="4" class="gz-ws-sep">' + w.nr + toggleBtn + '<br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small>' + co + '</th>';
     });
     html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
     worksheets.forEach(w => {
@@ -3048,14 +3460,15 @@ function renderGZGrades(classId) {
             const forgotLabel = matOn ? 'Mat' : (lapOn ? 'Lap' : '');
             const forgotClass = (matOn || lapOn) ? 'gz-mat active' : '';
             const gradeSelectClass = grade ? ' gz-grade-' + grade : '';
-            html += '<td class="gz-ws-sep"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',this.value)">' +
+            const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
+            html += '<td class="gz-ws-sep' + computerClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',this.value)">' +
                 '<option value="">–</option>' +
                 [1,2,3,4,5].map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
                 '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>nur gesehen</option>' +
                 '</select></td>';
-            html += '<td style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',' + (!absent) + ')">k</button></td>';
-            html += '<td style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ')">' + recvLabel + '</button></td>';
-            html += '<td class="gz-ws-last" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
+            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',' + (!absent) + ')">k</button></td>';
+            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ')">' + recvLabel + '</button></td>';
+            html += '<td class="gz-ws-last ' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
         });
         const avg = count > 0 ? (sum / count).toFixed(2) : '–';
         const missingJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
@@ -3147,7 +3560,7 @@ window.setGZProjectGrade = function(classId, studentId, value, field) {
 };
 
 function renderGZProject(classId) {
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const status = DB.loadWorksheetStatus(classId);
     let html = '<div class="view-header"><div><h2>Projekt</h2><p class="subtitle">Projektnote und Bemerkung pro Schüler.</p></div></div>';
     if (!students.length) {
@@ -3308,7 +3721,7 @@ function gzForgottenHas(classId, date, studentId, kind) {
 
 function renderGZForgotten(classId) {
     normalizeGZForgotten(classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const worksheets = getGZPlannedWorksheets(classId);
     const wsDates = new Set(worksheets.map(w => w.date));
     const data = DB.loadForgotMaterial(classId);
@@ -3332,7 +3745,7 @@ function renderGZForgotten(classId) {
     Object.keys(studentEntries).forEach(sid => {
         studentEntries[sid].sort((a, b) => a.date.localeCompare(b.date));
     });
-    const sortedStudents = students.filter(s => studentEntries[s.id]).sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    const sortedStudents = students.filter(s => studentEntries[s.id]).sort((a, b) => (getLastName(a.name) || '').localeCompare(getLastName(b.name) || ''));
     let html = '<div class="view-header"><div><h2>Vergessenes Material</h2>' +
         '<p class="subtitle">Pro Schüler: welche Übungstage mit Material- oder Laptop-Vergessen.</p></div></div>';
     if (!sortedStudents.length) {
@@ -3397,7 +3810,7 @@ window.renderGZForgotten = renderGZForgotten;
 
 function renderGZOverview(classId) {
     normalizeGZForgotten(classId);
-    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const students = DB.getStudentsForClass(classId);
     const worksheets = getGZPlannedWorksheets(classId);
     const status = DB.loadWorksheetStatus(classId);
     const weights = DB.loadGZGradeWeights(classId);
@@ -3405,6 +3818,7 @@ function renderGZOverview(classId) {
     const semesterManualGrades = DB.loadSemesterManualGrades(classId);
     const mitarbeit = DB.loadMitarbeit(classId);
     const project = DB.loadProjectGrades(classId);
+    const remarks = DB.loadSemesterRemarks(classId);
     const isYear = gradeOverviewScope === 'year';
     const includeProject = isYear;
     let html = '<div class="view-header"><div><h2>Übersicht – ' + (isYear ? 'Ganzes Jahr' : '1. Semester') + '</h2>' +
@@ -3421,6 +3835,7 @@ function renderGZOverview(classId) {
     html += '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
         '<th>Schüler</th><th>Ø ÜB</th><th>Mappe 1. Sem.</th><th>Mat. vergessen</th><th>Laptop vergessen</th><th>Berechnet</th><th>Note (1. Sem.)</th>' +
         (isYear ? '<th>Projekt</th><th>Note (Jahr)</th>' : '') +
+        '<th>Bemerkung</th>' +
         '</tr></thead><tbody>';
     students.forEach(s => {
         const st = status[s.id] || {};
@@ -3457,6 +3872,7 @@ function renderGZOverview(classId) {
             '<td>' + (!isYear ? gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)") : (semesterManual != null ? semesterManual : '–')) + '</td>' +
             (isYear ? '<td>' + (st.project != null ? st.project : '–') + '</td>' : '') +
             (isYear ? '<td>' + (manual != null ? manual : '–') + '</td>' : '') +
+            '<td><input type="text" class="grade-input" value="' + escapeHtml(remarks[s.id] || '') + '" onchange="setSemesterRemark(\'' + classId + '\',\'' + s.id + '\',this.value)" placeholder="…"></td>' +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -3469,6 +3885,14 @@ window.setSemesterManualGrade = function(classId, studentId, val) {
     if (val === '') delete m[studentId];
     else m[studentId] = parseFloat(val);
     DB.saveSemesterManualGrades(classId, m);
+    renderGrading();
+};
+
+window.setSemesterRemark = function(classId, studentId, value) {
+    captureUndo();
+    const remarks = DB.loadSemesterRemarks(classId);
+    remarks[studentId] = value || '';
+    DB.saveSemesterRemarks(classId, remarks);
     renderGrading();
 };
 
@@ -3492,7 +3916,7 @@ function renderGradesOverview() {
         '<button class="btn no-print" onclick="window.openGradesOverviewPrint()" style="margin-left:10px;">🖨️ Drucken</button>' +
         '</div>';
     classes.forEach(cls => {
-        const students = DB.loadStudents().filter(s => s.classId === cls.id);
+        const students = DB.getStudentsForClass(cls.id);
         if (!students.length) return;
         html += '<div class="all-grades-section">';
         html += '<h2>' + escapeHtml(cls.name) + ' – ' + escapeHtml(cls.subject) + '</h2>';
@@ -3678,7 +4102,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (diag) {
         try {
             const classes = DB.loadClasses();
-            const students = DB.loadStudents();
+            const students = DB.getStudentsSorted();
             const timetable = DB.getTimetable();
             diag.innerHTML = '<strong>Diagnose:</strong> ' + classes.length + ' Klassen | ' + students.length + ' Schüler | ' + timetable.length + ' Stundenplan-Einträge | localStorage=' + localStorage.length;
         } catch (e) {
@@ -3690,7 +4114,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         li.addEventListener('click', () => switchView(li.dataset.view));
     });
     var ttBtn = document.getElementById('open-timetable-btn');
-    if (ttBtn) ttBtn.addEventListener('click', function() { openTimetableEditor(); });
+    if (ttBtn) ttBtn.addEventListener('click', function() { window.setTimetableEditMode(!timetableEditMode); });
     var classBtn = document.getElementById('open-classmanager-btn');
     if (classBtn) classBtn.addEventListener('click', function() { openClassManager(); });
     var examBtn = document.getElementById('open-exammanager-btn');
@@ -3778,6 +4202,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (targetIndex < targetRowInputs.length && targetRowInputs[targetIndex]) {
             targetRowInputs[targetIndex].focus();
         }
+    });
+    document.addEventListener('keydown', function(e) {
+        if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v')) return;
+        if (!window._selectedStudentId || !window._selectedClassId) return;
+        const modal = document.getElementById('modal-overlay');
+        if (!modal || modal.style.display === 'none') return;
+        e.preventDefault();
+        pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
     });
     if (window.OD) {
         try { await window.OD.init(); } catch (e) { console.error('OD init failed', e); }
@@ -3924,3 +4356,10 @@ DB.saveTodoText = function(id, text) {
     const todo = todos.find(t => t.id === id);
     if (todo) { todo.text = text.trim(); DB.saveTodos(todos); }
 };
+
+(function initTheme() {
+    try {
+        const saved = DB.load('theme', 'dark');
+        applyTheme(saved);
+    } catch (e) {}
+})();

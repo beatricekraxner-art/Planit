@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "Plan-it",
   "short_name": "Plan-it",
   "start_url": ".",
@@ -7,9 +7,10 @@
   "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "assets/icon.png",
+      "src": "assets/icon-pwa.svg",
       "sizes": "any",
-      "type": "image/png"
+      "type": "image/svg+xml"
     }
   ]
 }
+

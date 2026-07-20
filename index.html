@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plan-it</title>
-    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 rx=%228%22 fill=%22%231a1d24%22/><circle cx=%2220%22 cy=%2220%22 r=%2210%22 stroke=%22%232563eb%22 stroke-width=%222%22 fill=%22none%22/><path d=%22M20 14v6l6 4%22 stroke=%22%2394a3b8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
+    <link rel="stylesheet" href="style.css?v=24">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -39,12 +40,13 @@
                 <div class="topbar-actions">
                     <span id="offline-indicator" class="offline-indicator" title="Verbindungsstatus">Online</span>
                     <span id="sync-status" class="sync-status" title="Sync-Status">--</span>
-                    <button class="btn btn-secondary" id="undo-btn" onclick="window.UndoManager.undo()" disabled title="Rückgängig (Ctrl+Z)">↶<span class="button-text"> Rückgängig</span></button>
-                    <button class="btn btn-secondary" id="redo-btn" onclick="window.UndoManager.redo()" disabled title="Wiederholen (Ctrl+Shift+Z)">↷<span class="button-text"> Wiederholen</span></button>
+                    <button class="btn btn-secondary" id="undo-btn" onclick="window.UndoManager.undo()" disabled title="Rückgängig (Ctrl+Z)">↶</button>
+                    <button class="btn btn-secondary" id="redo-btn" onclick="window.UndoManager.redo()" disabled title="Wiederholen (Ctrl+Shift+Z)">↷</button>
+                    <button class="btn btn-secondary" id="theme-toggle-btn" onclick="window.toggleTheme()" title="Helles/Dunkles Design umschalten">🌙<span class="button-text"> Design</span></button>
                     <div id="loading-overlay" class="loading-overlay" style="display:none;"><div class="loading-spinner"></div><span class="loading-text">Speichert...</span></div>
                     <button class="btn btn-secondary" onclick="window.syncNow()">🔄<span class="button-text"> Sync</span></button>
                     <button class="btn btn-secondary" onclick="window.ODConnect()">☁️<span class="button-text"> OneDrive</span></button>
-                    <button class="btn btn-secondary" onclick="window.print()">🖨️<span class="button-text"> Drucken</span></button>
+                    <button class="btn btn-secondary" onclick="window.print()">🖨️</button>
                     <button class="btn" id="save-btn" onclick="window.manualSave()">💾<span class="button-text"> Speichern</span></button>
                     <span id="save-status" class="save-status">Bereit</span>
                 </div>
@@ -57,9 +59,9 @@
                         <p class="subtitle">Ihr Stundenplan und Kalender für die aktuelle Woche.</p>
                     </div>
                     <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-                        <button class="btn" id="open-timetable-btn" onclick="window.openTimetableEditor()">Stundenplan bearbeiten</button>
+                        <button class="btn" id="open-timetable-btn">Stundenplan bearbeiten</button>
                         <button class="btn btn-secondary" onclick="window.printTimetable()">🖨️ Stundenplan drucken</button>
-                        <select id="timetable-cutoff" onchange="window.setTimetableCutoff(this.value)" style="padding: 10px; background: var(--bg-dark); color: white; border: 1px solid var(--border-color); border-radius: 8px;">
+                        <select id="timetable-cutoff" onchange="window.setTimetableCutoff(this.value)" style="padding: 10px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px;">
                             <option value="">Alle Stunden</option>
                         </select>
                     </div>
@@ -138,11 +140,13 @@
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="section-header">
+                    <div class="settings-section collapsed">
+                        <div class="section-header" style="cursor:pointer;" onclick="toggleSettingsSection(this)">
                             <h3>Stunden- und Pausenzeiten</h3>
-                            <button class="btn btn-secondary" onclick="window.addTimeSlot()">+ Zeile hinzufügen</button>
+                            <button class="btn btn-secondary" onclick="event.stopPropagation(); window.addTimeSlot()">+ Zeile hinzufügen</button>
+                            <span class="settings-toggle-icon" style="margin-left:8px;font-size:12px;">▼</span>
                         </div>
+                        <div class="settings-section-body">
                         <table class="settings-table" id="times-table">
                             <thead>
                                 <tr>
@@ -240,6 +244,7 @@
                             <label class="setting-toggle"><input type="checkbox" id="hide-holiday-columns" checked> Ferientage als „frei“ anzeigen</label>
                         </div>
                         <button class="btn" style="margin-top:20px;" onclick="window.saveTimeSettings()">💾 Speichern</button>
+                        </div>
                     </div>
 
                     <div class="settings-section">
