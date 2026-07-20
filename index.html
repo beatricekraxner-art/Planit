@@ -344,9 +344,7 @@
     <script src="js/ui.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function (regs) {
-                regs.forEach(function (r) { r.unregister(); });
-            });
+            navigator.serviceWorker.register('./sw.js');
         }
     </script>
 </body>
