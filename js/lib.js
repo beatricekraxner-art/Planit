@@ -345,6 +345,10 @@ const DB = {
     saveSemesterManualGrades: function(classId, m) { this.save('semester_manual_grades_' + classId, m); },
     loadSemesterRemarks: function(classId) { return this.load('semester_remarks_' + classId, {}); },
     saveSemesterRemarks: function(classId, m) { this.save('semester_remarks_' + classId, m); },
+    loadOverviewNoteComments: function(classId) { return this.load('overview_note_comments_' + classId, {}); },
+    saveOverviewNoteComments: function(classId, m) { this.save('overview_note_comments_' + classId, m); },
+    loadSemesterOverviewNoteComments: function(classId) { return this.load('semester_overview_note_comments_' + classId, {}); },
+    saveSemesterOverviewNoteComments: function(classId, m) { this.save('semester_overview_note_comments_' + classId, m); },
     exportAll: function() {
         const data = {};
         for (let i = 0; i < localStorage.length; i++) {

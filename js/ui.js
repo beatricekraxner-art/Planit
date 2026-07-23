@@ -1488,8 +1488,8 @@ function renderPlan(classId) {
             cols.push('Inhalt Schulübung');
             if (showHomework) cols.push('HÜ');
             cols.push('Inhalt Hausübung');
-            cols.push('');
-        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : 'grading-table plan-table';
+        cols.push('');
+        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : (planMode === 'dg' ? 'grading-table plan-table plan-table-dg' : (planMode === 'gz' ? 'grading-table plan-table plan-table-gz' : 'grading-table plan-table plan-table-mathe'));
         html += '<table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
             allDates.forEach(item => {
                 const date = item.date;
@@ -1525,7 +1525,7 @@ function renderPlan(classId) {
         return html;
     }
     if (isGZ) {
-        html += '<table class="grading-table plan-table"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
+        html += '<table class="grading-table plan-table plan-table-gz"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
@@ -1549,7 +1549,7 @@ function renderPlan(classId) {
             }
         }, 0);
     } else if (isDG) {
-        html += '<table class="grading-table plan-table"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
+        html += '<table class="grading-table plan-table plan-table-dg"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
@@ -1580,7 +1580,7 @@ function renderPlan(classId) {
         if (showHomework) cols.push('HÜ');
         cols.push('Inhalt Hausübung');
         cols.push('');
-        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : 'grading-table plan-table';
+        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : (planMode === 'dg' ? 'grading-table plan-table plan-table-dg' : (planMode === 'gz' ? 'grading-table plan-table plan-table-gz' : 'grading-table plan-table plan-table-mathe'));
         html += '<table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
@@ -1682,8 +1682,7 @@ function savePlanEntry(classId, id) {
     const hwSheets = hwSheetsEl ? hwSheetsEl.value.trim() : '';
     let hwNr = '';
     if (isDG) {
-        const plan = DB.loadTeachingPlan(classId);
-        hwNr = plan.filter(x => x.homeworkNr).length + 1;
+        hwNr = '';
     } else if (isGZ) {
         hwNr = wsNr;
     } else {
@@ -2573,10 +2572,10 @@ function renderMitarbeit(classId) {
         const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)") + '</td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.folderNote1 || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)"></td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
             '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)") + '</td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.folderNote2 || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)"></td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
             (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
             '</tr>';
     });
@@ -2649,6 +2648,8 @@ function renderOverview(classId) {
     const weights = DB.loadWeights(classId);
     const manual = DB.loadManualGrades(classId);
     const semesterManual = DB.loadSemesterManualGrades(classId);
+    const overviewNoteComments = DB.loadOverviewNoteComments(classId);
+    const semesterOverviewNoteComments = DB.loadSemesterOverviewNoteComments(classId);
     const isYear = gradeOverviewScope === 'year';
 
     let html = '<div class="view-header"><div><h2>Übersicht – ' + (isYear ? 'Ganzes Jahr' : '1. Semester') + '</h2>' +
@@ -2664,7 +2665,9 @@ function renderOverview(classId) {
     scopeData.exams.forEach(e => html += '<th>SA ' + e.nr + '<br><small>Pkte / Note</small></th>');
     html += '<th>Ø SA</th><th>Prüf.</th><th>Projekt</th><th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
-    html += '<th>Note (ich)</th></tr></thead><tbody>';
+    html += '<th>Note (ich)</th><th>Bemerkung</th>';
+    if (isYear) html += '<th>Bemerkung 1. Sem.</th>';
+    html += '</tr></thead><tbody>';
 
     students.forEach(s => {
         const hw = computeHwGrade(classId, s.id, scopeData.hws);
@@ -2698,6 +2701,8 @@ function renderOverview(classId) {
         if (parts.length && wSum > 0) computed = Math.round(parts.reduce((a, b) => a + b, 0) / wSum * 100) / 100;
         const activeManual = isYear ? (manual[s.id] != null ? manual[s.id] : null) : (semesterManual[s.id] != null ? semesterManual[s.id] : null);
         const semesterManualGrade = semesterManual[s.id] != null ? semesterManual[s.id] : null;
+        const noteComment = overviewNoteComments[s.id] || '';
+        const semesterNoteComment = semesterOverviewNoteComments[s.id] || '';
 
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td><span class="ov-pts">' + hw.points + '</span> / <span class="' + gradeClass(hw.grade) + ' grade-cell">' + (hw.grade != null ? hw.grade : '–') + '</span></td>' +
@@ -2708,6 +2713,8 @@ function renderOverview(classId) {
             '<td class="' + gradeClass(computed) + ' grade-cell">' + (computed != null ? computed : '–') + '</td>' +
             (isYear ? '<td class="' + gradeClass(semesterManualGrade) + ' grade-cell">' + (semesterManualGrade != null ? semesterManualGrade : '–') + '</td>' : '') +
             '<td>' + gradeSelect(activeManual, "setManualGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setOverviewNoteComment(\'' + classId + '\',\'' + s.id + '\',this.value)">' + escapeHtml(noteComment) + '</textarea></td>' +
+            (isYear ? '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setSemesterOverviewNoteComment(\'' + classId + '\',\'' + s.id + '\',this.value)">' + escapeHtml(semesterNoteComment) + '</textarea></td>' : '') +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -2732,6 +2739,24 @@ function setManualGrade(classId, studentId, val) {
     }
     renderGrading();
 }
+
+window.setOverviewNoteComment = function(classId, studentId, val) {
+    captureUndo();
+    const m = DB.loadOverviewNoteComments(classId);
+    if (!val) delete m[studentId];
+    else m[studentId] = val;
+    DB.saveOverviewNoteComments(classId, m);
+    renderGrading();
+};
+
+window.setSemesterOverviewNoteComment = function(classId, studentId, val) {
+    captureUndo();
+    const m = DB.loadSemesterOverviewNoteComments(classId);
+    if (!val) delete m[studentId];
+    else m[studentId] = val;
+    DB.saveSemesterOverviewNoteComments(classId, m);
+    renderGrading();
+};
 
 window.openWeightsModal = function(classId) {
     const weights = DB.loadWeights(classId);
@@ -3883,6 +3908,7 @@ function renderGZOverview(classId) {
         const manual = manualGrades[s.id] != null ? manualGrades[s.id] : null;
         const pr = project[s.id] || {};
         const forgot = getGZForgottenCounts(classId, s.id);
+        const noteComment = (remarks && remarks[s.id]) ? remarks[s.id] : '';
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + avg + '</td>' +
             '<td>' + (m.folder1 != null ? m.folder1 : '–') + '</td>' +
@@ -3890,9 +3916,9 @@ function renderGZOverview(classId) {
             '<td style="text-align:center;">' + (forgot.laptop || 0) + '</td>' +
             '<td>' + (calcSemester != null ? calcSemester.toFixed(2) : '–') + '</td>' +
             '<td>' + (!isYear ? gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)") : (semesterManual != null ? semesterManual : '–')) + '</td>' +
+            '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setSemesterRemark(\'' + classId + '\',\'' + s.id + '\',this.value)" placeholder="…">' + escapeHtml(noteComment) + '</textarea></td>' +
             (isYear ? '<td>' + (st.project != null ? st.project : '–') + '</td>' : '') +
             (isYear ? '<td>' + (manual != null ? manual : '–') + '</td>' : '') +
-            '<td><input type="text" class="grade-input" value="' + escapeHtml(remarks[s.id] || '') + '" onchange="setSemesterRemark(\'' + classId + '\',\'' + s.id + '\',this.value)" placeholder="…"></td>' +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -4240,12 +4266,21 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
             if (window.OD.useCloud) window.OD.useCloud();
             usedOneDriveInDesktop = true;
-        } else if (window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
             window.FilePersist = window.OneDrivePersist;
             if (window.OD.setProvider) window.OD.setProvider('onedrive');
             if (window.LocalPersist) window.LocalPersist.stopAutoSave();
             await window.OneDrivePersist.loadFromFile();
             window.OneDrivePersist.startAutoSave();
+        } else if (window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
+            window.FilePersist = window.OneDrivePersist;
+            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+            await window.OneDrivePersist.loadFromFile();
+            window.OneDrivePersist.startAutoSave();
+        } else if (!isWebApp && odConfigured && !odConnected && window.OneDrivePersist) {
+            window.FilePersist = window.OneDrivePersist;
+            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
         } else if (isWebApp) {
             window.FilePersist = {
                 available: true,
@@ -4275,8 +4310,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (typeof setODStatus === 'function') {
         setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
     }
-    const webNeedOD = isWebApp && !(window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected && window.OD.isConnected());
-    if (webNeedOD) {
+    const odAvailable = !!(window.OD && window.OD.getClientId && window.OD.getClientId());
+    const odConnectedNow = !!(window.OD && window.OD.isConnected && window.OD.isConnected());
+    const needOD = isWebApp && !odConnectedNow;
+    if (needOD) {
         await new Promise((resolve) => {
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
