@@ -53,7 +53,12 @@
 
     function getClientId() { return (localStorage.getItem(CLIENT_KEY) || '').trim(); }
     function getTenant() { return (localStorage.getItem(TENANT_KEY) || 'common').trim(); }
-    function getRedirectUri() { return window.location.origin + window.location.pathname; }
+    function getRedirectUri() {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'http://localhost:9014/';
+        }
+        return window.location.origin + window.location.pathname;
+    }
 
     function ensureMsal() {
         if (msal) return msal;
@@ -69,7 +74,7 @@
             },
             cache: {
                 cacheLocation: 'localStorage',
-                storeAuthStateInCookie: true
+                storeAuthStateInCookie: false
             }
         });
         return msal;
@@ -84,8 +89,8 @@
             return res.accessToken;
         } catch (e) {
             console.error('getTokenSilent failed', e);
-            if (allowLoginOnFail && msal.getAllAccounts().length > 0) {
-                login();
+            if (e && e.errorCode && e.errorCode.indexOf('block_nested_popups') !== -1) {
+                return null;
             }
             return null;
         }
@@ -107,16 +112,26 @@
 
         async login() {
             ensureMsal();
-            if (typeof msal.loginRedirect !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
-            _loginPromise = msal.loginRedirect({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
-            try { await _loginPromise; } catch (e) { _loginPromise = null; throw e; }
+            if (typeof msal.loginPopup !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
+            try {
+                const result = await msal.loginPopup({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
+                if (result && result.account) {
+                    saveSession(result.account, null);
+                }
+            } catch (e) {
+                console.error('OD loginPopup failed', e);
+                if (e && e.errorCode && e.errorCode.indexOf('block_nested_popups') !== -1) {
+                    throw new Error('Der Login-Popup wurde blockiert. Bitte schließe keine Fenster während der Anmeldung und versuche es erneut.');
+                }
+                throw e;
+            }
         },
 
         logout() {
             try {
                 ensureMsal();
                 const acc = msal.getAllAccounts()[0];
-                if (acc) msal.logoutRedirect();
+                if (acc) msal.logoutPopup();
             } catch (e) { console.error('OD logout', e); }
             clearSession();
         },
@@ -126,22 +141,28 @@
                 await ensureMsal();
                 await msal.handleRedirectPromise();
                 if (this.isConnected()) {
-                    const token = await getTokenSilent(true);
-                    if (token) {
-                        const text = await this._download(token);
-                        if (text && text.trim() && text.trim() !== '{}') {
-                            let serverData = null;
-                            try { serverData = JSON.parse(text); } catch (e) {}
-                            if (serverData && serverData._lastModified) {
-                                const localModified = localStorage.getItem('_lastModified');
-                                if (!localModified || localModified !== serverData._lastModified) {
-                                    console.log('OneDrive bootstrap: lade aktuelle Daten vom Server...');
-                                    DB.importAll(text);
-                                    localStorage.setItem('_lastModified', serverData._lastModified);
-                                } else {
-                                    console.log('OneDrive bootstrap: lokale Daten sind aktuell.');
+                    await tryRestoreSession();
+                    if (localStorage.getItem(PROVIDER_KEY) === 'onedrive') {
+                        try {
+                            const token = await getTokenSilent(false);
+                            if (token) {
+                                const text = await this._download(token);
+                                if (text && text.trim() && text.trim() !== '{}') {
+                                    let serverData = null;
+                                    try { serverData = JSON.parse(text); } catch (e) {}
+                                    if (serverData && serverData._lastModified) {
+                                        const localModified = localStorage.getItem('_lastModified');
+                                        if (!localModified || localModified !== serverData._lastModified) {
+                                            if (confirm('OneDrive-Daten sind aktueller als die lokalen Daten. Sollen die OneDrive-Daten geladen werden? Lokale Änderungen gehen sonst verloren.')) {
+                                                DB.importAll(text);
+                                                localStorage.setItem('_lastModified', serverData._lastModified);
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                        } catch (e) {
+                            console.error('OneDrive bootstrap failed', e);
                         }
                     }
                 }
@@ -170,7 +191,7 @@
                     console.error('OneDrive saveToFile: not connected');
                     return;
                 }
-                const token = await getTokenSilent(true);
+                const token = await getTokenSilent(false);
                 if (!token) {
                     console.error('OneDrive saveToFile: no token');
                     return;
@@ -193,7 +214,7 @@
                 }
             } catch (e) {
                 console.error('OneDrive saveToFile failed', e);
-                window.dispatchEvent(new CustomEvent('od-save-error', { detail: 'OneDrive: ' + (e && e.message ? e.message : e) }));
+                window.dispatchEvent(new CustomEvent('od-save-error', { detail: (e && e.message ? e.message : e) }));
             }
         },
 
@@ -209,83 +230,76 @@
                     return;
                 }
                 const text = await this._download(token);
-                if (text && text.trim() && text.trim() !== '{}') {
-                    let serverData = null;
-                    try { serverData = JSON.parse(text); } catch (e) {}
-                    if (serverData && serverData._lastModified) {
-                        const localModified = localStorage.getItem('_lastModified');
-                        if (!localModified || localModified !== serverData._lastModified) {
-                            DB.importAll(text);
-                            localStorage.setItem('_lastModified', serverData._lastModified);
-                            console.log('OneDrive: Daten vom Server geladen.');
-                        }
-                    }
+                if (text) {
+                    console.log('OneDrive: Daten geladen.');
+                    const localData = JSON.parse(text);
+                    if (localData._lastModified) localStorage.setItem('_lastModified', localData._lastModified);
                 }
             } catch (e) { console.error('OneDrive loadFromFile failed', e); }
         },
 
         async _download(token) {
-            const resp = await fetch(GRAPH, {
-                method: 'GET',
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            if (resp.status === 404) return '';
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return await resp.text();
-        },
-
-        async chooseFile() {
-            alert('OneDrive-Speicherung aktiv. Daten werden in deiner OneDrive unter ' + FILE_PATH + ' gespeichert.');
-            return true;
+            if (!token) return null;
+            try {
+                const resp = await fetch(GRAPH, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (resp.status === 404) return null;
+                if (!resp.ok) throw new Error('Download failed: ' + resp.status);
+                return await resp.text();
+            } catch (e) {
+                console.error('OneDrive download failed', e);
+                return null;
+            }
         }
     };
 
-    function renderODStatus() {
-        const el = document.getElementById('od-status');
-        if (!el) return;
-        if (!getClientId()) {
-            el.textContent = 'Noch nicht konfiguriert. Client-ID und Tenant eintragen und auf „Konfigurieren".';
-            return;
-        }
-        if (OneDrivePersist.isConnected()) {
-            const active = (window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive');
-            el.textContent = active
-                ? '✅ Mit OneDrive verbunden und als Speicher aktiv.'
-                : '✅ Mit OneDrive verbunden. Auf „Als Speicher verwenden" klicken.';
-        } else {
-            el.textContent = '⚠️ Nicht verbunden. Auf „Mit OneDrive verbinden" klicken. Prüfe auch die Redirect URI in der Azure-App-Registrierung.';
+    function disconnect() {
+        try {
+            OneDrivePersist.logout();
+        } catch (e) { console.error('OD disconnect', e); }
+        if (window.LocalPersist) window.LocalPersist.startAutoSave();
+        if (window.OD) {
+            window.OD.setProvider('local');
+            renderODStatus();
         }
     }
 
     async function applyCloud() {
-        if (!OneDrivePersist.isConnected()) {
-            alert('Bitte zuerst mit OneDrive verbinden.');
-            return;
-        }
-        window.FilePersist = OneDrivePersist;
-        if (window.OD) window.OD.setProvider('onedrive');
-        if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-        await OneDrivePersist.loadFromFile();
-        OneDrivePersist.startAutoSave();
-        renderODStatus();
-        setTimeout(function() {
-            if (typeof renderODConfig === 'function') renderODConfig();
-        }, 0);
-        alert('OneDrive-Speicherung aktiv. Daten werden jetzt in deiner OneDrive gespeichert.');
-        if (typeof renderDashboard === 'function') renderDashboard();
-        if (typeof renderClasses === 'function') renderClasses();
+        if (!OneDrivePersist.isConnected()) return;
+        const token = await getTokenSilent(true);
+        if (!token) return;
+        const text = await OneDrivePersist._download(token);
+        if (!text) return;
+        let serverData = null;
+        try { serverData = JSON.parse(text); } catch (e) {}
+        if (!serverData || !serverData._lastModified) return;
+        const localModified = localStorage.getItem('_lastModified');
+        if (localModified && localModified === serverData._lastModified) return;
+        if (!confirm('OneDrive-Daten sind aktueller als die lokalen Daten. Sollen die OneDrive-Daten geladen werden? Lokale Änderungen gehen sonst verloren.')) return;
+        DB.importAll(text);
+        localStorage.setItem('_lastModified', serverData._lastModified);
+        alert('OneDrive-Daten geladen.');
+        renderDashboard();
+        renderClasses();
     }
 
-    function disconnect() {
-        if (window.OD) window.OD.setProvider('local');
-        if (window.LocalPersist) window.FilePersist = window.LocalPersist;
-        OneDrivePersist.stopAutoSave();
-        if (window.LocalPersist) window.LocalPersist.startAutoSave();
-        OneDrivePersist.logout();
-        renderODStatus();
+    function renderODStatus() {
+        const el = document.getElementById('od-status');
+        if (!el) return;
+        const connected = OneDrivePersist.isConnected();
+        el.className = 'sync-status ' + (connected ? 'od-connected' : 'od-disconnected');
+        el.textContent = connected ? 'OneDrive: verbunden' : 'OneDrive: nicht verbunden';
+        const btn = document.getElementById('od-connect-btn');
+        if (btn) btn.textContent = connected ? 'OneDrive: verbunden' : 'Mit OneDrive verbinden';
     }
 
-    window.OneDrivePersist = OneDrivePersist;
+    function renderODConfig() {
+        const cid = document.getElementById('od-clientid');
+        const ten = document.getElementById('od-tenant');
+        if (cid) cid.value = getClientId();
+        if (ten) ten.value = getTenant();
+    }
 
     window.OD = {
         getProvider() { return localStorage.getItem(PROVIDER_KEY) || 'local'; },
@@ -300,27 +314,30 @@
         renderStatus: renderODStatus,
         async init() {
             try {
-                ensureMsal();
+                await ensureMsal();
                 await msal.handleRedirectPromise();
                 if (OneDrivePersist.isConnected()) {
                     await tryRestoreSession();
-                    if (localStorage.getItem(PENDING_KEY) === '1') {
-                        localStorage.removeItem(PENDING_KEY);
-                        try { await applyCloud(); } catch (e) { console.error('OD auto-apply', e); }
-                    }
                 }
             } catch (e) { console.error('OD init', e); }
             renderODStatus();
         },
         connect() {
             if (!getClientId()) { alert('Bitte zuerst Client-ID und Tenant konfigurieren.'); return; }
-            localStorage.setItem(PENDING_KEY, '1');
-            Promise.resolve().then(function () { return OneDrivePersist.login(); }).catch(function (e) {
-                localStorage.removeItem(PENDING_KEY);
+            Promise.resolve().then(function () { return OneDrivePersist.login(); }).then(function () {
+                if (OneDrivePersist.isConnected()) {
+                    localStorage.setItem(PENDING_KEY, '1');
+                    localStorage.setItem(PROVIDER_KEY, 'onedrive');
+                    applyCloud();
+                }
+            }).catch(function (e) {
                 alert('Verbindung fehlgeschlagen: ' + (e && e.message ? e.message : e));
             });
         },
-        useCloud() { applyCloud(); },
+        useCloud() {
+            localStorage.setItem(PROVIDER_KEY, 'onedrive');
+            applyCloud();
+        },
         disconnect() { disconnect(); },
         async pull() { await OneDrivePersist.loadFromFile(); },
         async sync() { await OneDrivePersist.saveToFile(); },
@@ -350,4 +367,25 @@
             alert(out.join('\n'));
         }
     };
+
+    window.OneDrivePersist = OneDrivePersist;
+
+    const FilePersist = {
+        available: true,
+        providerName: 'local',
+        scheduleSave() { if (this.saveToFile) this.saveToFile(); },
+        startAutoSave() {},
+        stopAutoSave() {},
+        chooseFile: async function() { return false; },
+        async bootstrap() {},
+        async saveToFile() {},
+        async loadFromFile() {},
+        async pull() {},
+        async sync() {}
+    };
+    window.FilePersist = FilePersist;
+    window.LocalPersist = FilePersist;
+
+    if (typeof window.ODConnect !== 'undefined') window.ODConnect = window.OD.connect;
+    if (typeof window.ODDisconnect !== 'undefined') window.ODDisconnect = window.OD.disconnect;
 })();

@@ -463,6 +463,7 @@ window.importStudentsFromCsv = function(input, classId) {
 };
 
 function deleteStudent(id, classId) {
+    if (!confirm('Schüler wirklich löschen?')) return;
     captureUndo();
     DB.deleteStudent(id);
     hideModal();
@@ -568,6 +569,7 @@ function addManualHoliday() {
 
 window.deleteManualHoliday = function(index) {
     if (!confirm('Eintrag löschen?')) return;
+    captureUndo();
     DB.deleteManualHoliday(index);
     renderHolidays();
     if (window.FilePersist) FilePersist.scheduleSave();
@@ -861,6 +863,8 @@ function addTimetableEntryModal() {
 }
 
 function deleteTimetableEntry(id) {
+    if (!confirm('Eintrag wirklich löschen?')) return;
+    captureUndo();
     DB.deleteTimetableEntry(id);
     hideModal();
     renderDashboard();
@@ -1227,6 +1231,7 @@ function populateGradeClassSelect() {
 }
 
 let currentGradeTab = 'plan';
+let hwScrollRestored = false;
 let gradeOverviewScope = 'semester';
 let currentExamId = null;
 let examPointGrid = [];
@@ -1240,6 +1245,8 @@ function renderGrading() {
         container.innerHTML = '';
         return;
     }
+    const prevWrap = document.querySelector('.hw-grid-wrap');
+    const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     switcher.style.display = 'flex';
     const cls = DB.loadClasses().find(c => c.id === classId);
     const planMode = cls ? (cls.planMode || (cls.type === 'gz' ? 'gz' : (cls.type === 'dg' ? 'dg' : 'mathe'))) : 'mathe';
@@ -1274,32 +1281,39 @@ function renderGrading() {
     switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
     container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
     if (currentGradeTab === 'gz-grades' || currentGradeTab === 'hw') {
-        setTimeout(() => {
-            const wrap = document.querySelector('.hw-grid-wrap');
-            const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : (wrap ? wrap.querySelector('table') : null);
-            if (wrap && table) {
-                const firstDataRow = table.querySelector('tbody tr');
-                if (firstDataRow) {
-                    const cells = firstDataRow.querySelectorAll('td');
-                    if (currentGradeTab === 'gz-grades') {
-                        const students = DB.getStudentsForClass(classId);
-                        const worksheets = getGZPlannedWorksheets(classId);
-                        if (students.length && worksheets.length) {
-                            const targetCol = 1 + (worksheets.length - 1) * 4;
-                            const targetCell = cells[targetCol];
-                            if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+        if (hwScrollRestored && savedScrollLeft) {
+            const wrapNow = document.querySelector('.hw-grid-wrap');
+            if (wrapNow) wrapNow.scrollLeft = savedScrollLeft;
+        }
+        if (!hwScrollRestored) {
+            setTimeout(() => {
+                const wrap = document.querySelector('.hw-grid-wrap');
+                const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : (wrap ? wrap.querySelector('table') : null);
+                if (wrap && table) {
+                    const firstDataRow = table.querySelector('tbody tr');
+                    if (firstDataRow) {
+                        const cells = firstDataRow.querySelectorAll('td');
+                        if (currentGradeTab === 'gz-grades') {
+                            const students = DB.getStudentsForClass(classId);
+                            const worksheets = getGZPlannedWorksheets(classId);
+                            if (students.length && worksheets.length) {
+                                const targetCol = 1 + (worksheets.length - 1) * 4;
+                                const targetCell = cells[targetCol];
+                                if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                            }
+                        } else {
+                            const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
+                            if (hws.length) {
+                                const targetCol = 1 + (hws.length - 1);
+                                const targetCell = cells[targetCol];
+                                if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                            }
                         }
-                    } else {
-                        const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
-                        if (hws.length) {
-                            const targetCol = 1 + (hws.length - 1);
-                            const targetCell = cells[targetCol];
-                            if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
-                        }
+                        hwScrollRestored = true;
                     }
                 }
-            }
-        }, 50);
+            }, 50);
+        }
     }
     attachGradeValidation(container);
 }
@@ -1334,6 +1348,7 @@ function validateAllGrades() {
 
 function setGradeTab(tab) {
     currentGradeTab = tab;
+    hwScrollRestored = false;
     renderGrading();
 }
 
@@ -1473,8 +1488,8 @@ function renderPlan(classId) {
             cols.push('Inhalt Schulübung');
             if (showHomework) cols.push('HÜ');
             cols.push('Inhalt Hausübung');
-            cols.push('');
-        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : 'grading-table plan-table';
+        cols.push('');
+        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : (planMode === 'dg' ? 'grading-table plan-table plan-table-dg' : (planMode === 'gz' ? 'grading-table plan-table plan-table-gz' : 'grading-table plan-table plan-table-mathe'));
         html += '<table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
             allDates.forEach(item => {
                 const date = item.date;
@@ -1510,7 +1525,7 @@ function renderPlan(classId) {
         return html;
     }
     if (isGZ) {
-        html += '<table class="grading-table plan-table"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
+        html += '<table class="grading-table plan-table plan-table-gz"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
@@ -1534,7 +1549,7 @@ function renderPlan(classId) {
             }
         }, 0);
     } else if (isDG) {
-        html += '<table class="grading-table plan-table"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
+        html += '<table class="grading-table plan-table plan-table-dg"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
@@ -1565,7 +1580,7 @@ function renderPlan(classId) {
         if (showHomework) cols.push('HÜ');
         cols.push('Inhalt Hausübung');
         cols.push('');
-        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : 'grading-table plan-table';
+        const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : (planMode === 'dg' ? 'grading-table plan-table plan-table-dg' : (planMode === 'gz' ? 'grading-table plan-table plan-table-gz' : 'grading-table plan-table plan-table-mathe'));
         html += '<table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
@@ -1667,8 +1682,7 @@ function savePlanEntry(classId, id) {
     const hwSheets = hwSheetsEl ? hwSheetsEl.value.trim() : '';
     let hwNr = '';
     if (isDG) {
-        const plan = DB.loadTeachingPlan(classId);
-        hwNr = plan.filter(x => x.homeworkNr).length + 1;
+        hwNr = '';
     } else if (isGZ) {
         hwNr = wsNr;
     } else {
@@ -1694,6 +1708,7 @@ function savePlanEntry(classId, id) {
 }
 
 function deletePlanEntry(classId, id) {
+    if (!confirm('Eintrag wirklich löschen?')) return;
     captureUndo();
     DB.deleteTeachingPlanEntry(classId, id);
     renderGrading();
@@ -2557,10 +2572,10 @@ function renderMitarbeit(classId) {
         const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)") + '</td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.folderNote1 || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)"></td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
             '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)") + '</td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.folderNote2 || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)"></td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
             (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
             '</tr>';
     });
@@ -2633,6 +2648,8 @@ function renderOverview(classId) {
     const weights = DB.loadWeights(classId);
     const manual = DB.loadManualGrades(classId);
     const semesterManual = DB.loadSemesterManualGrades(classId);
+    const overviewNoteComments = DB.loadOverviewNoteComments(classId);
+    const semesterOverviewNoteComments = DB.loadSemesterOverviewNoteComments(classId);
     const isYear = gradeOverviewScope === 'year';
 
     let html = '<div class="view-header"><div><h2>Übersicht – ' + (isYear ? 'Ganzes Jahr' : '1. Semester') + '</h2>' +
@@ -2648,7 +2665,9 @@ function renderOverview(classId) {
     scopeData.exams.forEach(e => html += '<th>SA ' + e.nr + '<br><small>Pkte / Note</small></th>');
     html += '<th>Ø SA</th><th>Prüf.</th><th>Projekt</th><th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
-    html += '<th>Note (ich)</th></tr></thead><tbody>';
+    html += '<th>Note (ich)</th><th>Bemerkung</th>';
+    if (isYear) html += '<th>Bemerkung 1. Sem.</th>';
+    html += '</tr></thead><tbody>';
 
     students.forEach(s => {
         const hw = computeHwGrade(classId, s.id, scopeData.hws);
@@ -2682,6 +2701,8 @@ function renderOverview(classId) {
         if (parts.length && wSum > 0) computed = Math.round(parts.reduce((a, b) => a + b, 0) / wSum * 100) / 100;
         const activeManual = isYear ? (manual[s.id] != null ? manual[s.id] : null) : (semesterManual[s.id] != null ? semesterManual[s.id] : null);
         const semesterManualGrade = semesterManual[s.id] != null ? semesterManual[s.id] : null;
+        const noteComment = overviewNoteComments[s.id] || '';
+        const semesterNoteComment = semesterOverviewNoteComments[s.id] || '';
 
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td><span class="ov-pts">' + hw.points + '</span> / <span class="' + gradeClass(hw.grade) + ' grade-cell">' + (hw.grade != null ? hw.grade : '–') + '</span></td>' +
@@ -2692,6 +2713,8 @@ function renderOverview(classId) {
             '<td class="' + gradeClass(computed) + ' grade-cell">' + (computed != null ? computed : '–') + '</td>' +
             (isYear ? '<td class="' + gradeClass(semesterManualGrade) + ' grade-cell">' + (semesterManualGrade != null ? semesterManualGrade : '–') + '</td>' : '') +
             '<td>' + gradeSelect(activeManual, "setManualGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setOverviewNoteComment(\'' + classId + '\',\'' + s.id + '\',this.value)">' + escapeHtml(noteComment) + '</textarea></td>' +
+            (isYear ? '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setSemesterOverviewNoteComment(\'' + classId + '\',\'' + s.id + '\',this.value)">' + escapeHtml(semesterNoteComment) + '</textarea></td>' : '') +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -2716,6 +2739,24 @@ function setManualGrade(classId, studentId, val) {
     }
     renderGrading();
 }
+
+window.setOverviewNoteComment = function(classId, studentId, val) {
+    captureUndo();
+    const m = DB.loadOverviewNoteComments(classId);
+    if (!val) delete m[studentId];
+    else m[studentId] = val;
+    DB.saveOverviewNoteComments(classId, m);
+    renderGrading();
+};
+
+window.setSemesterOverviewNoteComment = function(classId, studentId, val) {
+    captureUndo();
+    const m = DB.loadSemesterOverviewNoteComments(classId);
+    if (!val) delete m[studentId];
+    else m[studentId] = val;
+    DB.saveSemesterOverviewNoteComments(classId, m);
+    renderGrading();
+};
 
 window.openWeightsModal = function(classId) {
     const weights = DB.loadWeights(classId);
@@ -3077,6 +3118,7 @@ window.updateAppointment = function(id) {
 };
 window.deleteAppointment = function(id) {
     if (!confirm('Termin wirklich löschen?')) return;
+    captureUndo();
     DB.deleteAppointment(id);
     hideModal();
     renderAppointmentsList();
@@ -3866,6 +3908,7 @@ function renderGZOverview(classId) {
         const manual = manualGrades[s.id] != null ? manualGrades[s.id] : null;
         const pr = project[s.id] || {};
         const forgot = getGZForgottenCounts(classId, s.id);
+        const noteComment = (remarks && remarks[s.id]) ? remarks[s.id] : '';
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + avg + '</td>' +
             '<td>' + (m.folder1 != null ? m.folder1 : '–') + '</td>' +
@@ -3873,9 +3916,9 @@ function renderGZOverview(classId) {
             '<td style="text-align:center;">' + (forgot.laptop || 0) + '</td>' +
             '<td>' + (calcSemester != null ? calcSemester.toFixed(2) : '–') + '</td>' +
             '<td>' + (!isYear ? gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)") : (semesterManual != null ? semesterManual : '–')) + '</td>' +
+            '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setSemesterRemark(\'' + classId + '\',\'' + s.id + '\',this.value)" placeholder="…">' + escapeHtml(noteComment) + '</textarea></td>' +
             (isYear ? '<td>' + (st.project != null ? st.project : '–') + '</td>' : '') +
             (isYear ? '<td>' + (manual != null ? manual : '–') + '</td>' : '') +
-            '<td><input type="text" class="grade-input" value="' + escapeHtml(remarks[s.id] || '') + '" onchange="setSemesterRemark(\'' + classId + '\',\'' + s.id + '\',this.value)" placeholder="…"></td>' +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -4215,18 +4258,29 @@ document.addEventListener('DOMContentLoaded', async function() {
         pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
     });
     const isWebApp = !window.location.hostname.startsWith('localhost') && !window.location.hostname.startsWith('127.0.0.1');
+    let usedOneDriveInDesktop = false;
     if (window.OD) {
         try { await window.OD.init(); } catch (e) { console.error('OD init failed', e); }
         const odConfigured = !!(window.OD.getClientId && window.OD.getClientId());
         const odConnected = !!(window.OD.isConnected && window.OD.isConnected());
         if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
             if (window.OD.useCloud) window.OD.useCloud();
-        } else if (window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
+            usedOneDriveInDesktop = true;
             window.FilePersist = window.OneDrivePersist;
             if (window.OD.setProvider) window.OD.setProvider('onedrive');
             if (window.LocalPersist) window.LocalPersist.stopAutoSave();
             await window.OneDrivePersist.loadFromFile();
             window.OneDrivePersist.startAutoSave();
+        } else if (window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
+            window.FilePersist = window.OneDrivePersist;
+            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+            await window.OneDrivePersist.loadFromFile();
+            window.OneDrivePersist.startAutoSave();
+        } else if (!isWebApp && odConfigured && !odConnected && window.OneDrivePersist) {
+            window.FilePersist = window.OneDrivePersist;
+            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
         } else if (isWebApp) {
             window.FilePersist = {
                 available: true,
@@ -4250,12 +4304,49 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
     try { renderODConfig(); } catch (e) {}
-    await FilePersist.bootstrap();
+    if (!usedOneDriveInDesktop) {
+        await FilePersist.bootstrap();
+    }
     if (typeof setODStatus === 'function') {
         setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
     }
-    if (isWebApp && !(window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && window.OD.isConnected && window.OD.isConnected())) {
-        alert('Achtung: OneDrive ist nicht verbunden. Bitte verbinden Sie sich mit OneDrive (☁️), um die Daten zu synchronisieren.');
+    const odAvailable = !!(window.OD && window.OD.getClientId && window.OD.getClientId());
+    const odConnectedNow = !!(window.OD && window.OD.isConnected && window.OD.isConnected());
+    const needOD = isWebApp && !odConnectedNow;
+    if (needOD) {
+        await new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = '<div style="background:var(--bg-panel);color:var(--text-main);max-width:520px;width:100%;border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,0.35);">' +
+                '<h2 style="margin-top:0;">OneDrive-Anmeldung erforderlich</h2>' +
+                '<p class="subtitle">Bitte verbinden Sie sich mit OneDrive, um Ihre Daten zu laden und zu speichern. Ohne Anmeldung kann die App nicht verwendet werden.</p>' +
+                '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">' +
+                '<button class="btn" id="od-start-btn">Mit OneDrive verbinden</button>' +
+                '</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            const btn = overlay.querySelector('#od-start-btn');
+            const finish = () => { overlay.remove(); resolve(); };
+            btn.onclick = async () => {
+                try {
+                    if (window.OD && window.OD.connect) {
+                        await window.OD.connect();
+                        if (window.OD.isConnected && window.OD.isConnected() && window.OneDrivePersist) {
+                            window.FilePersist = window.OneDrivePersist;
+                            if (window.OD.setProvider) window.OD.setProvider('onedrive');
+                            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+                            await window.OneDrivePersist.loadFromFile();
+                            window.OneDrivePersist.startAutoSave();
+                            if (typeof setODStatus === 'function') setODStatus(true);
+                        }
+                    }
+                } catch (e) {
+                    console.error('OD connect from startup modal failed', e);
+                } finally {
+                    finish();
+                }
+            };
+        });
     }
     setInterval(() => {
         if (typeof setODStatus === 'function') {
