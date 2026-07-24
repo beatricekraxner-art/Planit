@@ -112,6 +112,19 @@
 
         async login() {
             ensureMsal();
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+            if (isMobile) {
+                try {
+                    const result = await msal.loginRedirect({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
+                    if (result && result.account) {
+                        saveSession(result.account, null);
+                    }
+                } catch (e) {
+                    console.error('OD loginRedirect failed', e);
+                    throw e;
+                }
+                return;
+            }
             if (typeof msal.loginPopup !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
             try {
                 const result = await msal.loginPopup({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
