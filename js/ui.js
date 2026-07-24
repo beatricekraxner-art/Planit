@@ -3276,6 +3276,16 @@ async function linkDataFile() {
     if (ok) { alert('Datendatei verknüpft. Alle Änderungen werden jetzt automatisch gespeichert.'); renderDashboard(); renderClasses(); }
 }
 
+window.ODDiagnose = async function() {
+    const out = [];
+    out.push('=== OD Diagnose ===');
+    out.push('Provider: ' + (window.OD ? window.OD.getProvider() : 'unbekannt'));
+    out.push('Verbunden: ' + (window.OD && window.OD.isConnected ? window.OD.isConnected() : 'unbekannt'));
+    if (window.OD && window.OD.getClientId) out.push('Client-ID: ' + (window.OD.getClientId() ? 'vorhanden' : 'fehlt'));
+    out.push('===================');
+    alert(out.join('\n'));
+};
+
 function updateDataFileUI() {
     const el = document.getElementById('datafile-status');
     if (!el) return;
@@ -4343,30 +4353,39 @@ document.addEventListener('DOMContentLoaded', async function() {
             overlay.innerHTML = '<div style="background:var(--bg-panel);color:var(--text-main);max-width:520px;width:100%;border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,0.35);">' +
                 '<h2 style="margin-top:0;">OneDrive-Anmeldung erforderlich</h2>' +
                 '<p class="subtitle">Bitte verbinden Sie sich mit OneDrive, um Ihre Daten zu laden und zu speichern. Ohne Anmeldung kann die App nicht verwendet werden.</p>' +
-                '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">' +
-                '<button class="btn" id="od-start-btn">Mit OneDrive verbinden</button>' +
-                '</div>' +
+                 '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">' +
+                 '<button class="btn" id="od-start-btn">Mit OneDrive verbinden</button>' +
+                 '<button class="btn btn-secondary" id="od-diag-btn">Diagnose</button>' +
+                 '</div>' +
                 '</div>';
             document.body.appendChild(overlay);
-            const btn = overlay.querySelector('#od-start-btn');
-            const finish = () => { overlay.remove(); resolve(); };
-            btn.onclick = async () => {
-                try {
-                    if (window.OD && window.OD.connect) {
-                        await window.OD.connect();
-                        if (window.OD.isConnected && window.OD.isConnected() && window.OneDrivePersist) {
-                            window.FilePersist = window.OneDrivePersist;
-                            if (window.OD.setProvider) window.OD.setProvider('onedrive');
-                            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-                            await window.OneDrivePersist.loadFromFile();
-                            window.OneDrivePersist.startAutoSave();
-                            if (typeof setODStatus === 'function') setODStatus(true);
-                        }
-                    }
-                } catch (e) {
-                    console.error('OD connect from startup modal failed', e);
-                } finally {
-                    finish();
+             const btn = overlay.querySelector('#od-start-btn');
+             const diagBtn = overlay.querySelector('#od-diag-btn');
+             const finish = () => { overlay.remove(); resolve(); };
+             btn.onclick = async () => {
+                 try {
+                     if (window.OD && window.OD.connect) {
+                         await window.OD.connect();
+                         if (window.OD.isConnected && window.OD.isConnected() && window.OneDrivePersist) {
+                             window.FilePersist = window.OneDrivePersist;
+                             if (window.OD.setProvider) window.OD.setProvider('onedrive');
+                             if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+                             await window.OneDrivePersist.loadFromFile();
+                             window.OneDrivePersist.startAutoSave();
+                             if (typeof setODStatus === 'function') setODStatus(true);
+                         }
+                     }
+                 } catch (e) {
+                     console.error('OD connect from startup modal failed', e);
+                 } finally {
+                     finish();
+                 }
+             };
+             if (diagBtn) {
+                 diagBtn.onclick = async () => {
+                     if (window.ODDiagnose) await window.ODDiagnose();
+                 };
+             }
                 }
             };
         });
