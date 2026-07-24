@@ -1,9 +1,0 @@
-﻿{
-  "name": "Plan-it",
-  "short_name": "Plan-it",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#4f46e5"
-}
-
