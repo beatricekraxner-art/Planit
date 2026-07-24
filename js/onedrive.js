@@ -89,9 +89,6 @@
             return res.accessToken;
         } catch (e) {
             console.error('getTokenSilent failed', e);
-            if (allowLoginOnFail && msal.getAllAccounts().length > 0) {
-                OneDrivePersist.login();
-            }
             return null;
         }
     }
@@ -309,10 +306,6 @@
                 await msal.handleRedirectPromise();
                 if (OneDrivePersist.isConnected()) {
                     await tryRestoreSession();
-                    if (localStorage.getItem(PENDING_KEY) === '1') {
-                        localStorage.removeItem(PENDING_KEY);
-                        try { await applyCloud(); } catch (e) { console.error('OD auto-apply', e); }
-                    }
                 }
             } catch (e) { console.error('OD init', e); }
             renderODStatus();
@@ -325,7 +318,7 @@
                 alert('Verbindung fehlgeschlagen: ' + (e && e.message ? e.message : e));
             });
         },
-        useCloud() { applyCloud(); },
+        useCloud() { localStorage.setItem(PROVIDER_KEY, 'onedrive'); applyCloud(); },
         disconnect() { disconnect(); },
         async pull() { await OneDrivePersist.loadFromFile(); },
         async sync() { await OneDrivePersist.saveToFile(); },

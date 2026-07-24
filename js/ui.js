@@ -121,10 +121,32 @@ function showModal(content) {
     const modalContent = document.getElementById('modal-content');
     modalContent.innerHTML = content;
     modal.style.display = 'flex';
+    modal.style.pointerEvents = 'auto';
 }
 
 function hideModal() {
-    document.getElementById('modal-overlay').style.display = 'none';
+    const modal = document.getElementById('modal-overlay');
+    modal.style.display = 'none';
+    modal.style.pointerEvents = 'none';
+}
+
+function resetAppState() {
+    try {
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (sidebar) sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('show');
+        if (sidebar) {
+            const app = document.querySelector('.app-container');
+            if (app) app.classList.remove('sidebar-collapsed');
+        }
+        hideModal();
+        document.querySelectorAll('.modal-overlay').forEach(el => {
+            el.style.display = 'none';
+            el.style.pointerEvents = 'none';
+        });
+        document.querySelectorAll('.loading-overlay').forEach(el => el.remove());
+    } catch (e) {}
 }
 
 function switchView(viewName) {
@@ -4129,6 +4151,7 @@ window.renderGradesOverview = renderGradesOverview;
 window.exportGradesCSV = window.exportGradesCSV;
 
 document.addEventListener('DOMContentLoaded', async function() {
+    resetAppState();
     const offlineEl = document.getElementById('offline-indicator');
     function updateOfflineStatus() {
         if (!offlineEl) return;
