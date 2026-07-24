@@ -35,7 +35,7 @@
             ensureMsal();
             const accounts = msal.getAllAccounts();
             if (accounts.length > 0) {
-                const token = await getTokenSilent(false);
+                const token = await getTokenSilent();
                 if (token) {
                     saveSession(accounts[0], token);
                     return true;
@@ -80,7 +80,7 @@
         return msal;
     }
 
-    async function getTokenSilent(allowLoginOnFail) {
+    async function getTokenSilent() {
         try {
             ensureMsal();
             const account = msal.getAllAccounts()[0];
@@ -132,7 +132,7 @@
                 await ensureMsal();
                 await msal.handleRedirectPromise();
                 if (this.isConnected()) {
-                    const token = await getTokenSilent(true);
+                    const token = await getTokenSilent();
                     if (token) {
                         const text = await this._download(token);
                         if (text && text.trim() && text.trim() !== '{}') {
@@ -176,7 +176,7 @@
                     console.error('OneDrive saveToFile: not connected');
                     return;
                 }
-                const token = await getTokenSilent(true);
+                const token = await getTokenSilent();
                 if (!token) {
                     console.error('OneDrive saveToFile: no token');
                     return;
@@ -264,7 +264,7 @@
 
     async function applyCloud() {
         if (!OneDrivePersist.isConnected()) return;
-        const token = await getTokenSilent(true);
+        const token = await getTokenSilent();
         if (!token) return;
         const text = await OneDrivePersist._download(token);
         if (!text) return;
@@ -344,7 +344,7 @@
                 const accounts = msal.getAllAccounts();
                 out.push('Konten: ' + accounts.length);
                 if (accounts.length > 0) {
-                    const token = await getTokenSilent(false);
+                    const token = await getTokenSilent();
                     out.push('Token: ' + (token ? 'gültig' : 'ungültig/abgelaufen'));
                 }
             } catch (e) {
