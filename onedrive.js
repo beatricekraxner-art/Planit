@@ -217,8 +217,20 @@
                 const text = await this._download(token);
                 if (text) {
                     console.log('OneDrive: Daten geladen.');
-                    const localData = JSON.parse(text);
-                    if (localData._lastModified) localStorage.setItem('_lastModified', localData._lastModified);
+                    let serverData = null;
+                    try { serverData = JSON.parse(text); } catch (e) {}
+                    if (serverData && serverData._lastModified) {
+                        const localModified = localStorage.getItem('_lastModified');
+                        if (!localModified || localModified !== serverData._lastModified) {
+                            console.log('OneDrive: neuere Daten gefunden, importiere...');
+                            DB.importAll(text);
+                            localStorage.setItem('_lastModified', serverData._lastModified);
+                            renderDashboard();
+                            renderClasses();
+                        } else {
+                            console.log('OneDrive: lokale Daten sind aktuell.');
+                        }
+                    }
                 }
             } catch (e) { console.error('OneDrive loadFromFile failed', e); }
         },
