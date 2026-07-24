@@ -1,0 +1,1310 @@
+﻿const daysOfWeek = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+
+function subjectAbbr(subject) {
+    if (!subject) return '';
+    const s = subject.toLowerCase();
+    if (s.indexOf('mathematik') !== -1) return 'M';
+    if (s.indexOf('darstellende geometrie') !== -1 || s.indexOf('dg') !== -1) return 'DG';
+    if (s.indexOf('geometrisches zeichnen') !== -1 || s.indexOf('gz') !== -1) return 'GZ';
+    return subject;
+}
+
+function showModal(content) {
+    const modal = document.getElementById('modal-overlay');
+    const modalContent = document.getElementById('modal-content');
+    modalContent.innerHTML = content;
+    modal.style.display = 'flex';
+}
+
+function hideModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+}
+
+function switchView(viewName) {
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+    document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
+    document.getElementById(viewName + '-view').classList.add('active');
+    document.querySelector('.nav-links li[data-view="' + viewName + '"]').classList.add('active');
+    document.getElementById('view-title').textContent = viewName.charAt(0).toUpperCase() + viewName.slice(1);
+    if (viewName === 'classes') renderClasses();
+    if (viewName === 'dashboard') renderDashboard();
+    if (viewName === 'grading') {
+        populateGradeClassSelect();
+        renderGrading();
+    }
+    if (viewName === 'settings') loadTimeSlotsTable();
+}
+
+function renderClasses() {
+    const grid = document.getElementById('classes-grid');
+    const classes = DB.getSortedClasses();
+    const students = DB.loadStudents();
+    grid.innerHTML = '';
+    const subjectOrder = { math: 'Mathematik', gz: 'Geometrisches Zeichnen', dg: 'Darstellende Geometrie', other: 'Andere Fächer' };
+    let currentType = null;
+    let currentList = null;
+    classes.forEach(cls => {
+        if (cls.type !== currentType) {
+            currentType = cls.type;
+            const group = document.createElement('div');
+            group.className = 'class-group';
+            group.innerHTML = '<h3>' + (subjectOrder[cls.type] || cls.subject || cls.type) + '</h3>';
+            currentList = document.createElement('div');
+            currentList.className = 'class-group-list';
+            group.appendChild(currentList);
+            grid.appendChild(group);
+        }
+        const count = students.filter(s => s.classId === cls.id).length;
+        const card = document.createElement('div');
+        card.className = 'class-card';
+        card.style.borderTopColor = cls.color || 'var(--primary)';
+        card.innerHTML = '<h3>' + cls.name + '</h3><p>' + cls.subject + '</p>' +
+            '<p class="class-count">' + count + ' Schüler</p>';
+        card.onclick = () => openClassManager(cls.id);
+        currentList.appendChild(card);
+    });
+}
+
+function openClassManager(classId) {
+    if (!classId) {
+        showModal(getClassForm());
+        return;
+    }
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    showModal(getClassManagerContent(cls, students));
+}
+
+function getClassForm() {
+    return '<div class="modal-header">' +
+        '<h2>Neuen Kurs anlegen</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<input type="text" id="class-name-input" placeholder="Kursname (z.B. 7A Mathematik)">' +
+        '<input type="text" id="class-subject-input" placeholder="Fach (z.B. Mathematik, Physik, ...)">' +
+        '<label style="width:100%;font-size:13px;color:var(--text-muted;">Farbe</label>' +
+        '<input type="color" id="class-color-input" value="#6366f1" style="width:100%;height:40px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;">' +
+        '<button class="btn" onclick="createNewClass()">Erstellen</button>' +
+        '</div>';
+}
+
+function getClassManagerContent(cls, students) {
+    let studentList = '<ul class="student-list">';
+    students.forEach(s => {
+        studentList += '<li>' +
+            '<span class="stu-name" id="stu-name-' + s.id + '">' + s.name + '</span>' +
+            '<span class="stu-actions">' +
+            '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">✎</button>' +
+            '<button class="btn btn-secondary" title="Löschen" onclick="deleteStudent(\'' + s.id + '\', \'' + cls.id + '\')">×</button>' +
+            '</span></li>';
+    });
+    studentList += '</ul>';
+    if (students.length === 0) studentList = '<p>Keine Schüler vorhanden</p>';
+    const clsColor = cls.color || '#6366f1';
+    const studentCount = students.length;
+    return '<div class="modal-header">' +
+        '<h2>Kurs bearbeiten <span class="class-count" style="font-size:13px;margin-left:8px;">' + studentCount + ' Schüler</span></h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<input type="text" id="edit-class-name-input" value="' + cls.name + '" placeholder="Kursname">' +
+        '<input type="text" id="edit-class-subject-input" value="' + cls.subject + '" placeholder="Fach">' +
+        '<label style="width:100%;font-size:13px;color:var(--text-muted);">Kursfarbe</label>' +
+        '<input type="color" id="edit-class-color-input" value="' + clsColor + '" style="width:100%;height:40px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;">' +
+        '<button class="btn" onclick="saveClassDetails(\'' + cls.id + '\')">Speichern</button>' +
+        '</div>' +
+        '<h3 style="margin-top:15px;">Schüler</h3>' + studentList +
+        '<div class="form-group exam-form" style="margin-top:15px;">' +
+        '<input type="text" id="new-student-input" placeholder="Schülername" onkeydown="if(event.key===\'Enter\') addStudentToClass(\'' + cls.id + '\')">' +
+        '<button class="btn" onclick="addStudentToClass(\'' + cls.id + '\')">Hinzufügen</button>' +
+        '</div>' +
+        '<button class="btn btn-secondary" style="margin-top:15px;" onclick="deleteClass(\'' + cls.id + '\')">Kurs löschen</button>';
+}
+
+function saveClassDetails(classId) {
+    const name = document.getElementById('edit-class-name-input').value;
+    const subject = document.getElementById('edit-class-subject-input').value;
+    const color = document.getElementById('edit-class-color-input').value;
+    const classes = DB.loadClasses();
+    const cls = classes.find(c => c.id === classId);
+    if (cls && name) {
+        cls.name = name;
+        if (subject) cls.subject = subject;
+        cls.color = color;
+        DB.saveClasses(classes);
+    }
+    hideModal();
+    renderClasses();
+    renderDashboard();
+}
+
+function createNewClass() {
+    const name = document.getElementById('class-name-input').value;
+    const subject = document.getElementById('class-subject-input').value;
+    const color = document.getElementById('class-color-input').value;
+    if (name && subject) {
+        const type = subjectToType(subject);
+        DB.addClass(name, type, subject, color);
+        hideModal();
+        renderClasses();
+    }
+}
+
+function subjectToType(subject) {
+    const s = (subject || '').toLowerCase();
+    if (s.indexOf('mathematik') !== -1) return 'math';
+    if (s.indexOf('darstellende geometrie') !== -1 || s.indexOf('dg') !== -1) return 'dg';
+    if (s.indexOf('geometrisches zeichnen') !== -1 || s.indexOf('gz') !== -1) return 'gz';
+    return 'other';
+}
+
+function addStudentToClass(classId) {
+    const name = document.getElementById('new-student-input').value;
+    if (name) {
+        DB.addStudent(classId, name);
+        hideModal();
+        const cls = DB.loadClasses().find(c => c.id === classId);
+        const students = DB.loadStudents().filter(s => s.classId === classId);
+        showModal(getClassManagerContent(cls, students));
+    }
+}
+
+function deleteStudent(id, classId) {
+    DB.deleteStudent(id);
+    hideModal();
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    showModal(getClassManagerContent(cls, students));
+}
+
+function editStudent(id, classId) {
+    const span = document.getElementById('stu-name-' + id);
+    if (!span) return;
+    const current = span.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'stu-edit-' + id;
+    input.className = 'stu-edit-input';
+    input.value = current;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    input.onkeydown = function(e) {
+        if (e.key === 'Enter') saveStudentEdit(id, classId);
+        else if (e.key === 'Escape') openClassManager(classId);
+    };
+}
+
+function saveStudentEdit(id, classId) {
+    const input = document.getElementById('stu-edit-' + id);
+    if (!input) return;
+    const name = input.value.trim();
+    if (name) {
+        const students = DB.loadStudents();
+        const stu = students.find(s => s.id === id);
+        if (stu) { stu.name = name; DB.saveStudents(students); }
+    }
+    openClassManager(classId);
+}
+
+function deleteClass(id) {
+    DB.deleteClass(id);
+    hideModal();
+    renderClasses();
+}
+
+let currentWeekStart = null;
+
+function getMonday(d) {
+    const date = new Date(d);
+    const day = (date.getDay() + 6) % 7;
+    date.setDate(date.getDate() - day);
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
+function formatDateKey(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
+
+function formatDateShort(d) {
+    return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
+}
+
+function buildHolidayMap() {
+    const map = {};
+    (DB.loadHolidays() || []).forEach(h => { map[h.date] = h.localName || h.name; });
+    (DB.loadAutonomousDays() || []).forEach(dt => { if (!map[dt]) map[dt] = 'Schulautonomer Tag'; });
+    return map;
+}
+
+const STEIERMARK_SCHOOL_HOLIDAYS = [
+    { name: 'Herbstferien Steiermark', start: '2025-10-27', end: '2025-10-31' },
+    { name: 'Weihnachtsferien Steiermark', start: '2025-12-24', end: '2026-01-06' },
+    { name: 'Semesterferien Steiermark', start: '2026-02-16', end: '2026-02-21' },
+    { name: 'Osterferien Steiermark', start: '2026-03-28', end: '2026-04-06' },
+    { name: 'Pfingstferien Steiermark', start: '2026-05-23', end: '2026-05-25' },
+    { name: 'Sommerferien Steiermark', start: '2026-07-11', end: '2026-09-13' }
+];
+
+function expandSchoolHolidays(list) {
+    const out = [];
+    list.forEach(range => {
+        const d = new Date(range.start);
+        const end = new Date(range.end);
+        while (d <= end) {
+            out.push([formatDateKey(d), range.name]);
+            d.setDate(d.getDate() + 1);
+        }
+    });
+    return out;
+}
+
+function shiftWeek(delta) {
+    if (!currentWeekStart) currentWeekStart = getMonday(new Date());
+    currentWeekStart.setDate(currentWeekStart.getDate() + delta * 7);
+    renderDashboard();
+}
+
+function renderDashboard() {
+    if (!currentWeekStart) currentWeekStart = getMonday(new Date());
+    const wrapper = document.getElementById('calendar-wrapper');
+    const timetable = DB.getTimetable();
+    const allSlots = DB.loadTimeSlots();
+    const showFrueh = DB.loadShowFruehaufsicht();
+    const timeSlots = allSlots.filter(s => showFrueh || s.name.toLowerCase().indexOf('frühaufsicht') === -1);
+    const classes = DB.loadClasses();
+    const holidayMap = buildHolidayMap();
+
+    const weekDates = daysOfWeek.map((_, i) => {
+        const d = new Date(currentWeekStart);
+        d.setDate(d.getDate() + i);
+        return d;
+    });
+
+    let html = '<div class="tt-nav">' +
+        '<button class="btn btn-secondary" onclick="shiftWeek(-1)">‹ Vorige Woche</button>' +
+        '<span class="tt-nav-label">' + formatDateShort(weekDates[0]) + ' – ' + formatDateShort(weekDates[4]) + '</span>' +
+        '<button class="btn btn-secondary" onclick="shiftWeek(1)">Nächste Woche ›</button>' +
+        '</div>';
+
+    html += '<div class="timetable-grid">';
+    html += '<div class="tt-row tt-head"><div class="tt-time-col"></div>';
+    weekDates.forEach((d, i) => {
+        const key = formatDateKey(d);
+        const isHol = holidayMap[key];
+        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '');
+        html += '<div class="' + cls + '">' + daysOfWeek[i] + '<br><small>' + formatDateShort(d) + '</small></div>';
+    });
+    html += '</div>';
+
+    html += '<div class="tt-row tt-holiday-row"><div class="tt-time-col"></div>';
+    weekDates.forEach(d => {
+        const key = formatDateKey(d);
+        const isHol = holidayMap[key];
+        if (isHol) {
+            html += '<div class="tt-day-col tt-holiday"><strong>' + isHol + '</strong></div>';
+        } else {
+            html += '<div class="tt-day-col"></div>';
+        }
+    });
+    html += '</div>';
+
+    timeSlots.forEach(slot => {
+        const firstWord = slot.name.split(' ')[0];
+        const isPause = slot.name.toLowerCase().includes('pause');
+        const slotName = isPause ? '' : '<br><span class="tt-slot-name">' + slot.name + '</span>';
+        html += '<div class="tt-row' + (isPause ? ' tt-pause-row' : '') + '"><div class="tt-time-col">' + slot.start + '<br>–<br>' + slot.end + slotName + '</div>';
+        weekDates.forEach((d, i) => {
+            const day = daysOfWeek[i];
+            const entry = timetable.find(e => e.day === day && (e.start === slot.start || e.period == firstWord));
+            if (entry) {
+                const cls = classes.find(c => c.id === entry.classId);
+                const className = cls ? cls.name : '';
+                const isPatrol = entry.subject.toLowerCase() === 'gangaufsicht';
+                const entryClass = 'tt-day-col' + (isPause ? ' tt-pause-entry' : ' timetable-entry') + (isPatrol ? ' tt-patrol' : '');
+                if (isPatrol) {
+                    html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Aufsicht bearbeiten"><small>' + entry.room + '</small></div>';
+                } else {
+                    const color = cls ? cls.color : null;
+                    const styleAttr = color ? ' style="background-color:' + color + '66;border-left:8px solid ' + color + ';"' : '';
+                    const abbr = subjectAbbr(entry.subject);
+                    const clsLower = className.toLowerCase();
+                    const redundant = abbr && (clsLower.indexOf(abbr.toLowerCase()) !== -1 || clsLower.indexOf(entry.subject.toLowerCase()) !== -1);
+                    const subjectHtml = (!className || !redundant) ? '<strong>' + (abbr || entry.subject) + '</strong>' : '';
+                    const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
+                    html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
+                        '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' +
+                        '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
+                }
+            } else {
+                html += '<div class="tt-day-col timetable-free"></div>';
+            }
+        });
+        html += '</div>';
+    });
+    html += '</div>';
+    wrapper.innerHTML = html;
+}
+
+function openTimetableEditor() {
+    const timetable = DB.getTimetable();
+    const classes = DB.loadClasses();
+    const timeSlots = DB.loadTimeSlots();
+    const lessonSlots = timeSlots.filter(s => !s.name.toLowerCase().includes('pause'));
+    let html = '<div class="modal-header">' +
+        '<h2>Stundenplan bearbeiten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
+    html += '<div class="form-group exam-form">' +
+        '<select id="tt-day">' + daysOfWeek.map(d => '<option value="' + d + '">' + d + '</option>').join('') + '</select>' +
+        '<select id="tt-period">' + timeSlots.map(s => '<option value="' + s.start + '">' + s.name + ' (' + s.start + '–' + s.end + ')</option>').join('') + '</select>' +
+        '<select id="tt-course"><option value="Gangaufsicht">Gangaufsicht (Pause)</option>' + classes.map(c => '<option value="' + c.id + '">' + c.name + ' – ' + c.subject + '</option>').join('') + '</select>' +
+        '<input type="text" id="tt-room" placeholder="Raum/Bereich">' +
+        '<button class="btn" onclick="addTimetableEntryModal()">Hinzufügen</button>' +
+        '</div><hr><h3>Vorhandene Einträge</h3>';
+    timetable.forEach(e => {
+        const cls = classes.find(c => c.id === e.classId);
+        const className = cls ? cls.name : '–';
+        html += '<div style="padding:10px;margin:5px 0;background:var(--bg-dark);border-radius:8px;">' +
+            e.day + ' - ' + e.period + ': ' + e.subject + ' (' + className + ', ' + e.room + ') ' +
+            '<button class="btn btn-secondary" onclick="deleteTimetableEntry(\'' + e.id + '\')">×</button>' +
+            '</div>';
+    });
+    showModal(html);
+}
+
+function addTimetableEntryModal() {
+    const day = document.getElementById('tt-day').value;
+    const period = document.getElementById('tt-period').value;
+    const courseSel = document.getElementById('tt-course');
+    const courseVal = courseSel.value;
+    const room = document.getElementById('tt-room').value;
+    let classId = '';
+    let subject = '';
+    if (courseVal === 'Gangaufsicht') {
+        subject = 'Gangaufsicht';
+    } else {
+        const cls = DB.loadClasses().find(c => c.id === courseVal);
+        if (!cls) return;
+        classId = cls.id;
+        subject = cls.subject;
+    }
+    if (day && period && subject && room) {
+        const slot = timeSlots.find(s => s.start === period);
+        DB.addTimetableEntry({ day: day, period: period, start: period, subject: subject, room: room, classId: classId });
+        hideModal();
+        renderDashboard();
+    }
+}
+
+function deleteTimetableEntry(id) {
+    DB.deleteTimetableEntry(id);
+    hideModal();
+    renderDashboard();
+}
+
+function editTimetableEntry(id) {
+    const entry = DB.getTimetable().find(e => e.id === id);
+    const classes = DB.loadClasses();
+    const isPatrol = entry.subject.toLowerCase() === 'gangaufsicht';
+    const courseOptions = '<option value="Gangaufsicht">Gangaufsicht (Pause)</option>' + classes.map(c => '<option value="' + c.id + '"' + (c.id === entry.classId ? ' selected' : '') + '>' + c.name + ' – ' + c.subject + '</option>').join('');
+    showModal('<div class="modal-header">' +
+        '<h2>Eintrag bearbeiten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<select id="edit-course">' + courseOptions + '</select>' +
+        '<input type="text" id="edit-room" value="' + entry.room + '">' +
+        '<button class="btn" onclick="updateTimetableEntry(\'' + id + '\')">Speichern</button>' +
+        '<button class="btn btn-secondary" onclick="deleteTimetableEntry(\'' + id + '\')">Löschen</button>' +
+        '</div>');
+}
+
+function updateTimetableEntry(id) {
+    const timetable = DB.getTimetable();
+    const entry = timetable.find(e => e.id === id);
+    const courseVal = document.getElementById('edit-course').value;
+    const room = document.getElementById('edit-room').value;
+    if (courseVal === 'Gangaufsicht') {
+        entry.subject = 'Gangaufsicht';
+        entry.classId = '';
+    } else {
+        const cls = DB.loadClasses().find(c => c.id === courseVal);
+        if (cls) { entry.subject = cls.subject; entry.classId = cls.id; }
+    }
+    entry.room = room;
+    DB.saveTimetable(timetable);
+    hideModal();
+    renderDashboard();
+}
+
+function escapeHtml(str) {
+    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDateDE(d) {
+    if (!d) return '';
+    const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return d;
+    const year = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    const day = parseInt(m[3], 10);
+    const date = new Date(year, month, day);
+    const days = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const dayName = days[date.getDay()];
+    return dayName + ' ' + m[3] + '.' + m[2] + '.' + m[1];
+}
+
+function formatDateShortDE(d) {
+    if (!d) return '';
+    const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return d;
+    return m[3] + '.' + m[2];
+}
+
+function percentToGrade(p) {
+    if (p == null || isNaN(p)) return null;
+    if (p >= 92) return 1;
+    if (p >= 79) return 2;
+    if (p >= 62) return 3;
+    if (p >= 50) return 4;
+    return 5;
+}
+
+function pointsToGrade(points, maxPoints, gradeScale) {
+    if (points == null || isNaN(points) || !maxPoints) return null;
+    if (!gradeScale || !gradeScale.length) return percentToGrade(points / maxPoints * 100);
+    const hasValues = gradeScale.some(e => e.minPoints != null || e.maxPoints != null);
+    if (!hasValues) return percentToGrade(points / maxPoints * 100);
+    const sorted = gradeScale.slice().sort((a, b) => (b.minPoints || 0) - (a.minPoints || 0));
+    for (const entry of sorted) {
+        if ((entry.minPoints == null || points >= entry.minPoints) && (entry.maxPoints == null || points <= entry.maxPoints)) return entry.grade;
+    }
+    return 5;
+}
+
+function gradeClass(g) {
+    if (g == 5) return 'grade-5';
+    if (g == 4) return 'grade-4';
+    if (g == 1) return 'grade-1';
+    return '';
+}
+
+function populateGradeClassSelect() {
+    const select = document.getElementById('grade-class-select');
+    if (select.options.length <= 1) {
+        const classes = DB.getSortedClasses();
+        classes.forEach(cls => {
+            const opt = document.createElement('option');
+            opt.value = cls.id;
+            opt.textContent = cls.name;
+            select.appendChild(opt);
+        });
+    }
+    select.onchange = renderGrading;
+}
+
+let currentGradeTab = 'plan';
+let gradeOverviewScope = 'semester';
+let currentExamId = null;
+
+function renderGrading() {
+    const classId = document.getElementById('grade-class-select').value;
+    const switcher = document.getElementById('grade-switcher');
+    const container = document.getElementById('grading-table-container');
+    if (!classId) {
+        switcher.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    switcher.style.display = 'flex';
+    const tabs = [
+        ['plan', 'Stundenplanung'],
+        ['hw', 'Hausübungen'],
+        ['exam', 'Schularbeiten'],
+        ['pruef', 'Prüfungen'],
+        ['mit', 'Mitarbeit'],
+        ['overview', 'Übersicht']
+    ];
+    switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + '</div>' + renderGradeContent(classId);
+}
+
+function setGradeTab(tab) {
+    currentGradeTab = tab;
+    renderGrading();
+}
+
+function renderGradeContent(classId) {
+    if (currentGradeTab === 'plan') return renderPlan(classId);
+    if (currentGradeTab === 'hw') return renderHomework(classId);
+    if (currentGradeTab === 'exam') return renderExamsView(classId);
+    if (currentGradeTab === 'pruef') return renderPruefungen(classId);
+    if (currentGradeTab === 'mit') return renderMitarbeit(classId);
+    if (currentGradeTab === 'overview') return renderOverview(classId);
+    return '';
+}
+
+/* ============ STUNDENPLANUNG ============ */
+function sortedPlan(classId) {
+    return DB.loadTeachingPlan(classId).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+function renderPlan(classId) {
+    const plan = sortedPlan(classId);
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen.</p></div>' +
+        '<button class="btn" onclick="openPlanModal(\'' + classId + '\')">+ Neue Stunde</button></div>';
+    if (!plan.length) {
+        html += '<p class="subtitle">Noch keine Einträge. Lege die erste Stunde an.</p>';
+        return html;
+    }
+    html += '<table class="grading-table plan-table"><thead><tr><th>Datum</th><th>Übung</th><th>Inhalt Schulübung</th><th>HÜ</th><th>Inhalt Hausübung</th><th></th></tr></thead><tbody>';
+    plan.forEach(e => {
+        const isToday = e.date === todayStr;
+        html += '<tr class="' + (isToday ? 'plan-today' : '') + '">' +
+            '<td>' + formatDateDE(e.date) + '</td>' +
+            '<td>' + (e.exerciseNr ? e.exerciseNr : '–') + '</td>' +
+            '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
+            '<td>' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>' +
+            '<td class="pre">' + escapeHtml(e.homeworkContent || '') + '</td>' +
+            '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+            '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function openPlanModal(classId, id) {
+    const plan = sortedPlan(classId);
+    let e = null;
+    if (id) e = DB.loadTeachingPlan(classId).find(p => p.id === id);
+    const nextEx = plan.filter(x => x.exerciseNr).length + 1;
+    const nextHw = plan.filter(x => x.homeworkNr).length + 1;
+    const lastDate = plan.length ? plan[plan.length - 1].date : null;
+    const defDate = e ? e.date : (DB.nextLessonDate(classId, lastDate) || '');
+    const exNr = e ? e.exerciseNr : nextEx;
+    const hwNr = e ? e.homeworkNr : nextHw;
+    showModal(
+        '<div class="modal-header"><h2>' + (id ? 'Stunde bearbeiten' : 'Neue Stunde') + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<label>Datum der Stunde</label><input type="date" id="plan-date" value="' + escapeHtml(defDate) + '">' +
+        '<label>Nummer Schulübung</label><input type="number" id="plan-exnr" value="' + (exNr || '') + '">' +
+        '<label>Inhalt Schulübung</label><textarea id="plan-excontent" rows="4" style="white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea>' +
+        '<label>Nummer Hausübung</label><input type="number" id="plan-hwnr" value="' + (hwNr || '') + '">' +
+        '<label>Inhalt Hausübung</label><textarea id="plan-hwcontent" rows="4" style="white-space:pre-wrap;">' + escapeHtml(e ? e.homeworkContent : '') + '</textarea>' +
+        '<button class="btn" onclick="savePlanEntry(\'' + classId + '\',\'' + (id || '') + '\')">Speichern</button>' +
+        '</div>'
+    );
+}
+
+function savePlanEntry(classId, id) {
+    const date = document.getElementById('plan-date').value;
+    if (!date) { alert('Bitte Datum angeben'); return; }
+    const exNr = document.getElementById('plan-exnr').value;
+    const exContent = document.getElementById('plan-excontent').value;
+    const hwNr = document.getElementById('plan-hwnr').value;
+    const hwContent = document.getElementById('plan-hwcontent').value;
+    const fields = {
+        date: date,
+        exerciseNr: exNr ? parseInt(exNr) : '',
+        exerciseContent: exContent,
+        homeworkNr: hwNr ? parseInt(hwNr) : '',
+        homeworkContent: hwContent
+    };
+    if (id) DB.updateTeachingPlanEntry(classId, id, fields);
+    else DB.addTeachingPlanEntry(classId, date, fields.exerciseNr, exContent, fields.homeworkNr, hwContent);
+    hideModal();
+    renderGrading();
+}
+
+function deletePlanEntry(classId, id) {
+    DB.deleteTeachingPlanEntry(classId, id);
+    renderGrading();
+}
+
+/* ============ HAUSÜBUNGEN ============ */
+function hwStatusOptions(sel) {
+    const opts = [['', '–'], ['forgotten', 'x'], ['improve', 'V!'], ['improved', 'Vg'], ['sick', 'k'], ['collected', 'ab']];
+    return opts.map(o => '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + ' class="hw-opt-' + o[0] + '">' + o[1] + '</option>').join('');
+}
+
+function computeHwGrade(classId, studentId, hws) {
+    const status = DB.loadHwStatus(classId);
+    const corrected = DB.loadHwCorrected(classId);
+    const st = status[studentId] || {};
+    let points = 0, total = 0, missing = 0;
+    const missingNrs = [];
+    hws.forEach(h => {
+        const cell = st[h.nr];
+        const s = cell ? cell.status : '';
+        if (s === 'sick') return;
+        total += 1;
+        if (s === 'done' || s === 'improved' || s === 'collected') points += 1;
+        else if (s === 'improve') points += 0.5;
+        else if (s === '') {
+            if (corrected[h.nr]) points += 1;
+            else { missing += 1; missingNrs.push(h.nr); }
+        } else if (s === 'forgotten') { missing += 1; missingNrs.push(h.nr); }
+    });
+    if (total === 0) return { grade: null, missing: 0, points: 0, total: 0, missingNrs: [] };
+    return { grade: percentToGrade(points / total * 100), missing: missing, points: points, total: total, missingNrs: missingNrs };
+}
+
+let hwViewMode = 'detailed';
+
+function renderHomework(classId) {
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const hws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    const status = DB.loadHwStatus(classId);
+    let html = '<div class="view-header"><div><h2>Hausübungen</h2><p class="subtitle">Kompakt: nur Note/Fehlend. Detail: Matrix mit „korrigiert/abgesammelt" pro HÜ – leere Zelle bei korrigierter HÜ = automatisch erbracht.</p></div>' +
+        '<div class="grading-controls">' +
+        '<button class="btn ' + (hwViewMode === 'compact' ? '' : 'btn-secondary') + '" onclick="setHwView(\'compact\')">Kompakt</button>' +
+        '<button class="btn ' + (hwViewMode === 'detailed' ? '' : 'btn-secondary') + '" onclick="setHwView(\'detailed\')">Detail</button>' +
+        '<button class="btn btn-secondary" onclick="openHwListModal(\'' + classId + '\')">HÜ-Liste / Fristen</button>' +
+        '</div></div>';
+    if (!hws.length) {
+        html += '<p class="subtitle">Lege zuerst Stunden mit Hausübungen in der Stundenplanung an, damit hier die Hausübungsnummern erscheinen.</p>';
+        return html;
+    }
+    if (hwViewMode === 'detailed') return html + renderHomeworkDetailed(classId, students, hws);
+    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Note</th><th>Fehlend</th><th>abgesammelt</th><th></th></tr></thead><tbody>';
+    students.forEach(s => {
+        const calc = computeHwGrade(classId, s.id, hws);
+        const collected = hws.filter(h => {
+            const cell = status[s.id] && status[s.id][h.nr] ? status[s.id][h.nr] : {};
+            return cell.collected || cell.status === 'collected';
+        }).length;
+        const missingText = calc.missingNrs && calc.missingNrs.length ? 'Fehlende HÜs: ' + calc.missingNrs.join(', ') : (calc.missing ? 'Fehlende (' + calc.missing + ')' : '–');
+        html += '<tr><td>' + escapeHtml(s.name) + '</td>' +
+            '<td class="' + gradeClass(calc.grade) + ' grade-cell">' + (calc.grade != null ? calc.grade : '–') + '</td>' +
+            '<td><button class="btn btn-secondary" onclick="showMissingHwModal(\'' + classId + '\',\'' + s.id + '\')">Fehlende (' + calc.missing + ')</button></td>' +
+            '<td>' + collected + ' / ' + hws.length + '</td>' +
+            '<td><button class="btn" onclick="setHwView(\'detailed\')">Details</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function setHwView(mode) {
+    hwViewMode = mode;
+    renderGrading();
+}
+
+function renderHomeworkDetailed(classId, students, hws) {
+    const status = DB.loadHwStatus(classId);
+    const corrected = DB.loadHwCorrected(classId);
+    const expired = DB.loadHwExpired(classId);
+    let html = '<div class="hw-grid-wrap"><table class="grading-table hw-detail-table"><thead><tr><th class="hw-sticky-left">Schüler</th>';
+    hws.forEach(h => {
+        const corr = corrected[h.nr] ? 'checked' : '';
+        const isExpired = !!expired[h.nr];
+        html += '<th class="hw-col' + (isExpired ? ' hw-expired-col' : '') + '">HÜ ' + h.nr + '<br><small>' + formatDateShortDE(h.date) + '</small>' +
+            (isExpired ? '<br><small class="hw-expired-label">Frist abgelaufen</small>' : '') +
+            '<br><label class="hw-corr" title="von mir korrigiert / abgesammelt"><input type="checkbox" ' + corr + ' onchange="toggleHwCorrected(\'' + classId + '\',' + h.nr + ',this.checked)"> korr.</label></th>';
+    });
+    html += '<th>Fehlend</th><th>Note</th></tr></thead><tbody>';
+    students.forEach(s => {
+        html += '<tr><td class="hw-sticky-left">' + escapeHtml(s.name) + '</td>';
+        hws.forEach(h => {
+            const cell = status[s.id] && status[s.id][h.nr] ? status[s.id][h.nr] : {};
+            const selClass = cell.status ? ' hw-status-' + cell.status : '';
+            html += '<td class="hw-cell">' +
+                '<select class="hw-status' + selClass + '" onchange="setHwStatus(\'' + classId + '\',\'' + s.id + '\',' + h.nr + ',this.value)">' + hwStatusOptions(cell.status) + '</select>' +
+                '</td>';
+        });
+        const calc = computeHwGrade(classId, s.id, hws);
+        html += '<td class="' + gradeClass(calc.missing) + ' grade-cell"><button class="btn btn-secondary" onclick="showMissingHwModal(\'' + classId + '\',\'' + s.id + '\')">' + (calc.missing != null ? calc.missing : '–') + '</button></td>';
+        html += '<td class="' + gradeClass(calc.grade) + ' grade-cell">' + (calc.grade != null ? calc.grade : '–') + '</td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function toggleHwCorrected(classId, hwNr, val) {
+    const wrap = document.querySelector('.hw-grid-wrap');
+    const scrollLeft = wrap ? wrap.scrollLeft : 0;
+    const obj = DB.loadHwCorrected(classId);
+    if (val) obj[hwNr] = true; else delete obj[hwNr];
+    DB.saveHwCorrected(classId, obj);
+    renderGrading();
+    requestAnimationFrame(() => {
+        const w = document.querySelector('.hw-grid-wrap');
+        if (w) w.scrollLeft = scrollLeft;
+    });
+}
+
+function showMissingHwModal(classId, studentId) {
+    const hws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    const status = DB.loadHwStatus(classId);
+    const corrected = DB.loadHwCorrected(classId);
+    const student = DB.loadStudents().find(s => s.id === studentId);
+    const name = student ? escapeHtml(student.name) : 'Schüler';
+    const st = status[studentId] || {};
+    const missing = [];
+    const sick = [];
+    const improve = [];
+    hws.forEach(h => {
+        const cell = st[h.nr];
+        const s = cell ? cell.status : '';
+        if (s === 'sick') sick.push(h.nr);
+        else if (s === 'improve') improve.push(h.nr);
+        else if (s === 'done' || s === 'improved' || s === 'collected') return;
+        else if (s === 'forgotten') missing.push(h.nr);
+        else if (!corrected[h.nr]) missing.push(h.nr);
+    });
+    let html = '<div class="modal-header"><h2>Hausübungs-Status – ' + name + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
+    html += '<div class="form-group exam-form">';
+    if (!hws.length) {
+        html += '<p>Keine Hausübungen vorhanden.</p>';
+    } else {
+        html += '<p><strong>Fehlend (' + missing.length + '):</strong> ' + (missing.length ? missing.join(', ') : '–') + '</p>';
+        html += '<p><strong>k (' + sick.length + '):</strong> ' + (sick.length ? sick.join(', ') : '–') + '</p>';
+        html += '<p><strong>V! (' + improve.length + '):</strong> ' + (improve.length ? improve.join(', ') : '–') + '</p>';
+    }
+    html += '</div>';
+    showModal(html);
+}
+
+function openHwListModal(classId) {
+    const hws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    const expired = DB.loadHwExpired(classId);
+    let html = '<div class="modal-header"><h2>Hausübungs-Liste</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
+    html += '<div class="hw-expired-list">';
+    if (!hws.length) html += '<p>Keine Hausübungen vorhanden.</p>';
+    hws.forEach(h => {
+        html += '<label class="hw-expired-item"><input type="checkbox" ' + (expired[h.nr] ? 'checked' : '') + ' onchange="toggleHwExpired(\'' + classId + '\',' + h.nr + ',this.checked)"> HÜ ' + h.nr + ' (' + formatDateDE(h.date) + ')</label>';
+    });
+    html += '</div>';
+    showModal(html);
+}
+
+function setHwStatus(classId, studentId, hwNr, status) {
+    DB.setHwStatus(classId, studentId, hwNr, status, undefined);
+    renderGrading();
+}
+
+function setHwCollected(classId, studentId, hwNr, collected) {
+    DB.setHwStatus(classId, studentId, hwNr, undefined, collected);
+    renderGrading();
+}
+
+function setExamExamplePoints(classId, studentId, examId, exampleId, points, inputEl) {
+    DB.setExamExamplePoints(classId, studentId, examId, exampleId, points);
+    if (inputEl) {
+        const row = inputEl.closest('tr');
+        if (row) {
+            const rec = DB.loadExamRecords(classId);
+            const exam = (DB.loadExams(classId) || []).find(e => e.id === examId);
+            const studentRec = (rec[studentId] && rec[studentId][examId]) ? rec[studentId][examId] : { examplePoints: {}, returned: false };
+            let sum = 0;
+            if (exam && exam.examples) {
+                exam.examples.forEach(ex => {
+                    const pts = (studentRec.examplePoints && studentRec.examplePoints[ex.id] != null) ? studentRec.examplePoints[ex.id] : '';
+                    if (pts !== '' && !isNaN(pts)) sum += parseFloat(pts);
+                });
+            }
+            const sumCell = row.querySelector('.exam-sum-cell');
+            const gradeCell = row.querySelector('.exam-grade-cell');
+            if (sumCell) sumCell.innerHTML = '<strong>' + (exam && exam.maxPoints > 0 ? sum : '–') + '</strong>';
+            if (gradeCell && exam) {
+                const g = exam.maxPoints > 0 ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null;
+                gradeCell.className = 'exam-grade-cell ' + gradeClass(g) + ' grade-cell';
+                gradeCell.textContent = g != null ? g : '–';
+            }
+            const statsEl = document.getElementById('exam-stats-' + examId);
+            if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
+            return;
+        }
+    }
+    renderGrading();
+}
+
+function setExamReturned(classId, studentId, examId, returned, inputEl) {
+    DB.setExamReturned(classId, studentId, examId, returned);
+    if (inputEl) {
+        const row = inputEl.closest('tr');
+        if (row) {
+            const rec = DB.loadExamRecords(classId);
+            const exam = (DB.loadExams(classId) || []).find(e => e.id === examId);
+            const studentRec = (rec[studentId] && rec[studentId][examId]) ? rec[studentId][examId] : { examplePoints: {}, returned: false };
+            const returnCell = row.querySelector('.exam-return-cell');
+            if (returnCell) {
+                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '✓' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
+            }
+            const statsEl = document.getElementById('exam-stats-' + examId);
+            if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
+            return;
+        }
+    }
+    renderGrading();
+}
+
+function toggleHwExpired(classId, hwNr, val) {
+    const obj = DB.loadHwExpired(classId);
+    if (val) obj[hwNr] = true; else delete obj[hwNr];
+    DB.saveHwExpired(classId, obj);
+    renderGrading();
+}
+
+/* ============ SCHULARBEITEN ============ */
+function examExampleRowHtml(label, pts) {
+    return '<div class="exam-ex-row" style="display:flex;gap:8px;margin-bottom:6px;"><input type="text" class="ex-label" placeholder="Beispiel (z.B. 1)" value="' + escapeHtml(label || '') + '"><input type="number" class="ex-pts" placeholder="Punkte" value="' + (pts != null ? pts : '') + '"><button class="btn btn-secondary" type="button" onclick="this.parentElement.remove()">×</button></div>';
+}
+
+function openExamModal(classId, id) {
+    let exam = null;
+    if (id) exam = DB.loadExams(classId).find(e => e.id === id);
+    let exRows = '';
+    if (exam) exam.examples.forEach(ex => exRows += examExampleRowHtml(ex.label, ex.maxPoints));
+    else exRows = examExampleRowHtml('', 12);
+    let gradeScaleHtml = '';
+    const prevExam = id ? null : (DB.loadExams(classId) || []).slice(-1)[0];
+    const scale = (exam && exam.gradeScale) ? exam.gradeScale : (prevExam && prevExam.gradeScale) ? prevExam.gradeScale : defaultGradeScale();
+    const maxP = (exam && exam.maxPoints) ? exam.maxPoints : ((prevExam && prevExam.maxPoints) ? prevExam.maxPoints : 48);
+    gradeScaleHtml += '<label>Notenschlüssel (Punkte)</label><div id="grade-scale-editor">';
+    gradeScaleHtml += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    [1,2,3,4,5].forEach(g => {
+        const item = scale.find(s => s.grade === g);
+        const minVal = item && item.minPoints != null ? item.minPoints : '';
+        const maxVal = item && item.maxPoints != null ? item.maxPoints : '';
+        gradeScaleHtml += '<div style="display:flex;align-items:center;gap:8px;"><span style="width:60px;">Note ' + g + '</span><input type="number" step="0.5" class="grade-scale-min-input" data-grade="' + g + '" value="' + minVal + '" placeholder="von" style="flex:1;"><span style="color:var(--text-muted);font-size:12px;">bis</span><input type="number" step="0.5" class="grade-scale-max-input" data-grade="' + g + '" value="' + maxVal + '" placeholder="bis" style="flex:1;"><span style="color:var(--text-muted);font-size:12px;">P</span></div>';
+    });
+    gradeScaleHtml += '</div></div>';
+    showModal(
+        '<div class="modal-header"><h2>' + (id ? 'Schularbeit bearbeiten' : 'Neue Schularbeit') + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<label>Titel</label><input type="text" id="exam-title" value="' + escapeHtml(exam ? exam.title : '') + '">' +
+        '<label>Datum (optional, für Semesterfilter)</label><input type="date" id="exam-date" value="' + (exam && exam.date ? escapeHtml(exam.date) : '') + '">' +
+        '<label>Beispiele (Aufgaben)</label>' +
+        '<div id="exam-examples">' + exRows + '</div>' +
+        '<button class="btn btn-secondary" type="button" onclick="addExamExampleRow()">+ Beispiel</button>' +
+        gradeScaleHtml +
+        '<button class="btn" onclick="saveExam(\'' + classId + '\',\'' + (id || '') + '\')">Speichern</button>' +
+        '</div>'
+    );
+}
+
+function addExamExampleRow() {
+    document.getElementById('exam-examples').insertAdjacentHTML('beforeend', examExampleRowHtml('', 12));
+}
+
+function saveExam(classId, id) {
+    const title = document.getElementById('exam-title').value;
+    const date = document.getElementById('exam-date').value;
+    if (!title) { alert('Titel angeben'); return; }
+    const examples = [];
+    document.querySelectorAll('#exam-examples .exam-ex-row').forEach(row => {
+        const l = row.querySelector('.ex-label').value;
+        const p = row.querySelector('.ex-pts').value;
+        if (l || p) examples.push({ id: Date.now().toString() + Math.random().toString().slice(2, 6), label: l, maxPoints: parseFloat(p) || 0 });
+    });
+    const gradeScaleInputsMin = document.querySelectorAll('.grade-scale-min-input');
+    const gradeScaleInputsMax = document.querySelectorAll('.grade-scale-max-input');
+    const gradeScale = [];
+    gradeScaleInputsMin.forEach(input => {
+        const grade = parseInt(input.dataset.grade);
+        const min = parseFloat(input.value) || 0;
+        const max = gradeScaleInputsMax.length ? (parseFloat(document.querySelector('.grade-scale-max-input[data-grade="' + grade + '"]').value) || 0) : 0;
+        gradeScale.push({ grade: grade, minPoints: min, maxPoints: max });
+    });
+    if (id) {
+        const exams = DB.loadExams(classId);
+        const ex = exams.find(e => e.id === id);
+        ex.title = title; ex.date = date; ex.examples = examples; ex.maxPoints = examples.reduce((s, e) => s + e.maxPoints, 0); ex.gradeScale = gradeScale;
+        DB.saveExams(classId, exams);
+    } else {
+        DB.addExam(classId, title, examples, date);
+        const exams = DB.loadExams(classId);
+        const ex = exams[exams.length - 1];
+        ex.gradeScale = gradeScale;
+        DB.saveExams(classId, exams);
+    }
+    hideModal();
+    renderGrading();
+}
+
+function deleteExamConfirm(classId, examId) {
+    if (confirm('Schularbeit wirklich löschen?')) {
+        DB.deleteExam(classId, examId);
+        currentExamId = null;
+        renderGrading();
+    }
+}
+
+function setCurrentExam(id) {
+    currentExamId = id;
+    renderGrading();
+}
+
+function renderExamTable(classId, exam) {
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const records = DB.loadExamRecords(classId);
+    let html = '<table class="grading-table exam-table" id="exam-print-area"><thead><tr><th class="exam-sticky-left">Schüler</th>';
+    exam.examples.forEach(ex => html += '<th>' + escapeHtml(ex.label || '') + '<br><small>' + ex.maxPoints + ' P</small></th>');
+    html += '<th class="exam-sticky-right">Σ / ' + exam.maxPoints + '</th><th class="exam-sticky-right exam-grade-col">Note</th><th class="exam-sticky-right">zurück</th></tr></thead><tbody>';
+    students.forEach(s => {
+        const rec = (records[s.id] && records[s.id][exam.id]) ? records[s.id][exam.id] : { examplePoints: {}, returned: false };
+        let sum = 0;
+        html += '<tr><td class="exam-sticky-left">' + escapeHtml(s.name) + '</td>';
+        exam.examples.forEach(ex => {
+            const pts = (rec.examplePoints && rec.examplePoints[ex.id] != null) ? rec.examplePoints[ex.id] : '';
+            if (pts !== '' && !isNaN(pts)) sum += parseFloat(pts);
+            html += '<td><input type="number" class="grade-input ex-pts-input" value="' + pts + '" onchange="setExamExamplePoints(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',\'' + ex.id + '\',this.value,this)"></td>';
+        });
+        const g = exam.maxPoints > 0 ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null;
+        html += '<td class="exam-sum-cell exam-sticky-right"><strong>' + (exam.maxPoints > 0 ? sum : '–') + '</strong></td>';
+        html += '<td class="exam-grade-cell exam-sticky-right ' + gradeClass(g) + ' grade-cell">' + (g != null ? g : '–') + '</td>';
+        html += '<td class="exam-return-cell exam-sticky-right"><input type="checkbox" ' + (rec.returned ? 'checked' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',this.checked,this)"></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function renderExamStats(classId, exam, containerId) {
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const records = DB.loadExamRecords(classId);
+    const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    students.forEach(s => {
+        const rec = records[s.id] && records[s.id][exam.id];
+        if (!rec || !rec.examplePoints) return;
+        let sum = 0;
+        Object.values(rec.examplePoints).forEach(p => sum += parseFloat(p) || 0);
+        const g = exam.maxPoints > 0 ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null;
+        if (g) counts[g]++;
+    });
+    const idAttr = containerId ? ' id="' + containerId + '"' : '';
+    return '<div' + idAttr + ' class="exam-stats">Statistik: ' + [1, 2, 3, 4, 5].map(g => '<span class="stat-pill ' + gradeClass(g) + '">' + g + ': ' + counts[g] + '</span>').join(' ') + '</div>';
+}
+
+function renderExamsView(classId) {
+    const exams = DB.loadExams(classId);
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const className = cls ? escapeHtml(cls.name) : '';
+    let html = '<div class="view-header"><div><h2>Schularbeiten</h2></div>' +
+        '<div class="grading-controls">' +
+        (exams.length ? '<select id="exam-select" class="btn btn-secondary" onchange="setCurrentExam(this.value)">' + exams.map(e => '<option value="' + e.id + '"' + (currentExamId === e.id ? ' selected' : '') + '>' + escapeHtml(e.title) + '</option>').join('') + '</select>' : '') +
+        '<button class="btn" onclick="openExamModal(\'' + classId + '\')">+ Neue Schularbeit</button>' +
+        '<button class="btn btn-secondary" onclick="printExam()">🖨️ Drucken</button>' +
+        '</div></div>';
+    if (!exams.length) { html += '<p class="subtitle">Noch keine Schularbeit angelegt.</p>'; return html; }
+    if (!currentExamId || !exams.find(e => e.id === currentExamId)) currentExamId = exams[0].id;
+    const exam = exams.find(e => e.id === currentExamId);
+    html += '<div class="exam-header">' +
+        '<h3>' + escapeHtml(exam.title) + '</h3>' +
+        '<p class="subtitle">' + className + (exam.date ? ' &nbsp;|&nbsp; ' + formatDateDE(exam.date) : '') + '</p>' +
+        '</div>';
+    html += renderExamTable(classId, exam);
+    html += renderExamStats(classId, exam, 'exam-stats-' + exam.id);
+    html += '<div style="margin-top:15px;"><button class="btn btn-secondary" onclick="openExamModal(\'' + classId + '\',\'' + exam.id + '\')">✎ Bearbeiten</button> <button class="btn btn-secondary" onclick="deleteExamConfirm(\'' + classId + '\',\'' + exam.id + '\')">Schularbeit löschen</button></div>';
+    return html;
+}
+
+function printExam() { window.print(); }
+
+/* ============ PRÜFUNGEN ============ */
+function renderPruefungen(classId) {
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const data = DB.loadPruefung(classId);
+    let html = '<div class="view-header"><div><h2>Prüfungen</h2><p class="subtitle">Pro Schüler eine mündliche Prüfung mit Datum und Note.</p></div></div>';
+    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Note</th><th>Notiz</th></tr></thead><tbody>';
+    students.forEach(s => {
+        const d = data[s.id] || {};
+        html += '<tr><td>' + escapeHtml(s.name) + '</td>' +
+            '<td><input type="date" class="grade-input" style="width:auto;" value="' + escapeHtml(d.date || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'date\',this.value)"></td>' +
+            '<td><input type="number" min="1" max="5" class="grade-input ' + gradeClass(d.grade) + '" value="' + (d.grade != null ? d.grade : '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'grade\',this.value)"></td>' +
+            '<td><input type="text" class="grade-input" style="width:auto;min-width:160px;" value="' + escapeHtml(d.note || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function setPruefung(classId, studentId, field, value) {
+    const data = DB.loadPruefung(classId);
+    if (!data[studentId]) data[studentId] = {};
+    data[studentId][field] = (field === 'grade') ? (value === '' ? null : parseInt(value)) : value;
+    DB.savePruefung(classId, data);
+    renderGrading();
+}
+
+/* ============ MITARBEIT ============ */
+function renderMitarbeit(classId) {
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const data = DB.loadMitarbeit(classId);
+    let html = '<div class="view-header"><div><h2>Mitarbeit</h2><p class="subtitle">Wiederholung, Hausübungsmappe, Verhalten.</p></div></div>';
+    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Wiederholung ausgefallen</th><th>Mappe in Ordnung</th><th>Verhalten (positiv/negativ)</th></tr></thead><tbody>';
+    students.forEach(s => {
+        const d = data[s.id] || {};
+        html += '<tr><td>' + escapeHtml(s.name) + '</td>' +
+            '<td style="text-align:center;"><input type="checkbox" ' + (d.repetitionMissed ? 'checked' : '') + ' onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'repetitionMissed\',this.checked)"></td>' +
+            '<td style="text-align:center;"><input type="checkbox" ' + (d.folderOk ? 'checked' : '') + ' onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderOk\',this.checked)"></td>' +
+            '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function setMitarbeit(classId, studentId, field, value) {
+    const data = DB.loadMitarbeit(classId);
+    if (!data[studentId]) data[studentId] = {};
+    data[studentId][field] = value;
+    DB.saveMitarbeit(classId, data);
+    renderGrading();
+}
+
+/* ============ ÜBERSICHT ============ */
+function filterByScope(hws, exams, cutoff) {
+    if (!cutoff) return { hws: hws, exams: exams };
+    const h = hws.filter(x => !x.date || x.date <= cutoff);
+    const e = exams.filter(x => !x.date || x.date <= cutoff);
+    return { hws: h, exams: e };
+}
+
+function renderOverview(classId) {
+    const students = DB.loadStudents().filter(s => s.classId === classId);
+    const allHws = sortedPlan(classId).filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    const exams = DB.loadExams(classId);
+    const cutoff = DB.loadSemesterCutoff(classId);
+    const scopeData = (gradeOverviewScope === 'semester') ? filterByScope(allHws, exams, cutoff) : { hws: allHws, exams: exams };
+    const weights = DB.loadWeights(classId);
+    const manual = DB.loadManualGrades(classId);
+
+    let html = '<div class="view-header"><div><h2>Übersicht – ' + (gradeOverviewScope === 'semester' ? '1. Semester' : 'Ganzes Jahr') + '</h2>' +
+        '<p class="subtitle">Gewichtung der Noten frei wählbar. Manuelle Note überschreibt die Berechnung.</p></div>' +
+        '<div class="grading-controls">' +
+        '<button class="btn ' + (gradeOverviewScope === 'semester' ? '' : 'btn-secondary') + '" onclick="setOverviewScope(\'semester\')">1. Semester</button>' +
+        '<button class="btn ' + (gradeOverviewScope === 'year' ? '' : 'btn-secondary') + '" onclick="setOverviewScope(\'year\')">Ganzes Jahr</button>' +
+        '</div></div>';
+
+    html += '<div class="form-group exam-form" style="max-width:520px;">' +
+        '<label>Semester-Grenze (Datum) – filtert Hausübungen & Schularbeiten mit Datum</label>' +
+        '<input type="date" id="sem-cutoff" value="' + escapeHtml(cutoff) + '" onchange="setSemesterCutoff(\'' + classId + '\',this.value)">' +
+        '<label>Gewichtung: Hausübung</label><input type="number" step="0.5" id="w-hw" value="' + weights.hw + '" onchange="setWeight(\'' + classId + '\',\'hw\',this.value)">' +
+        '<label>Gewichtung: Schularbeit (Ø der Schularbeiten)</label><input type="number" step="0.5" id="w-exam" value="' + weights.exam + '" onchange="setWeight(\'' + classId + '\',\'exam\',this.value)">' +
+        '<label>Gewichtung: Prüfung</label><input type="number" step="0.5" id="w-pruef" value="' + weights.pruefung + '" onchange="setWeight(\'' + classId + '\',\'pruefung\',this.value)">' +
+        '</div>';
+
+    html += '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
+        '<th>Schüler</th><th>HÜ<br><small>Pkte / Note</small></th>';
+    scopeData.exams.forEach(e => html += '<th>SA ' + e.nr + '<br><small>Pkte / Note</small></th>');
+    html += '<th>Ø SA</th><th>Prüf.</th><th>Berechnet</th><th>Note (ich)</th></tr></thead><tbody>';
+
+    students.forEach(s => {
+        const hw = computeHwGrade(classId, s.id, scopeData.hws);
+        let examSum = 0, examCount = 0, examGrades = [];
+        scopeData.exams.forEach(e => {
+            const rec = (DB.loadExamRecords(classId)[s.id] && DB.loadExamRecords(classId)[s.id][e.id]);
+            let sum = 0, has = false;
+            if (rec && rec.examplePoints) {
+                has = true;
+                Object.values(rec.examplePoints).forEach(p => sum += parseFloat(p) || 0);
+            }
+            const g = (has && e.maxPoints > 0) ? percentToGrade(sum / e.maxPoints * 100) : null;
+            if (g != null) { examSum += g; examCount++; examGrades.push(g); }
+            html += '<td><span class="ov-pts">' + (has ? sum : '–') + '</span> / <span class="' + gradeClass(g) + ' grade-cell">' + (g != null ? g : '–') + '</span></td>';
+        });
+        const examAvg = examCount ? examSum / examCount : null;
+        const pr = DB.loadPruefung(classId)[s.id];
+        const pruefGrade = (pr && pr.grade != null) ? pr.grade : null;
+        const w = DB.loadWeights(classId);
+        let computed = null;
+        const parts = [];
+        if (hw.grade != null) parts.push(hw.grade * w.hw);
+        if (examAvg != null) parts.push(examAvg * w.exam);
+        if (pruefGrade != null) parts.push(pruefGrade * w.pruefung);
+        const wSum = (hw.grade != null ? w.hw : 0) + (examAvg != null ? w.exam : 0) + (pruefGrade != null ? w.pruefung : 0);
+        if (parts.length && wSum > 0) computed = Math.round(parts.reduce((a, b) => a + b, 0) / wSum);
+        const manualGrade = manual[s.id] != null ? manual[s.id] : null;
+        const finalGrade = manualGrade != null ? manualGrade : computed;
+
+        html += '<tr><td>' + escapeHtml(s.name) + '</td>' +
+            '<td><span class="ov-pts">' + hw.points + '</span> / <span class="' + gradeClass(hw.grade) + ' grade-cell">' + (hw.grade != null ? hw.grade : '–') + '</span></td>';
+        html += '<td>' + (examAvg != null ? '<span class="' + gradeClass(Math.round(examAvg)) + ' grade-cell">' + (Math.round(examAvg * 10) / 10) + '</span>' : '–') + '</td>';
+        html += '<td>' + (pruefGrade != null ? '<span class="' + gradeClass(pruefGrade) + ' grade-cell">' + pruefGrade + '</span>' : '–') + '</td>';
+        html += '<td class="' + gradeClass(computed) + ' grade-cell">' + (computed != null ? computed : '–') + '</td>';
+        html += '<td><input type="number" min="1" max="5" class="grade-input ' + gradeClass(manualGrade) + '" value="' + (manualGrade != null ? manualGrade : '') + '" onchange="setManualGrade(\'' + classId + '\',\'' + s.id + '\',this.value)"></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function setOverviewScope(scope) { gradeOverviewScope = scope; renderGrading(); }
+function setSemesterCutoff(classId, val) { DB.saveSemesterCutoff(classId, val); renderGrading(); }
+function setWeight(classId, key, val) { const w = DB.loadWeights(classId); w[key] = parseFloat(val) || 0; DB.saveWeights(classId, w); renderGrading(); }
+function setManualGrade(classId, studentId, val) { const m = DB.loadManualGrades(classId); if (val === '') delete m[studentId]; else m[studentId] = parseInt(val); DB.saveManualGrades(classId, m); renderGrading(); }
+
+function openExamManagerFromSelect() {
+    const classId = document.getElementById('grade-class-select').value;
+    if (classId) { currentGradeTab = 'exam'; renderGrading(); }
+}
+
+function openClassGrading(classId) {
+    switchView('grading');
+    const select = document.getElementById('grade-class-select');
+    if (select) {
+        select.value = classId;
+        renderGrading();
+    }
+}
+
+function addTimeSlot() {
+    const tbody = document.querySelector('#times-table tbody');
+    const row = document.createElement('tr');
+    row.innerHTML = '<td><input type="text" value="Neue Einheit"></td><td><input type="time" value="08:00"></td><td><input type="time" value="09:00"></td>';
+    tbody.appendChild(row);
+}
+
+function saveTimeSettings() {
+    const rows = document.querySelectorAll('#times-table tbody tr');
+    const slots = [];
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('input');
+        slots.push({ name: cells[0].value, start: cells[1].value, end: cells[2].value });
+    });
+    DB.saveTimeSlots(slots);
+    const cb = document.getElementById('show-fruehaufsicht');
+    if (cb) DB.saveShowFruehaufsicht(cb.checked);
+    renderDashboard();
+}
+
+async function fetchAustrianHolidays() {
+    const y = new Date().getFullYear();
+    let holidays = [];
+    for (const year of [y - 1, y, y + 1]) {
+        try {
+            const data = await DB.fetchHolidays(year);
+            if (data && data.length) holidays = holidays.concat(data);
+        } catch (e) {}
+    }
+    const school = expandSchoolHolidays(STEIERMARK_SCHOOL_HOLIDAYS);
+    const map = {};
+    holidays.forEach(h => { map[h.date] = h.localName || h.name; });
+    school.forEach(pair => { map[pair[0]] = pair[1]; });
+    const combined = Object.keys(map).sort().map(date => ({ date: date, name: map[date], localName: map[date] }));
+    DB.saveHolidays(combined);
+    renderHolidays();
+}
+
+function renderHolidays() {
+    const holidays = DB.loadHolidays();
+    const list = document.getElementById('holidays-list');
+    if (list) list.innerHTML = holidays.map(h => '<div>' + h.date + ': ' + h.localName + '</div>').join('');
+}
+
+function saveAutonomousDays() {
+    const text = document.getElementById('autonomous-days').value;
+    const days = text.split(/[\n,]+/).map(d => d.trim()).filter(d => d);
+    DB.saveAutonomousDays(days);
+}
+
+function exportData() {
+    const json = DB.exportAll();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = 'teachpro-backup-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importData(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            DB.importAll(e.target.result);
+            hideModal();
+            switchView('dashboard');
+            renderDashboard();
+            renderClasses();
+            alert('Daten erfolgreich importiert.');
+        } catch (err) {
+            alert('Import fehlgeschlagen: Datei ist kein gültiges TeachPro-Backup.');
+        }
+        input.value = '';
+    };
+    reader.readAsText(file);
+}
+
+function loadTimeSlotsTable() {
+    renderHolidays();
+    const days = DB.loadAutonomousDays();
+    document.getElementById('autonomous-days').value = days.join(', ');
+    const cb = document.getElementById('show-fruehaufsicht');
+    if (cb) cb.checked = DB.loadShowFruehaufsicht();
+}
+
+window.openTimetableEditor = openTimetableEditor;
+window.openClassManager = openClassManager;
+window.editStudent = editStudent;
+window.saveStudentEdit = saveStudentEdit;
+window.openExamManagerFromSelect = openExamManagerFromSelect;
+window.openClassGrading = openClassGrading;
+window.addTimeSlot = addTimeSlot;
+window.saveTimeSettings = saveTimeSettings;
+window.fetchAustrianHolidays = fetchAustrianHolidays;
+window.saveAutonomousDays = saveAutonomousDays;
+window.exportData = exportData;
+window.importData = importData;
+window.linkDataFile = linkDataFile;
+window.addTimetableEntryModal = addTimetableEntryModal;
+window.deleteTimetableEntry = deleteTimetableEntry;
+window.updateTimetableEntry = updateTimetableEntry;
+window.editTimetableEntry = editTimetableEntry;
+window.saveExam = saveExam;
+window.deleteExamConfirm = deleteExamConfirm;
+window.setCurrentExam = setCurrentExam;
+window.printExam = printExam;
+window.deleteStudent = deleteStudent;
+window.setHwStatus = setHwStatus;
+window.setHwCollected = setHwCollected;
+window.showMissingHwModal = showMissingHwModal;
+window.toggleHwExpired = toggleHwExpired;
+window.toggleHwCorrected = toggleHwCorrected;
+window.setHwView = setHwView;
+window.setGradeTab = setGradeTab;
+window.openExamModal = openExamModal;
+window.addExamExampleRow = addExamExampleRow;
+window.hideModal = hideModal;
+window.showModal = showModal;
+
+async function linkDataFile() {
+    const ok = await FilePersist.chooseFile();
+    updateDataFileUI();
+    if (ok) { alert('Datendatei verknüpft. Alle Änderungen werden jetzt automatisch gespeichert.'); renderDashboard(); renderClasses(); }
+}
+
+function updateDataFileUI() {
+    const el = document.getElementById('datafile-status');
+    if (!el) return;
+    if (FilePersist.available) {
+        el.textContent = FilePersist.handle ? '✅ Mit Datei verknüpft – automatische Speicherung aktiv.' : '⚠️ Noch keine Datei gewählt – Daten nur im Browser (können verloren gehen).';
+    } else {
+        el.textContent = '⚠️ Browser unterstützt keine Datei-Speicherung – bitte Export/Import nutzen.';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+    document.querySelectorAll('.nav-links li').forEach(li => {
+        li.addEventListener('click', () => switchView(li.dataset.view));
+    });
+    var ttBtn = document.getElementById('open-timetable-btn');
+    if (ttBtn) ttBtn.addEventListener('click', function() { openTimetableEditor(); });
+    var classBtn = document.getElementById('open-classmanager-btn');
+    if (classBtn) classBtn.addEventListener('click', function() { openClassManager(); });
+    var examBtn = document.getElementById('open-exammanager-btn');
+    if (examBtn) examBtn.addEventListener('click', function() { openExamManagerFromSelect(); });
+    await FilePersist.bootstrap();
+    updateDataFileUI();
+    switchView('dashboard');
+    populateGradeClassSelect();
+    renderDashboard();
+    renderClasses();
+});
