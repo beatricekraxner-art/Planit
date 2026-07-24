@@ -121,32 +121,11 @@ function showModal(content) {
     const modalContent = document.getElementById('modal-content');
     modalContent.innerHTML = content;
     modal.style.display = 'flex';
-    modal.style.pointerEvents = 'auto';
 }
 
 function hideModal() {
     const modal = document.getElementById('modal-overlay');
     modal.style.display = 'none';
-    modal.style.pointerEvents = 'none';
-}
-
-function resetAppState() {
-    try {
-        const sidebar = document.querySelector('.sidebar');
-        const overlay = document.getElementById('sidebar-overlay');
-        if (sidebar) sidebar.classList.remove('open');
-        if (overlay) overlay.classList.remove('show');
-        if (sidebar) {
-            const app = document.querySelector('.app-container');
-            if (app) app.classList.remove('sidebar-collapsed');
-        }
-        hideModal();
-        document.querySelectorAll('.modal-overlay').forEach(el => {
-            el.style.display = 'none';
-            el.style.pointerEvents = 'none';
-        });
-        document.querySelectorAll('.loading-overlay').forEach(el => el.remove());
-    } catch (e) {}
 }
 
 function switchView(viewName) {
@@ -3276,15 +3255,6 @@ async function linkDataFile() {
     if (ok) { alert('Datendatei verknüpft. Alle Änderungen werden jetzt automatisch gespeichert.'); renderDashboard(); renderClasses(); }
 }
 
-window.ODDiagnose = async function() {
-    const out = [];
-    out.push('=== OD Diagnose ===');
-    out.push('Provider: ' + (window.OD ? window.OD.getProvider() : 'unbekannt'));
-    out.push('Verbunden: ' + (window.OD && window.OD.isConnected ? window.OD.isConnected() : 'unbekannt'));
-    if (window.OD && window.OD.getClientId) out.push('Client-ID: ' + (window.OD.getClientId() ? 'vorhanden' : 'fehlt'));
-    out.push('===================');
-    alert(out.join('\n'));
-};
 
 function updateDataFileUI() {
     const el = document.getElementById('datafile-status');
@@ -4161,7 +4131,6 @@ window.renderGradesOverview = renderGradesOverview;
 window.exportGradesCSV = window.exportGradesCSV;
 
 document.addEventListener('DOMContentLoaded', async function() {
-    resetAppState();
     const offlineEl = document.getElementById('offline-indicator');
     function updateOfflineStatus() {
         if (!offlineEl) return;
@@ -4355,12 +4324,10 @@ document.addEventListener('DOMContentLoaded', async function() {
                 '<p class="subtitle">Bitte verbinden Sie sich mit OneDrive, um Ihre Daten zu laden und zu speichern. Ohne Anmeldung kann die App nicht verwendet werden.</p>' +
                  '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">' +
                  '<button class="btn" id="od-start-btn">Mit OneDrive verbinden</button>' +
-                 '<button class="btn btn-secondary" id="od-diag-btn">Diagnose</button>' +
                  '</div>' +
                 '</div>';
-            document.body.appendChild(overlay);
+             document.body.appendChild(overlay);
              const btn = overlay.querySelector('#od-start-btn');
-             const diagBtn = overlay.querySelector('#od-diag-btn');
              const finish = () => { overlay.remove(); resolve(); };
              btn.onclick = async () => {
                  try {
@@ -4381,13 +4348,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                      finish();
                  }
              };
-             if (diagBtn) {
-                 diagBtn.onclick = async () => {
-                     if (window.ODDiagnose) await window.ODDiagnose();
-                 };
-             }
-                }
-            };
         });
     }
     setInterval(() => {
