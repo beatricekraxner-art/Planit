@@ -192,10 +192,14 @@ document.addEventListener('click', function(e) {
 });
 
 function initSidebar() {
+    window.closeSidebar();
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        li.addEventListener('click', () => {
-            switchView(li.dataset.view);
+        const newLi = li.cloneNode(true);
+        li.parentNode.replaceChild(newLi, li);
+        newLi.addEventListener('click', () => {
+            switchView(newLi.dataset.view);
+            window.closeSidebar();
         });
     });
 }
