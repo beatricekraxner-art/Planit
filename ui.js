@@ -195,25 +195,16 @@ document.addEventListener('pointerdown', function(e) {
 function initSidebar() {
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        const activate = (e) => {
-            if (e) e.preventDefault();
+        li.addEventListener('click', (e) => {
+            e.preventDefault();
             switchView(li.dataset.view);
             window.closeSidebar();
-        };
-        li.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            activate();
         });
-        li.addEventListener('click', activate);
     });
 
     const overlay = document.getElementById('sidebar-overlay');
     if (overlay) {
         overlay.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.closeSidebar();
-        });
-        overlay.addEventListener('touchend', (e) => {
             e.preventDefault();
             window.closeSidebar();
         });

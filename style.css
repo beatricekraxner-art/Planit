@@ -237,6 +237,7 @@ select option:hover {
     display: flex;
     flex-direction: column;
     padding: 24px;
+    touch-action: manipulation;
     transition: width 0.25s ease, min-width 0.25s ease, max-width 0.25s ease, padding 0.25s ease, border-right 0.25s ease, transform 0.25s ease, overflow 0s;
     overflow: visible;
     z-index: 1;
