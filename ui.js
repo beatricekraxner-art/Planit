@@ -181,11 +181,12 @@ window.closeSidebar = function() {
     document.querySelector('.app-container').classList.add('sidebar-collapsed');
 };
 
-document.addEventListener('click', function(e) {
+document.addEventListener('pointerdown', function(e) {
     const toggle = document.getElementById('sidebar-toggle');
     const sidebar = document.querySelector('.sidebar');
     if (!toggle || !sidebar) return;
     if (e.target === toggle) {
+        e.preventDefault();
         if (sidebar.classList.contains('open')) window.closeSidebar();
         else window.openSidebar();
     }
@@ -194,11 +195,33 @@ document.addEventListener('click', function(e) {
 function initSidebar() {
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        li.addEventListener('click', () => {
+        const activate = () => {
             switchView(li.dataset.view);
             window.closeSidebar();
+        };
+        li.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch') {
+                e.preventDefault();
+            }
         });
+        li.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            activate();
+        });
+        li.addEventListener('click', activate);
     });
+
+    const overlay = document.getElementById('sidebar-overlay');
+    if (overlay) {
+        overlay.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            window.closeSidebar();
+        });
+        overlay.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            window.closeSidebar();
+        });
+    }
 }
 
 window.addEventListener('od-save-error', (e) => {
