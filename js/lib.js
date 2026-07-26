@@ -406,7 +406,7 @@ const DB = {
 window.db = DB;
 window.DB = DB;
 
-const FilePersist = {
+let FilePersist = {
     available: true,
     handle: null,
     _pending: false,

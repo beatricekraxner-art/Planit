@@ -162,7 +162,7 @@ function switchView(viewName) {
         loadTimeSlotsTable();
         try { renderODConfig(); } catch (e) {}
     }
-    if (window.innerWidth <= 768) window.closeSidebar();
+    window.closeSidebar();
 }
 
 window.openSidebar = function() {
@@ -181,11 +181,12 @@ window.closeSidebar = function() {
     document.querySelector('.app-container').classList.add('sidebar-collapsed');
 };
 
-document.addEventListener('click', function(e) {
+document.addEventListener('pointerdown', function(e) {
     const toggle = document.getElementById('sidebar-toggle');
     const sidebar = document.querySelector('.sidebar');
     if (!toggle || !sidebar) return;
     if (e.target === toggle) {
+        e.preventDefault();
         if (sidebar.classList.contains('open')) window.closeSidebar();
         else window.openSidebar();
     }
@@ -194,10 +195,27 @@ document.addEventListener('click', function(e) {
 function initSidebar() {
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        li.addEventListener('click', () => {
+        let activated = false;
+        const activate = () => {
+            if (activated) return;
+            activated = true;
             switchView(li.dataset.view);
+            window.closeSidebar();
+        };
+        li.addEventListener('click', (e) => {
+            e.preventDefault();
+            activate();
+            setTimeout(() => { activated = false; }, 50);
         });
     });
+
+    const overlay = document.getElementById('sidebar-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.closeSidebar();
+        });
+    }
 }
 
 window.addEventListener('od-save-error', (e) => {
@@ -3275,11 +3293,25 @@ function updateDataFileUI() {
     el.textContent = '💾 Automatische Speicherung aktiv – planit-daten.json wird alle 30 Sekunden gespeichert und von OneDrive synchronisiert.';
 }
 
+function updateProviderBadge() {
+    const el = document.getElementById('provider-badge');
+    if (!el) return;
+    const provider = (window.FilePersist && window.FilePersist.providerName) || 'local';
+    if (provider === 'onedrive') {
+        el.textContent = '☁️ OneDrive';
+        el.className = 'provider-badge od-active';
+    } else {
+        el.textContent = '💾 Lokal';
+        el.className = 'provider-badge local-active';
+    }
+}
+
 window.ODSaveConfig = function () {
     const cid = document.getElementById('od-clientid');
     const ten = document.getElementById('od-tenant');
     if (window.OD) window.OD.setConfig(cid ? cid.value : '', ten ? ten.value : '');
     if (window.OD) window.OD.renderStatus();
+    updateProviderBadge();
     alert('Konfiguration gespeichert. Jetzt auf „Mit OneDrive verbinden" klicken.');
 };
 
@@ -3289,10 +3321,12 @@ window.ODConnect = function () {
 
 window.ODUseCloud = function () {
     if (window.OD) window.OD.useCloud();
+    updateProviderBadge();
 };
 
 window.ODDisconnect = function () {
     if (window.OD) window.OD.disconnect();
+    updateProviderBadge();
 };
 
 function renderODConfig() {
@@ -4296,7 +4330,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     setTimeout(tryRenderStartup, 300);
     const isWebApp = !window.location.hostname.startsWith('localhost') && !window.location.hostname.startsWith('127.0.0.1');
-    let usedOneDriveInDesktop = false;
     try {
         if (window.OD) {
             try {
@@ -4307,26 +4340,14 @@ document.addEventListener('DOMContentLoaded', async function() {
             } catch (e) { console.error('OD init failed', e); }
             const odConfigured = !!(window.OD.getClientId && window.OD.getClientId());
             const odConnected = !!(window.OD.isConnected && window.OD.isConnected());
-            if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
-                if (window.OD.useCloud) window.OD.useCloud();
-                try {
-                    usedOneDriveInDesktop = true;
-                    window.FilePersist = window.OneDrivePersist;
-                    if (window.OD.setProvider) window.OD.setProvider('onedrive');
-                    if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-                } catch (e) {
-                    console.warn('OneDrive init failed, using local:', e.message);
-                    usedOneDriveInDesktop = false;
-                    window.FilePersist = window.LocalPersist || window.OneDrivePersist;
-                    if (window.OD.setProvider) window.OD.setProvider('local');
-                    if (window.OneDrivePersist) window.OneDrivePersist.stopAutoSave();
-                }
-            } else if (!isWebApp && odConfigured && !odConnected && window.OneDrivePersist) {
+            if (odConfigured && odConnected && window.OneDrivePersist) {
                 window.FilePersist = window.OneDrivePersist;
-                if (window.OD.setProvider) window.OD.setProvider('local');
+                if (window.OD.useCloud) window.OD.useCloud();
+                if (window.OD.setProvider) window.OD.setProvider('onedrive');
                 if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-            } else if (isWebApp) {
-                window.FilePersist = window.OneDrivePersist || window.LocalPersist || {
+                if (window.OneDrivePersist && window.OneDrivePersist.startAutoSave) window.OneDrivePersist.startAutoSave();
+            } else {
+                window.FilePersist = window.LocalPersist || window.OneDrivePersist || {
                     available: true,
                     scheduleSave: function() {},
                     startAutoSave: function() {},
@@ -4336,9 +4357,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                     saveToFile: async function() {},
                     loadFromFile: async function() {}
                 };
+                if (window.OD.setProvider) window.OD.setProvider('local');
+                if (window.LocalPersist) window.LocalPersist.startAutoSave();
+                if (window.OneDrivePersist) window.OneDrivePersist.stopAutoSave();
             }
         } else {
-            window.FilePersist = window.OneDrivePersist || window.LocalPersist || {
+            window.FilePersist = window.LocalPersist || window.OneDrivePersist || {
                 available: true,
                 scheduleSave: function() {},
                 startAutoSave: function() {},
@@ -4349,11 +4373,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                 loadFromFile: async function() {}
             };
         }
+        updateProviderBadge();
         try { renderODConfig(); } catch (e) {}
-        if (!isWebApp && window.LocalPersist && window.LocalPersist.bootstrap) {
-            await window.LocalPersist.bootstrap();
-        }
-        if (!usedOneDriveInDesktop && window.FilePersist && window.FilePersist.bootstrap) {
+        if (window.FilePersist && window.FilePersist.bootstrap) {
             await window.FilePersist.bootstrap();
         }
         if (typeof setODStatus === 'function') {

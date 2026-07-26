@@ -119,11 +119,11 @@
 
         async login() {
             ensureMsal();
-            if (typeof msal.loginRedirect !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
+            if (typeof msal.loginPopup !== 'function') throw new Error('MSAL-Bibliothek nicht geladen (Internet/CDN prüfen).');
             try {
-                await msal.loginRedirect({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
+                await msal.loginPopup({ scopes: SCOPES, extraQueryParameters: { prompt: 'select_account' } });
             } catch (e) {
-                console.error('OD loginRedirect failed', e);
+                console.error('OD loginPopup failed', e);
                 throw e;
             }
         },
@@ -197,6 +197,7 @@
 
         async saveToFile() {
             try {
+                console.log('[OD] saveToFile called, connected=', this.isConnected());
                 if (!this.isConnected()) {
                     console.error('OneDrive saveToFile: not connected');
                     return;
@@ -207,15 +208,15 @@
                     return;
                 }
                 const data = DB.exportAll();
+                console.log('[OD] Uploading data, length=', data.length);
                 const resp = await fetch(GRAPH, {
                     method: 'PUT',
                     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
                     body: data
                 });
-                console.log('OneDrive upload status:', resp.status, resp.statusText);
-                console.log('OneDrive upload URL:', resp.url);
+                console.log('[OD] Upload status:', resp.status, resp.statusText);
                 if (resp.ok) {
-                    console.log('OneDrive: gespeichert.');
+                    console.log('[OD] gespeichert.');
                     const localData = JSON.parse(data);
                     if (localData._lastModified) localStorage.setItem('_lastModified', localData._lastModified);
                     saveSession(msal.getAllAccounts()[0], token);
@@ -225,7 +226,7 @@
                     window.dispatchEvent(new CustomEvent('od-save-error', { detail: 'OneDrive: ' + resp.status }));
                 }
             } catch (e) {
-                console.error('OneDrive saveToFile failed', e);
+                console.error('[OD] saveToFile failed', e);
                 window.dispatchEvent(new CustomEvent('od-save-error', { detail: (e && e.message ? e.message : e) }));
             }
         },
