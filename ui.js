@@ -147,6 +147,13 @@ function switchView(viewName) {
     if (viewName === 'dashboard') renderDashboard();
     if (viewName === 'grading') {
         populateGradeClassSelect();
+        const select = document.getElementById('grade-class-select');
+        if (select && !select.value) {
+            const classes = getClassesSortedByName();
+            if (classes.length > 0) {
+                select.value = classes[0].id;
+            }
+        }
         renderGrading();
     }
     if (viewName === 'grades-overview') renderGradesOverview();
@@ -185,10 +192,10 @@ document.addEventListener('click', function(e) {
 });
 
 function initSidebar() {
-    window.closeSidebar();
-    document.querySelectorAll('.nav-links li').forEach(li => {
+    const links = document.querySelectorAll('.nav-links li');
+    links.forEach(li => {
         li.addEventListener('click', () => {
-            window.closeSidebar();
+            switchView(li.dataset.view);
         });
     });
 }
@@ -1229,6 +1236,10 @@ function populateGradeClassSelect() {
         select.appendChild(opt);
     });
     select.onchange = renderGrading;
+    if (classes.length > 0 && !select.value) {
+        select.value = classes[0].id;
+        renderGrading();
+    }
 }
 
 let currentGradeTab = 'plan';
@@ -1337,6 +1348,8 @@ function attachGradeValidation(container) {
 function validateAllGrades() {
     let valid = true;
     document.querySelectorAll('.grade-input').forEach(inp => {
+        if (inp.classList.contains('remark-input')) return;
+        if (inp.tagName === 'TEXTAREA') return;
         if (!isValidGrade(inp.value)) {
             inp.classList.add('invalid');
             valid = false;
@@ -2573,10 +2586,10 @@ function renderMitarbeit(classId) {
         const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)") + '</td>' +
-            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
+            '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
             '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)") + '</td>' +
-            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
-            '<td><textarea class="grade-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
+            '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
+            '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
             (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
             '</tr>';
     });
@@ -4131,6 +4144,16 @@ window.renderGradesOverview = renderGradesOverview;
 window.exportGradesCSV = window.exportGradesCSV;
 
 document.addEventListener('DOMContentLoaded', async function() {
+    const startupOverlay = document.createElement('div');
+    startupOverlay.id = 'startup-overlay';
+    startupOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,17,21,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;';
+    startupOverlay.innerHTML = '<div style="width:40px;height:40px;border:3px solid rgba(37,99,235,0.2);border-top-color:#2563eb;border-radius:50%;animation:spin 0.8s linear infinite;"></div><span style="color:#f8fafc;font-size:14px;font-weight:500;">Daten werden geladen...</span>';
+    document.body.appendChild(startupOverlay);
+    setTimeout(() => {
+        const so = document.getElementById('startup-overlay');
+        if (so) so.remove();
+    }, 10000);
+
     const offlineEl = document.getElementById('offline-indicator');
     function updateOfflineStatus() {
         if (!offlineEl) return;
@@ -4158,9 +4181,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
     
-    document.querySelectorAll('.nav-links li').forEach(li => {
-        li.addEventListener('click', () => switchView(li.dataset.view));
-    });
     var ttBtn = document.getElementById('open-timetable-btn');
     if (ttBtn) ttBtn.addEventListener('click', function() { window.setTimetableEditMode(!timetableEditMode); });
     var classBtn = document.getElementById('open-classmanager-btn');
@@ -4259,118 +4279,119 @@ document.addEventListener('DOMContentLoaded', async function() {
         e.preventDefault();
         pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
     });
+    let startRendered = false;
+    function tryRenderStartup() {
+        if (startRendered) return;
+        startRendered = true;
+        updateDataFileUI();
+        initSidebar();
+        switchView('dashboard');
+        const so = document.getElementById('startup-overlay');
+        if (so) so.remove();
+        setTimeout(() => {
+            populateGradeClassSelect();
+            renderDashboard();
+            renderClasses();
+        }, 50);
+    }
+    setTimeout(tryRenderStartup, 300);
     const isWebApp = !window.location.hostname.startsWith('localhost') && !window.location.hostname.startsWith('127.0.0.1');
     let usedOneDriveInDesktop = false;
-    if (window.OD) {
-        try { await window.OD.init(); } catch (e) { console.error('OD init failed', e); }
-        const odConfigured = !!(window.OD.getClientId && window.OD.getClientId());
-        const odConnected = !!(window.OD.isConnected && window.OD.isConnected());
-        if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
-            if (window.OD.useCloud) window.OD.useCloud();
-            usedOneDriveInDesktop = true;
-            window.FilePersist = window.OneDrivePersist;
-            if (window.OD.setProvider) window.OD.setProvider('onedrive');
-            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-            await window.OneDrivePersist.loadFromFile();
-            window.OneDrivePersist.startAutoSave();
-        } else if (window.OD && window.OD.getProvider && window.OD.getProvider() === 'onedrive' && odConnected && window.OneDrivePersist) {
-            window.FilePersist = window.OneDrivePersist;
-            if (window.OD.setProvider) window.OD.setProvider('onedrive');
-            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-            await window.OneDrivePersist.loadFromFile();
-            window.OneDrivePersist.startAutoSave();
-        } else if (!isWebApp && odConfigured && !odConnected && window.OneDrivePersist) {
-            window.FilePersist = window.OneDrivePersist;
-            if (window.OD.setProvider) window.OD.setProvider('onedrive');
-            if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-        } else if (isWebApp) {
-            window.FilePersist = {
+    try {
+        if (window.OD) {
+            try {
+                await Promise.race([
+                    window.OD.init(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('OD init timeout')), 5000))
+                ]);
+            } catch (e) { console.error('OD init failed', e); }
+            const odConfigured = !!(window.OD.getClientId && window.OD.getClientId());
+            const odConnected = !!(window.OD.isConnected && window.OD.isConnected());
+            if (!isWebApp && odConfigured && odConnected && window.OneDrivePersist) {
+                if (window.OD.useCloud) window.OD.useCloud();
+                try {
+                    usedOneDriveInDesktop = true;
+                    window.FilePersist = window.OneDrivePersist;
+                    if (window.OD.setProvider) window.OD.setProvider('onedrive');
+                    if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+                } catch (e) {
+                    console.warn('OneDrive init failed, using local:', e.message);
+                    usedOneDriveInDesktop = false;
+                    window.FilePersist = window.LocalPersist || window.OneDrivePersist;
+                    if (window.OD.setProvider) window.OD.setProvider('local');
+                    if (window.OneDrivePersist) window.OneDrivePersist.stopAutoSave();
+                }
+            } else if (!isWebApp && odConfigured && !odConnected && window.OneDrivePersist) {
+                window.FilePersist = window.OneDrivePersist;
+                if (window.OD.setProvider) window.OD.setProvider('local');
+                if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+            } else if (isWebApp && odConnected && window.OneDrivePersist) {
+                window.FilePersist = window.OneDrivePersist;
+                if (window.OD.setProvider) window.OD.setProvider('onedrive');
+                if (window.LocalPersist) window.LocalPersist.stopAutoSave();
+            } else if (isWebApp) {
+                window.FilePersist = {
+                    available: true,
+                    scheduleSave: function() {},
+                    startAutoSave: function() {},
+                    stopAutoSave: function() {},
+                    chooseFile: async function() {
+                        alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu speichern.');
+                        return false;
+                    },
+                    bootstrap: async function() {
+                        alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu laden und zu speichern.');
+                    },
+                    saveToFile: async function() {
+                        alert('Achtung: OneDrive ist nicht verbunden. Speichern nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
+                    },
+                    loadFromFile: async function() {
+                        alert('Achtung: OneDrive ist nicht verbunden. Laden nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
+                    }
+                };
+            }
+        } else {
+            window.FilePersist = window.OneDrivePersist || window.LocalPersist || {
                 available: true,
                 scheduleSave: function() {},
                 startAutoSave: function() {},
                 stopAutoSave: function() {},
-                chooseFile: async function() {
-                    alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu speichern.');
-                    return false;
-                },
-                bootstrap: async function() {
-                    alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu laden und zu speichern.');
-                },
-                saveToFile: async function() {
-                    alert('Achtung: OneDrive ist nicht verbunden. Speichern nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
-                },
-                loadFromFile: async function() {
-                    alert('Achtung: OneDrive ist nicht verbunden. Laden nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
-                }
+                chooseFile: async function() { return false; },
+                bootstrap: async function() {},
+                saveToFile: async function() {},
+                loadFromFile: async function() {}
             };
         }
-    }
-    try { renderODConfig(); } catch (e) {}
-    if (!usedOneDriveInDesktop) {
-        await FilePersist.bootstrap();
-    }
-    if (typeof setODStatus === 'function') {
-        setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
-    }
-    const odAvailable = !!(window.OD && window.OD.getClientId && window.OD.getClientId());
-    const odConnectedNow = !!(window.OD && window.OD.isConnected && window.OD.isConnected());
-    const needOD = isWebApp && !odConnectedNow;
-    if (needOD) {
-        await new Promise((resolve) => {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-            overlay.innerHTML = '<div style="background:var(--bg-panel);color:var(--text-main);max-width:520px;width:100%;border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,0.35);">' +
-                '<h2 style="margin-top:0;">OneDrive-Anmeldung erforderlich</h2>' +
-                '<p class="subtitle">Bitte verbinden Sie sich mit OneDrive, um Ihre Daten zu laden und zu speichern. Ohne Anmeldung kann die App nicht verwendet werden.</p>' +
-                 '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">' +
-                 '<button class="btn" id="od-start-btn">Mit OneDrive verbinden</button>' +
-                 '</div>' +
-                '</div>';
-             document.body.appendChild(overlay);
-             const btn = overlay.querySelector('#od-start-btn');
-             const finish = () => { overlay.remove(); resolve(); };
-             btn.onclick = async () => {
-                 try {
-                     if (window.OD && window.OD.connect) {
-                         await window.OD.connect();
-                         if (window.OD.isConnected && window.OD.isConnected() && window.OneDrivePersist) {
-                             window.FilePersist = window.OneDrivePersist;
-                             if (window.OD.setProvider) window.OD.setProvider('onedrive');
-                             if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-                             await window.OneDrivePersist.loadFromFile();
-                             window.OneDrivePersist.startAutoSave();
-                             if (typeof setODStatus === 'function') setODStatus(true);
-                         }
-                     }
-                 } catch (e) {
-                     console.error('OD connect from startup modal failed', e);
-                 } finally {
-                     finish();
-                 }
-             };
-        });
-    }
-    setInterval(() => {
+        try { renderODConfig(); } catch (e) {}
+        if (!isWebApp && window.LocalPersist && window.LocalPersist.bootstrap) {
+            await window.LocalPersist.bootstrap();
+        }
+        if (!usedOneDriveInDesktop && window.FilePersist && window.FilePersist.bootstrap) {
+            await window.FilePersist.bootstrap();
+        }
         if (typeof setODStatus === 'function') {
             setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
         }
-    }, 30000);
-    const classes = DB.loadClasses();
-    classes.forEach(c => {
-        const sem = DB.loadSemesterManualGrades(c.id);
-        if (Object.keys(sem).length === 0) {
-            const legacy = DB.loadManualGrades(c.id);
-            if (Object.keys(legacy).length > 0) {
-                DB.saveSemesterManualGrades(c.id, legacy);
+        setInterval(() => {
+            if (typeof setODStatus === 'function') {
+                setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
             }
-        }
-    });
-    updateDataFileUI();
-    initSidebar();
-    switchView('dashboard');
-    populateGradeClassSelect();
-    renderDashboard();
-    renderClasses();
+        }, 30000);
+        const classes = DB.loadClasses();
+          classes.forEach(c => {
+              const sem = DB.loadSemesterManualGrades(c.id);
+              if (Object.keys(sem).length === 0) {
+                  const legacy = DB.loadManualGrades(c.id);
+                  if (Object.keys(legacy).length > 0) {
+                      DB.saveSemesterManualGrades(c.id, legacy);
+                  }
+              }
+          });
+          tryRenderStartup();
+    } catch (e) {
+        console.error('App init failed, rendering fallback UI:', e);
+        tryRenderStartup();
+    }
 });
 
 function renderTodos() {
