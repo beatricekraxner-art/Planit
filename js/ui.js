@@ -4360,7 +4360,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         const odAvailable = !!(window.OD && window.OD.getClientId && window.OD.getClientId());
         const odConnectedNow = !!(window.OD && window.OD.isConnected && window.OD.isConnected());
-        const needOD = isWebApp && !odConnectedNow;
+        const needOD = isWebApp && window.OD && !odConnectedNow;
         if (needOD) {
             await new Promise((resolve) => {
                 const overlay = document.createElement('div');
