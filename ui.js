@@ -181,14 +181,18 @@ window.closeSidebar = function() {
     document.querySelector('.app-container').classList.add('sidebar-collapsed');
 };
 
-document.addEventListener('pointerdown', function(e) {
-    const toggle = document.getElementById('sidebar-toggle');
+window.toggleSidebar = function() {
     const sidebar = document.querySelector('.sidebar');
-    if (!toggle || !sidebar) return;
+    if (sidebar && sidebar.classList.contains('open')) window.closeSidebar();
+    else window.openSidebar();
+};
+
+document.addEventListener('click', function(e) {
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!toggle) return;
     if (e.target === toggle) {
         e.preventDefault();
-        if (sidebar.classList.contains('open')) window.closeSidebar();
-        else window.openSidebar();
+        window.toggleSidebar();
     }
 });
 
@@ -197,6 +201,7 @@ function initSidebar() {
     links.forEach(li => {
         li.addEventListener('click', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             switchView(li.dataset.view);
             window.closeSidebar();
         });

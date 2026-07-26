@@ -149,6 +149,7 @@ select option:hover {
     display: flex;
     align-items: center;
     gap: 12px;
+    touch-action: manipulation;
 }
 
 .nav-links li:hover {
@@ -195,6 +196,7 @@ select option:hover {
     padding: 4px;
     margin-right: 12px;
     position: relative;
+    touch-action: manipulation;
 }
 
 .sidebar-toggle::after {
