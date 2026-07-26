@@ -4326,24 +4326,15 @@ document.addEventListener('DOMContentLoaded', async function() {
                 if (window.OD.setProvider) window.OD.setProvider('local');
                 if (window.LocalPersist) window.LocalPersist.stopAutoSave();
             } else if (isWebApp) {
-                window.FilePersist = {
+                window.FilePersist = window.OneDrivePersist || window.LocalPersist || {
                     available: true,
                     scheduleSave: function() {},
                     startAutoSave: function() {},
                     stopAutoSave: function() {},
-                    chooseFile: async function() {
-                        alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu speichern.');
-                        return false;
-                    },
-                    bootstrap: async function() {
-                        alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu laden und zu speichern.');
-                    },
-                    saveToFile: async function() {
-                        alert('Achtung: OneDrive ist nicht verbunden. Speichern nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
-                    },
-                    loadFromFile: async function() {
-                        alert('Achtung: OneDrive ist nicht verbunden. Laden nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
-                    }
+                    chooseFile: async function() { return false; },
+                    bootstrap: async function() {},
+                    saveToFile: async function() {},
+                    loadFromFile: async function() {}
                 };
             }
         } else {
