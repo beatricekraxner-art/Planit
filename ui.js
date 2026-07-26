@@ -162,7 +162,7 @@ function switchView(viewName) {
         loadTimeSlotsTable();
         try { renderODConfig(); } catch (e) {}
     }
-    if (window.innerWidth <= 768) window.closeSidebar();
+    window.closeSidebar();
 }
 
 window.openSidebar = function() {
