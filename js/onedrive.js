@@ -93,6 +93,16 @@
         }
     }
 
+    async function ensureValidToken() {
+        const token = await getTokenSilent();
+        if (token) return token;
+        const isTablet = navigator.maxTouchPoints > 1;
+        if (isTablet && OneDrivePersist.isConnected()) {
+            return null;
+        }
+        return null;
+    }
+
     const OneDrivePersist = {
         available: true,
         providerName: 'onedrive',
@@ -128,30 +138,46 @@
         },
 
         async bootstrap() {
-            try {
-                await ensureMsal();
-                await msal.handleRedirectPromise();
-                if (this.isConnected()) {
-                    const token = await getTokenSilent();
-                    if (token) {
-                        const text = await this._download(token);
-                        if (text && text.trim() && text.trim() !== '{}') {
-                            let serverData = null;
-                            try { serverData = JSON.parse(text); } catch (e) {}
-                            if (serverData && serverData._lastModified) {
-                                const localModified = localStorage.getItem('_lastModified');
-                                if (!localModified || localModified !== serverData._lastModified) {
-                                    console.log('OneDrive bootstrap: lade aktuelle Daten vom Server...');
-                                    DB.importAll(text);
-                                    localStorage.setItem('_lastModified', serverData._lastModified);
-                                } else {
-                                    console.log('OneDrive bootstrap: lokale Daten sind aktuell.');
+            let lastError = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await ensureMsal();
+                    await msal.handleRedirectPromise();
+                    if (this.isConnected()) {
+                        const token = await getTokenSilent();
+                        if (token) {
+                            const text = await this._download(token);
+                            if (text && text.trim() && text.trim() !== '{}') {
+                                let serverData = null;
+                                try { serverData = JSON.parse(text); } catch (e) {}
+                                if (serverData && serverData._lastModified) {
+                                    const localModified = localStorage.getItem('_lastModified');
+                                    if (!localModified || localModified !== serverData._lastModified) {
+                                        console.log('OneDrive bootstrap: lade aktuelle Daten vom Server (Versuch ' + attempt + ')...');
+                                        try {
+                                            DB.importAll(text);
+                                            localStorage.setItem('_lastModified', serverData._lastModified);
+                                        } catch (e) {
+                                            console.error('OneDrive bootstrap: Import fehlgeschlagen', e);
+                                            throw e;
+                                        }
+                                    } else {
+                                        console.log('OneDrive bootstrap: lokale Daten sind aktuell.');
+                                    }
                                 }
                             }
                         }
                     }
+                    this.startAutoSave();
+                    if (this.isConnected()) this.startAutoSync();
+                    return;
+                } catch (e) {
+                    lastError = e;
+                    console.error('OneDrive bootstrap fehlgeschlagen (Versuch ' + attempt + '):', e);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
                 }
-            } catch (e) { console.error('OneDrive load failed', e); }
+            }
+            console.error('OneDrive bootstrap endgültig fehlgeschlagen:', lastError);
             this.startAutoSave();
         },
 
@@ -164,6 +190,32 @@
         startAutoSave() {
             if (this._interval) return;
             this._interval = setInterval(() => { this.saveToFile(); }, 30000);
+        },
+
+        startAutoSync() {
+            if (this._syncInterval) return;
+            this._syncInterval = setInterval(() => { this.syncFromCloud(); }, 15000);
+        },
+
+        stopAutoSync() {
+            if (this._syncInterval) { clearInterval(this._syncInterval); this._syncInterval = null; }
+        },
+
+        async syncFromCloud() {
+            if (!this.isConnected()) return;
+            const token = await getTokenSilent();
+            if (!token) return;
+            const text = await this._download(token);
+            if (!text) return;
+            let serverData = null;
+            try { serverData = JSON.parse(text); } catch (e) {}
+            if (!serverData || !serverData._lastModified) return;
+            const localModified = localStorage.getItem('_lastModified');
+            if (localModified && localModified === serverData._lastModified) return;
+            DB.importAll(text);
+            localStorage.setItem('_lastModified', serverData._lastModified);
+            renderDashboard();
+            renderClasses();
         },
 
         stopAutoSave() {
@@ -204,35 +256,48 @@
         },
 
         async loadFromFile() {
-            try {
-                if (!this.isConnected()) {
-                    console.error('OneDrive loadFromFile: not connected');
-                    return;
-                }
-                const token = await getTokenSilent();
-                if (!token) {
-                    console.error('OneDrive loadFromFile: no token');
-                    return;
-                }
-                const text = await this._download(token);
-                if (text) {
-                    console.log('OneDrive: Daten geladen.');
-                    let serverData = null;
-                    try { serverData = JSON.parse(text); } catch (e) {}
-                    if (serverData && serverData._lastModified) {
-                        const localModified = localStorage.getItem('_lastModified');
-                        if (!localModified || localModified !== serverData._lastModified) {
-                            console.log('OneDrive: neuere Daten gefunden, importiere...');
-                            DB.importAll(text);
-                            localStorage.setItem('_lastModified', serverData._lastModified);
-                            renderDashboard();
-                            renderClasses();
-                        } else {
-                            console.log('OneDrive: lokale Daten sind aktuell.');
+            let lastError = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    if (!this.isConnected()) {
+                        console.error('OneDrive loadFromFile: not connected');
+                        return;
+                    }
+                    const token = await getTokenSilent();
+                    if (!token) {
+                        console.error('OneDrive loadFromFile: no token');
+                        return;
+                    }
+                    const text = await this._download(token);
+                    if (text) {
+                        console.log('OneDrive: Daten geladen (Versuch ' + attempt + ').');
+                        let serverData = null;
+                        try { serverData = JSON.parse(text); } catch (e) {}
+                        if (serverData && serverData._lastModified) {
+                            const localModified = localStorage.getItem('_lastModified');
+                            if (!localModified || localModified !== serverData._lastModified) {
+                                console.log('OneDrive: neuere Daten gefunden, importiere...');
+                                try {
+                                    DB.importAll(text);
+                                    localStorage.setItem('_lastModified', serverData._lastModified);
+                                } catch (e) {
+                                    console.error('OneDrive loadFromFile: Import fehlgeschlagen', e);
+                                    throw e;
+                                }
+                            } else {
+                                console.log('OneDrive: lokale Daten sind aktuell.');
+                            }
                         }
                     }
+                    this.startAutoSync();
+                    return;
+                } catch (e) {
+                    lastError = e;
+                    console.error('OneDrive loadFromFile fehlgeschlagen (Versuch ' + attempt + '):', e);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
                 }
-            } catch (e) { console.error('OneDrive loadFromFile failed', e); }
+            }
+            console.error('OneDrive loadFromFile endgültig fehlgeschlagen:', lastError);
         },
 
         async _download(token) {
@@ -263,22 +328,7 @@
     }
 
     async function applyCloud() {
-        if (!OneDrivePersist.isConnected()) return;
-        const token = await getTokenSilent();
-        if (!token) return;
-        const text = await OneDrivePersist._download(token);
-        if (!text) return;
-        let serverData = null;
-        try { serverData = JSON.parse(text); } catch (e) {}
-        if (!serverData || !serverData._lastModified) return;
-        const localModified = localStorage.getItem('_lastModified');
-        if (localModified && localModified === serverData._lastModified) return;
-        if (!confirm('OneDrive-Daten sind aktueller als die lokalen Daten. Sollen die OneDrive-Daten geladen werden? Lokale Änderungen gehen sonst verloren.')) return;
-        DB.importAll(text);
-        localStorage.setItem('_lastModified', serverData._lastModified);
-        alert('OneDrive-Daten geladen.');
-        renderDashboard();
-        renderClasses();
+        await OneDrivePersist.syncFromCloud();
     }
 
     function renderODStatus() {

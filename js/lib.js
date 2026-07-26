@@ -428,17 +428,25 @@ const FilePersist = {
         return true;
     },
     bootstrap: async function() {
-        try {
-            const response = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
-            if (response.ok) {
-                const text = await response.text();
-                if (text && text.trim() !== '' && text.trim() !== '{}') {
-                    DB.importAll(text);
-                    console.log('FilePersist: Datei geladen.');
+        let lastError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const response = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text && text.trim() !== '' && text.trim() !== '{}') {
+                        DB.importAll(text);
+                        console.log('FilePersist: Datei geladen (Versuch ' + attempt + ').');
+                    }
                 }
+                return;
+            } catch (e) {
+                lastError = e;
+                console.error('FilePersist.load failed (Versuch ' + attempt + '):', e);
+                if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt));
             }
-        } catch (e) { console.error('FilePersist.load failed', e); }
-        this.startAutoSave();
+        }
+        console.error('FilePersist.load endgültig fehlgeschlagen:', lastError);
     },
     saveToFile: async function() {
         try {
