@@ -169,7 +169,6 @@
                         }
                     }
                     this.startAutoSave();
-                    if (this.isConnected()) this.startAutoSync();
                     return;
                 } catch (e) {
                     lastError = e;
@@ -190,32 +189,6 @@
         startAutoSave() {
             if (this._interval) return;
             this._interval = setInterval(() => { this.saveToFile(); }, 30000);
-        },
-
-        startAutoSync() {
-            if (this._syncInterval) return;
-            this._syncInterval = setInterval(() => { this.syncFromCloud(); }, 15000);
-        },
-
-        stopAutoSync() {
-            if (this._syncInterval) { clearInterval(this._syncInterval); this._syncInterval = null; }
-        },
-
-        async syncFromCloud() {
-            if (!this.isConnected()) return;
-            const token = await getTokenSilent();
-            if (!token) return;
-            const text = await this._download(token);
-            if (!text) return;
-            let serverData = null;
-            try { serverData = JSON.parse(text); } catch (e) {}
-            if (!serverData || !serverData._lastModified) return;
-            const localModified = localStorage.getItem('_lastModified');
-            if (localModified && localModified === serverData._lastModified) return;
-            DB.importAll(text);
-            localStorage.setItem('_lastModified', serverData._lastModified);
-            renderDashboard();
-            renderClasses();
         },
 
         stopAutoSave() {
@@ -289,7 +262,6 @@
                             }
                         }
                     }
-                    this.startAutoSync();
                     return;
                 } catch (e) {
                     lastError = e;
@@ -328,7 +300,20 @@
     }
 
     async function applyCloud() {
-        await OneDrivePersist.syncFromCloud();
+        if (!OneDrivePersist.isConnected()) return;
+        const token = await getTokenSilent();
+        if (!token) return;
+        const text = await OneDrivePersist._download(token);
+        if (!text) return;
+        let serverData = null;
+        try { serverData = JSON.parse(text); } catch (e) {}
+        if (!serverData || !serverData._lastModified) return;
+        const localModified = localStorage.getItem('_lastModified');
+        if (localModified && localModified === serverData._lastModified) return;
+        DB.importAll(text);
+        localStorage.setItem('_lastModified', serverData._lastModified);
+        renderDashboard();
+        renderClasses();
     }
 
     function renderODStatus() {

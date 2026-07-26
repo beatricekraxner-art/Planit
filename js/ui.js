@@ -4385,7 +4385,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                                  if (window.LocalPersist) window.LocalPersist.stopAutoSave();
                                   await window.OneDrivePersist.loadFromFile();
                                   window.OneDrivePersist.startAutoSave();
-                                  window.OneDrivePersist.startAutoSync();
                                  if (typeof setODStatus === 'function') setODStatus(true);
                              }
                          }
