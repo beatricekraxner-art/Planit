@@ -324,6 +324,7 @@ function getClassManagerContent(cls, students) {
         '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-exams" ' + (cls.showExams !== false ? 'checked' : '') + '> Schularbeiten anzeigen</label>' +
         '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-exercise-nr" ' + (cls.showExerciseNr !== false ? 'checked' : '') + '> SÜ-Nummern anzeigen</label>' +
         '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-homework" ' + (cls.showHomework !== false ? 'checked' : '') + '> Hausübungen anzeigen</label>' +
+        '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-use-half-grades" ' + (cls.useHalfGrades ? 'checked' : '') + '> Zwischennoten erlauben (1, 1.5, 2, 2.5, ...)</label>' +
         '<button class="btn" onclick="saveClassDetails(\'' + cls.id + '\')">Speichern</button>' +
         '</div>' +
         '<div class="student-section">' +
@@ -367,6 +368,7 @@ function saveClassDetails(classId) {
         cls.showExams = document.getElementById('edit-show-exams') ? document.getElementById('edit-show-exams').checked : (cls.showExams !== false);
         cls.showExerciseNr = document.getElementById('edit-show-exercise-nr') ? document.getElementById('edit-show-exercise-nr').checked : (cls.showExerciseNr !== false);
         cls.showHomework = document.getElementById('edit-show-homework') ? document.getElementById('edit-show-homework').checked : (cls.showHomework !== false);
+        cls.useHalfGrades = document.getElementById('edit-use-half-grades') ? document.getElementById('edit-use-half-grades').checked : !!cls.useHalfGrades;
         DB.saveClasses(classes);
     }
     hideModal();
@@ -1209,7 +1211,17 @@ function gradeClass(g) {
     return '';
 }
 
-function gradeSelect(value, onChange) {
+function gradeSelect(value, onChange, classId) {
+    const cls = classId ? DB.loadClasses().find(c => c.id === classId) : null;
+    const useHalf = cls ? !!cls.useHalfGrades : false;
+    if (useHalf) {
+        const opts = ['<option value="">–</option>'];
+        [1, 1.5, 2, 2.5, 3, 3.5, 4, 5].forEach(g => {
+            const label = g % 1 === 0 ? g.toString() : g.toFixed(1);
+            opts.push('<option value="' + g + '"' + (parseFloat(value) === g ? ' selected' : '') + '>' + label + '</option>');
+        });
+        return '<select class="grade-input" onchange="' + onChange + '">' + opts.join('') + '</select>';
+    }
     const opts = ['<option value="">–</option>'];
     [1,2,3,4,5].forEach(g => {
         opts.push('<option value="' + g + '"' + (value == g ? ' selected' : '') + '>' + g + '</option>');
@@ -2572,7 +2584,7 @@ function renderPruefungen(classId) {
         const d = data[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td><input type="date" class="grade-input" style="width:auto;" value="' + escapeHtml(d.date || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'date\',this.value)"></td>' +
-            '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)") + '</td>' +
+            '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)", classId) + '</td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:160px;" value="' + escapeHtml(d.note || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td></tr>';
     });
     html += '</tbody></table>';
@@ -2601,12 +2613,12 @@ function renderMitarbeit(classId) {
         const d = data[s.id] || {};
         const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)") + '</td>' +
+            '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)", classId) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
-            '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)") + '</td>' +
+            '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)", classId) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
-            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
+            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' : '') +
             '</tr>';
     });
     html += '</tbody></table>';
@@ -3668,7 +3680,7 @@ function renderGZProject(classId) {
         const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' +
             '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(note) + '" onchange="setGZProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
