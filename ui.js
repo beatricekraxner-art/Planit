@@ -192,13 +192,10 @@ document.addEventListener('click', function(e) {
 });
 
 function initSidebar() {
-    window.closeSidebar();
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        const newLi = li.cloneNode(true);
-        li.parentNode.replaceChild(newLi, li);
-        newLi.addEventListener('click', () => {
-            switchView(newLi.dataset.view);
+        li.addEventListener('click', () => {
+            switchView(li.dataset.view);
             window.closeSidebar();
         });
     });
@@ -4329,29 +4326,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                 window.FilePersist = window.OneDrivePersist;
                 if (window.OD.setProvider) window.OD.setProvider('local');
                 if (window.LocalPersist) window.LocalPersist.stopAutoSave();
-            } else if (isWebApp && odConnected && window.OneDrivePersist) {
-                window.FilePersist = window.OneDrivePersist;
-                if (window.OD.setProvider) window.OD.setProvider('onedrive');
-                if (window.LocalPersist) window.LocalPersist.stopAutoSave();
             } else if (isWebApp) {
-                window.FilePersist = {
+                window.FilePersist = window.OneDrivePersist || window.LocalPersist || {
                     available: true,
                     scheduleSave: function() {},
                     startAutoSave: function() {},
                     stopAutoSave: function() {},
-                    chooseFile: async function() {
-                        alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu speichern.');
-                        return false;
-                    },
-                    bootstrap: async function() {
-                        alert('Bitte verbinden Sie sich zuerst mit OneDrive (☁️), um Daten zu laden und zu speichern.');
-                    },
-                    saveToFile: async function() {
-                        alert('Achtung: OneDrive ist nicht verbunden. Speichern nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
-                    },
-                    loadFromFile: async function() {
-                        alert('Achtung: OneDrive ist nicht verbunden. Laden nicht möglich. Bitte verbinden Sie sich mit OneDrive (☁️).');
-                    }
+                    chooseFile: async function() { return false; },
+                    bootstrap: async function() {},
+                    saveToFile: async function() {},
+                    loadFromFile: async function() {}
                 };
             }
         } else {
