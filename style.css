@@ -228,19 +228,17 @@ select option:hover {
     z-index: 900;
 }
 
-.sidebar {
-    width: 280px;
-    min-width: 280px;
-    max-width: 280px;
-    background-color: var(--bg-panel);
-    border-right: 1px solid var(--border-color);
+.nav-links li {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: var(--transition);
     display: flex;
-    flex-direction: column;
-    padding: 24px;
+    align-items: center;
+    gap: 12px;
     touch-action: manipulation;
-    transition: width 0.25s ease, min-width 0.25s ease, max-width 0.25s ease, padding 0.25s ease, border-right 0.25s ease, transform 0.25s ease, overflow 0s;
-    overflow: visible;
-    z-index: 1;
 }
 
 .app-container.sidebar-collapsed .sidebar {

@@ -195,24 +195,17 @@ document.addEventListener('pointerdown', function(e) {
 function initSidebar() {
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        let activated = false;
-        const activate = () => {
-            if (activated) return;
-            activated = true;
+        li.addEventListener('pointerup', (e) => {
+            e.stopPropagation();
             switchView(li.dataset.view);
             window.closeSidebar();
-        };
-        li.addEventListener('click', (e) => {
-            e.preventDefault();
-            activate();
-            setTimeout(() => { activated = false; }, 50);
         });
     });
 
     const overlay = document.getElementById('sidebar-overlay');
     if (overlay) {
-        overlay.addEventListener('click', (e) => {
-            e.preventDefault();
+        overlay.addEventListener('pointerup', (e) => {
+            e.stopPropagation();
             window.closeSidebar();
         });
     }
