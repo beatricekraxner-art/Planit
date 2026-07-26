@@ -196,7 +196,6 @@ function initSidebar() {
     links.forEach(li => {
         li.addEventListener('click', () => {
             switchView(li.dataset.view);
-            window.closeSidebar();
         });
     });
 }
@@ -4323,9 +4322,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                     if (window.OneDrivePersist) window.OneDrivePersist.stopAutoSave();
                 }
             } else if (!isWebApp && odConfigured && !odConnected && window.OneDrivePersist) {
-                window.FilePersist = window.LocalPersist || window.OneDrivePersist;
+                window.FilePersist = window.OneDrivePersist;
                 if (window.OD.setProvider) window.OD.setProvider('local');
-                if (window.OneDrivePersist) window.OneDrivePersist.stopAutoSave();
+                if (window.LocalPersist) window.LocalPersist.stopAutoSave();
             } else if (isWebApp) {
                 window.FilePersist = {
                     available: true,
@@ -4347,6 +4346,17 @@ document.addEventListener('DOMContentLoaded', async function() {
                     }
                 };
             }
+        } else {
+            window.FilePersist = window.OneDrivePersist || window.LocalPersist || {
+                available: true,
+                scheduleSave: function() {},
+                startAutoSave: function() {},
+                stopAutoSave: function() {},
+                chooseFile: async function() { return false; },
+                bootstrap: async function() {},
+                saveToFile: async function() {},
+                loadFromFile: async function() {}
+            };
         }
         try { renderODConfig(); } catch (e) {}
         if (!isWebApp && window.LocalPersist && window.LocalPersist.bootstrap) {

@@ -212,6 +212,8 @@
                     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
                     body: data
                 });
+                console.log('OneDrive upload status:', resp.status, resp.statusText);
+                console.log('OneDrive upload URL:', resp.url);
                 if (resp.ok) {
                     console.log('OneDrive: gespeichert.');
                     const localData = JSON.parse(data);
