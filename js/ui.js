@@ -181,21 +181,26 @@ window.closeSidebar = function() {
     document.querySelector('.app-container').classList.add('sidebar-collapsed');
 };
 
-document.addEventListener('pointerdown', function(e) {
-    const toggle = document.getElementById('sidebar-toggle');
+window.toggleSidebar = function() {
     const sidebar = document.querySelector('.sidebar');
-    if (!toggle || !sidebar) return;
+    if (sidebar && sidebar.classList.contains('open')) window.closeSidebar();
+    else window.openSidebar();
+};
+
+document.addEventListener('click', function(e) {
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!toggle) return;
     if (e.target === toggle) {
         e.preventDefault();
-        if (sidebar.classList.contains('open')) window.closeSidebar();
-        else window.openSidebar();
+        window.toggleSidebar();
     }
 });
 
 function initSidebar() {
     const links = document.querySelectorAll('.nav-links li');
     links.forEach(li => {
-        li.addEventListener('pointerup', (e) => {
+        li.addEventListener('click', (e) => {
+            e.preventDefault();
             e.stopPropagation();
             switchView(li.dataset.view);
             window.closeSidebar();
@@ -204,8 +209,8 @@ function initSidebar() {
 
     const overlay = document.getElementById('sidebar-overlay');
     if (overlay) {
-        overlay.addEventListener('pointerup', (e) => {
-            e.stopPropagation();
+        overlay.addEventListener('click', (e) => {
+            e.preventDefault();
             window.closeSidebar();
         });
     }
@@ -316,9 +321,10 @@ function getClassManagerContent(cls, students) {
         '<option value="dg"' + ((cls.planMode || 'mathe') === 'dg' ? ' selected' : '') + '>DG</option>' +
         '<option value="other"' + ((cls.planMode || 'mathe') === 'other' ? ' selected' : '') + '>Allgemein</option>' +
         '</select>' +
-        '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-exams" ' + (cls.showExams !== false ? 'checked' : '') + '> Schularbeiten anzeigen</label>' +
-        '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-exercise-nr" ' + (cls.showExerciseNr !== false ? 'checked' : '') + '> SÜ-Nummern anzeigen</label>' +
-        '<label style="display:flex;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-homework" ' + (cls.showHomework !== false ? 'checked' : '') + '> Hausübungen anzeigen</label>' +
+        '<label style="display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-exams" ' + (cls.showExams !== false ? 'checked' : '') + '> <span>Schularbeiten anzeigen</span></label>' +
+        '<label style="display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-exercise-nr" ' + (cls.showExerciseNr !== false ? 'checked' : '') + '> <span>SÜ-Nummern anzeigen</span></label>' +
+        '<label style="display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-show-homework" ' + (cls.showHomework !== false ? 'checked' : '') + '> <span>Hausübungen anzeigen</span></label>' +
+        '<label style="display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="edit-use-half-grades" ' + (cls.useHalfGrades ? 'checked' : '') + '> <span>Zwischennoten erlauben (1, 1.5, 2, 2.5, ...)</span></label>' +
         '<button class="btn" onclick="saveClassDetails(\'' + cls.id + '\')">Speichern</button>' +
         '</div>' +
         '<div class="student-section">' +
@@ -362,6 +368,7 @@ function saveClassDetails(classId) {
         cls.showExams = document.getElementById('edit-show-exams') ? document.getElementById('edit-show-exams').checked : (cls.showExams !== false);
         cls.showExerciseNr = document.getElementById('edit-show-exercise-nr') ? document.getElementById('edit-show-exercise-nr').checked : (cls.showExerciseNr !== false);
         cls.showHomework = document.getElementById('edit-show-homework') ? document.getElementById('edit-show-homework').checked : (cls.showHomework !== false);
+        cls.useHalfGrades = document.getElementById('edit-use-half-grades') ? document.getElementById('edit-use-half-grades').checked : !!cls.useHalfGrades;
         DB.saveClasses(classes);
     }
     hideModal();
@@ -663,7 +670,7 @@ function applyTheme(theme) {
         document.documentElement.removeAttribute('data-theme');
     }
     const btn = document.getElementById('theme-toggle-btn');
-    if (btn) btn.innerHTML = (theme === 'light' ? '☀️' : '🌙') + '<span class="button-text"> Design</span>';
+    if (btn) btn.innerHTML = (theme === 'light' ? '☀️' : '🌙');
 }
 
 window.toggleTheme = function() {
@@ -762,7 +769,7 @@ function renderDashboard() {
         const dayName = isDayView ? formatDateDE(d) : daysOfWeek[i];
         const abbr = isDayView ? formatDateShort(d) : dayName.substring(0, 2);
         if (isHol) {
-            html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#d97706;">' + escapeHtml(isHol) + '</small></div>';
+            html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#0d9488;">' + escapeHtml(isHol) + '</small></div>';
         } else {
             const apptHtml = dayAppts.length ? dayAppts.map(a => '<div style="text-align:left;font-size:11px;color:#fff;font-weight:400;">• ' + escapeHtml(a.title || 'Termin') + '</div>').join('') : '';
             html += '<div class="' + cls + '"' + (dayAppts.length ? ' title="' + escapeHtml(dayAppts.map(a => (a.description || a.title || 'Termin')).join(' | ')) + '"' : '') + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + '</div>';
@@ -1204,7 +1211,17 @@ function gradeClass(g) {
     return '';
 }
 
-function gradeSelect(value, onChange) {
+function gradeSelect(value, onChange, classId) {
+    const cls = classId ? DB.loadClasses().find(c => c.id === classId) : null;
+    const useHalf = cls ? !!cls.useHalfGrades : false;
+    if (useHalf) {
+        const opts = ['<option value="">–</option>'];
+        [1, 1.5, 2, 2.5, 3, 3.5, 4, 5].forEach(g => {
+            const label = g % 1 === 0 ? g.toString() : g.toFixed(1);
+            opts.push('<option value="' + g + '"' + (parseFloat(value) === g ? ' selected' : '') + '>' + label + '</option>');
+        });
+        return '<select class="grade-input" onchange="' + onChange + '">' + opts.join('') + '</select>';
+    }
     const opts = ['<option value="">–</option>'];
     [1,2,3,4,5].forEach(g => {
         opts.push('<option value="' + g + '"' + (value == g ? ' selected' : '') + '>' + g + '</option>');
@@ -1256,6 +1273,7 @@ function populateGradeClassSelect() {
 let currentGradeTab = 'plan';
 let hwScrollRestored = false;
 let gradeOverviewScope = 'semester';
+let lastRenderedPlanClassId = null;
 let currentExamId = null;
 let examPointGrid = [];
 
@@ -1270,6 +1288,8 @@ function renderGrading() {
     }
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
+    const prevPlanWrap = document.querySelector('.plan-table-wrap');
+    const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
     switcher.style.display = 'flex';
     const cls = DB.loadClasses().find(c => c.id === classId);
     const planMode = cls ? (cls.planMode || (cls.type === 'gz' ? 'gz' : (cls.type === 'dg' ? 'dg' : 'mathe'))) : 'mathe';
@@ -1301,8 +1321,40 @@ function renderGrading() {
         gzTabs.push(['gz-overview', 'Übersicht']);
         tabs = gzTabs;
     }
-    switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
+    switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('') + (currentGradeTab === 'plan' ? '<button class="btn grade-tab plan-new-btn" onclick="openPlanModal(\'' + classId + '\')">+ Neue Stunde</button>' : '');
+    container.style.opacity = '0';
     container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
+    if (currentGradeTab === 'plan') {
+        const shouldScrollToToday = classId !== lastRenderedPlanClassId;
+        if (shouldScrollToToday) lastRenderedPlanClassId = classId;
+        function applyScroll() {
+            const wrap = document.querySelector('.plan-table-wrap');
+            if (!wrap) {
+                container.style.opacity = '1';
+                return;
+            }
+            if (shouldScrollToToday) {
+                const todayRow = document.querySelector('.plan-today');
+                if (todayRow) {
+                    wrap.scrollTop = todayRow.offsetTop - wrap.offsetTop - 20;
+                }
+            } else {
+                wrap.scrollTop = savedPlanScrollTop;
+            }
+            container.style.opacity = '1';
+        }
+        if (shouldScrollToToday) {
+            requestAnimationFrame(function() {
+                requestAnimationFrame(applyScroll);
+            });
+        } else {
+            applyScroll();
+        }
+    } else {
+        requestAnimationFrame(function() {
+            container.style.opacity = '1';
+        });
+    }
     if (currentGradeTab === 'gz-grades' || currentGradeTab === 'hw') {
         if (hwScrollRestored && savedScrollLeft) {
             const wrapNow = document.querySelector('.hw-grid-wrap');
@@ -1374,6 +1426,7 @@ function validateAllGrades() {
 function setGradeTab(tab) {
     currentGradeTab = tab;
     hwScrollRestored = false;
+    if (tab === 'plan') lastRenderedPlanClassId = null;
     renderGrading();
 }
 
@@ -1442,8 +1495,7 @@ function renderPlan(classId) {
     const isDG = planMode === 'dg';
     const lessonDays = cls && cls.lessonDays && cls.lessonDays.length ? cls.lessonDays : (isGZ ? ['Montag'] : (isDG ? ['Dienstag'] : []));
     const hasAutoSchedule = lessonDays.length > 0;
-    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen.</p></div>' +
-        '<button class="btn" onclick="openPlanModal(\'' + classId + '\')">+ Neue Stunde</button></div>';
+    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen.</p></div></div>';
     if (hasAutoSchedule) {
         const firstLessonDate = cls && cls.firstLessonDate ? cls.firstLessonDate : null;
         const globalSettings = DB.loadGlobalSettings();
@@ -1456,12 +1508,21 @@ function renderPlan(classId) {
         const supplierDates = plan.filter(e => e.supplier && e.date).map(e => e.date);
         const supplierEntries = plan.filter(e => e.supplier && e.date);
         const regularDates = generateRegularDates(firstLessonDate, lessonDays, schoolYearEnd);
-        const allDates = regularDates.concat(supplierDates.map(date => ({ date: date, type: 'supplier' })));
+        const regularDateSet = new Set(regularDates.map(d => d.date));
+        const holidays = (DB.loadHolidays() || []).filter(h => h.date >= schoolYearStart && h.date <= schoolYearEnd && !regularDateSet.has(h.date));
+        const autonomous = (DB.loadAutonomousDays() || []).filter(d => d >= schoolYearStart && d <= schoolYearEnd && !regularDateSet.has(d));
+        const holidayDates = holidays.map(h => ({ date: h.date, type: 'holiday', name: h.localName || h.name }));
+        const allDates = regularDates.concat(supplierDates.map(date => ({ date: date, type: 'supplier' })), holidayDates);
         allDates.sort((a, b) => a.date.localeCompare(b.date));
 
         if (isGZ) {
-            html += '<table class="grading-table plan-table plan-table-gz"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
+            html += '<div class="plan-table-wrap"><table class="grading-table plan-table plan-table-gz"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
             allDates.forEach(item => {
+                if (item.type === 'holiday') {
+                    const isTodayHoliday = item.date === todayStr;
+                    html += '<tr class="holiday-row ' + (isTodayHoliday ? 'plan-today' : '') + '"><td colspan="4" style="text-align:center;padding:10px;">' + formatDateDE(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
+                    return;
+                }
                 const date = item.date;
                 const isToday = date === todayStr;
                 const isSupplier = item.type === 'supplier';
@@ -1469,13 +1530,14 @@ function renderPlan(classId) {
                 const entry = isSupplier ?
                     supplierEntries.find(e => e.date === date) :
                     plan.find(e => e.date === date && !e.supplier);
-                const nr = entry ? entry.homeworkNr : '';
+                 const nr = entry ? entry.homeworkNr : '';
                 const title = entry ? (entry.homeworkContent || '') : '';
                 const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
-                const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '');
-                const actions = entry ?
+                const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
+                const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
+                 const actions = entry ?
                     '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' :
-                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
+                     '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
                 const contentClass = nr ? 'pre plan-content-gz' : 'pre plan-content-gz plan-content-only';
                 html += '<tr class="' + rowClass.trim() + '">' +
                     '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
@@ -1485,8 +1547,13 @@ function renderPlan(classId) {
                     '</tr>';
             });
         } else if (isDG) {
-            html += '<table class="grading-table plan-table plan-table-dg"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
+            html += '<div class="plan-table-wrap"><table class="grading-table plan-table plan-table-dg"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
             allDates.forEach(item => {
+                if (item.type === 'holiday') {
+                    const isToday = item.date === todayStr;
+                    html += '<tr class="holiday-row ' + (isToday ? 'plan-today' : '') + '"><td colspan="6" style="text-align:center;padding:10px;">' + formatDateDE(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
+                    return;
+                }
                 const date = item.date;
                 const isToday = date === todayStr;
                 const isFuture = date > todayStr;
@@ -1497,9 +1564,10 @@ function renderPlan(classId) {
                     plan.find(e => e.date === date && !e.supplier);
                 const hwNr = entry ? (entry.homeworkNr || '') : '';
                 const sheetsText = (entry ? (entry.homeworkSheets || '') : '').trim();
-                const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + escapeHtml(sheetsText) + '</small>') : (hwNr || '–');
-                const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '');
-                const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+                 const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + escapeHtml(sheetsText) + '</small>') : (hwNr || '–');
+                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
+                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
+                 const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 html += '<tr class="' + rowClass.trim() + '">' +
                     '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>' +
@@ -1515,8 +1583,13 @@ function renderPlan(classId) {
             cols.push('Inhalt Hausübung');
         cols.push('');
         const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : (planMode === 'dg' ? 'grading-table plan-table plan-table-dg' : (planMode === 'gz' ? 'grading-table plan-table plan-table-gz' : 'grading-table plan-table plan-table-mathe'));
-        html += '<table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
+        html += '<div class="plan-table-wrap"><table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other plan-hw-border"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
             allDates.forEach(item => {
+                if (item.type === 'holiday') {
+                    const isToday = item.date === todayStr;
+                    html += '<tr class="holiday-row ' + (isToday ? 'plan-today' : '') + '"><td colspan="6" style="text-align:center;padding:10px;">' + formatDateDE(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
+                    return;
+                }
                 const date = item.date;
                 const isToday = date === todayStr;
                 const isFuture = date > todayStr;
@@ -1525,24 +1598,19 @@ function renderPlan(classId) {
                 const entry = isSupplier ?
                     supplierEntries.find(e => e.date === date) :
                     plan.find(e => e.date === date && !e.supplier);
-                const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
-                const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '');
-                let cells = '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
+                 const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
+                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
+                 let cells = '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
                 if (showExerciseNr) cells += '<td>' + (entry ? (entry.exerciseNr || '–') : '–') + '</td>';
                 cells += '<td class="pre plan-content-other">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>';
-                if (showHomework) cells += '<td class="plan-hw-other">' + (entry ? (entry.homeworkNr || '–') : '–') + '</td>';
-                cells += '<td class="pre plan-hw-content-other">' + escapeHtml(entry ? (entry.homeworkContent || '') : '') + '</td>';
+                 if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr || '–') : '–') + '</td>';
+                 cells += '<td class="pre plan-hw-content-other" style="border-left:none;">' + escapeHtml(entry ? (entry.homeworkContent || '') : '') + '</td>';
                 cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
                 html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
             });
         }
-        html += '</tbody></table>';
-        setTimeout(function() {
-            const todayRow = document.querySelector('.plan-today');
-            if (todayRow) {
-                todayRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 0);
+        html += '</tbody></table></div>';
         return html;
     }
     if (!plan.length) {
@@ -1550,54 +1618,46 @@ function renderPlan(classId) {
         return html;
     }
     if (isGZ) {
-        html += '<table class="grading-table plan-table plan-table-gz"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
+        html += '<div class="plan-table-wrap"><table class="grading-table plan-table plan-table-gz"><thead><tr><th>Datum</th><th>Übungsblatt</th><th>Inhalt</th><th></th></tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
             const holiday = isHoliday(e.date);
-            const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
-            const nr = e.homeworkNr ? e.homeworkNr : '';
-            const title = e.homeworkContent || '';
-            const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '');
-            html += '<tr class="' + rowClass.trim() + '">' +
+              const holidayName = getHolidayName(e.date);
+              const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(holidayName || 'Ferien') + '</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+             const nr = e.homeworkNr ? e.homeworkNr : '';
+             const title = e.homeworkContent || '';
+             const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
+             const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
+             html += '<tr class="' + rowClass.trim() + '">' +
                 '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td>' + (nr ? (nr + '<span style="margin-left:20px;">' + escapeHtml(title) + '</span>') : '–') + '</td>' +
                 '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
                 '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
                 '</tr>';
         });
-        html += '</tbody></table>';
-        setTimeout(function() {
-            const todayRow = document.querySelector('.plan-today');
-            if (todayRow) {
-                todayRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 0);
+        html += '</tbody></table></div>';
     } else if (isDG) {
-        html += '<table class="grading-table plan-table plan-table-dg"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
+        html += '<div class="plan-table-wrap"><table class="grading-table plan-table plan-table-dg"><thead><tr><th>Datum</th><th>Inhalt Schulübung</th><th>HÜ</th><th></th></tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
             const holiday = isHoliday(e.date);
-            const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+              const holidayName = getHolidayName(e.date);
+              const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(holidayName || 'Ferien') + '</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
             const hwNr = e.homeworkNr ? e.homeworkNr : '–';
             const sheetsText = (e.homeworkSheets || '').trim();
-            const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + escapeHtml(sheetsText) + '</small>') : hwNr;
-            const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '');
-            html += '<tr class="' + rowClass.trim() + '">' +
+             const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + escapeHtml(sheetsText) + '</small>') : hwNr;
+             const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
+             const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
+             html += '<tr class="' + rowClass.trim() + '">' +
                 '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
                 '<td>' + hwDisplay + '</td>' +
                 '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
                 '</tr>';
         });
-        html += '</tbody></table>';
-        setTimeout(function() {
-            const todayRow = document.querySelector('.plan-today');
-            if (todayRow) {
-                todayRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 0);
+        html += '</tbody></table></div>';
     } else {
         const cols = ['Datum'];
         if (showExerciseNr) cols.push('SÜ-Nr.');
@@ -1606,28 +1666,24 @@ function renderPlan(classId) {
         cols.push('Inhalt Hausübung');
         cols.push('');
         const tableClass = planMode === 'other' ? 'grading-table plan-table plan-table-other' : (planMode === 'dg' ? 'grading-table plan-table plan-table-dg' : (planMode === 'gz' ? 'grading-table plan-table plan-table-gz' : 'grading-table plan-table plan-table-mathe'));
-        html += '<table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
+        html += '<div class="plan-table-wrap"><table class="' + tableClass + '"><thead><tr>' + cols.map(c => '<th' + (c === 'Inhalt Schulübung' ? ' class="plan-content-other plan-hw-border"' : '') + (c === 'HÜ' ? ' class="plan-hw-other"' : '') + (c === 'Inhalt Hausübung' ? ' class="plan-hw-content-other"' : '') + '>' + c + '</th>').join('') + '</tr></thead><tbody>';
         plan.forEach(e => {
             const isToday = e.date === todayStr;
             const isFuture = e.date > todayStr;
             const holiday = isHoliday(e.date);
-            const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
-            const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '');
-            let cells = '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
+              const holidayName = getHolidayName(e.date);
+              const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(holidayName || 'Ferien') + '</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+             const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
+             const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
+             let cells = '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
             if (showExerciseNr) cells += '<td>' + (e.exerciseNr ? e.exerciseNr : '–') + '</td>';
-            cells += '<td class="pre plan-content-other">' + escapeHtml(e.exerciseContent || '') + '</td>';
-            if (showHomework) cells += '<td class="plan-hw-other">' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>';
+             cells += '<td class="pre plan-content-other">' + escapeHtml(e.exerciseContent || '') + '</td>';
+             if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>';
             cells += '<td class="pre plan-hw-content-other">' + escapeHtml(e.homeworkContent || '') + '</td>';
             cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
             html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
         });
         html += '</tbody></table>';
-        setTimeout(function() {
-            const todayRow = document.querySelector('.plan-today');
-            if (todayRow) {
-                todayRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 0);
     }
     return html;
 }
@@ -1670,6 +1726,8 @@ function openPlanModal(classId, id, date) {
         hwContentHtml = '<label>Inhalt Hausübung</label><textarea id="plan-hwcontent" rows="4" style="white-space:pre-wrap;">' + escapeHtml(e ? e.homeworkContent : '') + '</textarea>';
     }
     const supplierHtml = '<button type="button" id="plan-supplier" class="btn" data-supplier="0" onclick="window.toggleSupplier(this)" style="width:100%;margin-top:4px;">Supplierstunde</button>';
+    const rowColor = e ? (e.rowColor || '') : '';
+    const rowColorHtml = '<label>Zeilenfarbe</label><select id="plan-row-color" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"><option value="">Keine</option><option value="blue"' + (rowColor === 'blue' ? ' selected' : '') + '>Blau</option><option value="green"' + (rowColor === 'green' ? ' selected' : '') + '>Grün</option><option value="yellow"' + (rowColor === 'yellow' ? ' selected' : '') + '>Gelb</option><option value="red"' + (rowColor === 'red' ? ' selected' : '') + '>Rot</option><option value="purple"' + (rowColor === 'purple' ? ' selected' : '') + '>Lila</option><option value="orange"' + (rowColor === 'orange' ? ' selected' : '') + '>Orange</option></select>';
     showModal(
         '<div class="modal-header"><h2>' + (id ? 'Stunde bearbeiten' : 'Neue Stunde') + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
         '<div class="form-group exam-form">' +
@@ -1681,6 +1739,7 @@ function openPlanModal(classId, id, date) {
         hwNrHtml +
         hwContentHtml +
         supplierHtml +
+        rowColorHtml +
         '<button class="btn" onclick="savePlanEntry(\'' + classId + '\',\'' + (id || '') + '\')">Speichern</button>' +
         '</div>'
     );
@@ -1717,6 +1776,8 @@ function savePlanEntry(classId, id) {
     const hwContent = isDG ? '' : (isGZ ? wsTitle : (document.getElementById('plan-hwcontent') ? document.getElementById('plan-hwcontent').value : ''));
     const supplierEl = document.getElementById('plan-supplier');
     const supplier = supplierEl ? supplierEl.getAttribute('data-supplier') === '1' : false;
+    const rowColorEl = document.getElementById('plan-row-color');
+    const rowColor = rowColorEl ? rowColorEl.value : '';
     const fields = {
         date: date,
         exerciseNr: exNr ? parseInt(exNr) : '',
@@ -1724,10 +1785,11 @@ function savePlanEntry(classId, id) {
         homeworkNr: (isGZ ? wsNr : hwNr) ? parseInt(isGZ ? wsNr : hwNr) : '',
         homeworkContent: hwContent,
         homeworkSheets: hwSheets,
-        supplier: supplier
+        supplier: supplier,
+        rowColor: rowColor
     };
     if (id) DB.updateTeachingPlanEntry(classId, id, fields);
-    else DB.addTeachingPlanEntry(classId, date, fields.exerciseNr, exContent, fields.homeworkNr, hwContent, hwSheets, supplier);
+    else DB.addTeachingPlanEntry(classId, date, fields.exerciseNr, exContent, fields.homeworkNr, hwContent, hwSheets, supplier, rowColor);
     hideModal();
     renderGrading();
 }
@@ -2567,8 +2629,8 @@ function renderPruefungen(classId) {
         const d = data[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td><input type="date" class="grade-input" style="width:auto;" value="' + escapeHtml(d.date || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'date\',this.value)"></td>' +
-            '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)") + '</td>' +
-            '<td><input type="text" class="grade-input" style="width:auto;min-width:160px;" value="' + escapeHtml(d.note || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)"></td></tr>';
+            '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)", classId) + '</td>' +
+            '<td><textarea class="grade-input" style="width:auto;min-width:160px;height:auto;min-height:32px;text-align:left;white-space:normal;resize:vertical;overflow:auto;" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td></tr>';
     });
     html += '</tbody></table>';
     return html;
@@ -2596,12 +2658,12 @@ function renderMitarbeit(classId) {
         const d = data[s.id] || {};
         const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)") + '</td>' +
+            '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)", classId) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
-            '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)") + '</td>' +
+            '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)", classId) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
-            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' : '') +
+            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' : '') +
             '</tr>';
     });
     html += '</tbody></table>';
@@ -3505,6 +3567,7 @@ window.exportWorksheetsCSV = function(classId) {
 
 function renderGZGrades(classId) {
     normalizeGZForgotten(classId);
+    const cls = DB.loadClasses().find(c => c.id === classId);
     const students = DB.getStudentsForClass(classId);
     const worksheets = getGZPlannedWorksheets(classId);
     const status = DB.loadWorksheetStatus(classId);
@@ -3548,10 +3611,11 @@ function renderGZGrades(classId) {
             const forgotClass = (matOn || lapOn) ? 'gz-mat active' : '';
             const gradeSelectClass = grade ? ' gz-grade-' + grade : '';
             const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
+            const gradeOptions = cls.useHalfGrades ? [1,1.5,2,2.5,3,3.5,4,5] : [1,2,3,4,5];
             html += '<td class="gz-ws-sep' + computerClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',this.value)">' +
                 '<option value="">–</option>' +
-                [1,2,3,4,5].map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
-                '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>nur gesehen</option>' +
+                gradeOptions.map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
+                '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>ges</option>' +
                 '</select></td>';
             html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',' + (!absent) + ')">k</button></td>';
             html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ')">' + recvLabel + '</button></td>';
@@ -3663,7 +3727,7 @@ function renderGZProject(classId) {
         const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' +
             '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(note) + '" onchange="setGZProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
@@ -4180,21 +4244,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         const so = document.getElementById('startup-overlay');
         if (so) so.remove();
     }, 10000);
-
-    const offlineEl = document.getElementById('offline-indicator');
-    function updateOfflineStatus() {
-        if (!offlineEl) return;
-        if (navigator.onLine) {
-            offlineEl.textContent = 'Online';
-            offlineEl.className = 'offline-indicator online';
-        } else {
-            offlineEl.textContent = 'Offline';
-            offlineEl.className = 'offline-indicator offline';
-        }
-    }
-    updateOfflineStatus();
-    window.addEventListener('online', updateOfflineStatus);
-    window.addEventListener('offline', updateOfflineStatus);
 
     const diag = document.getElementById('diagnose');
     if (diag) {

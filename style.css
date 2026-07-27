@@ -7,9 +7,9 @@
     --bg-panel: #1a1d24;
     --bg-panel-hover: #232730;
     
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --secondary: #06b6d4;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --secondary: #00e6b8;
     
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
@@ -30,7 +30,7 @@
     
     --primary: #2563eb;
     --primary-hover: #1d4ed8;
-    --secondary: #0891b2;
+    --secondary: #00bcd9;
     
     --text-main: #0f172a;
     --text-muted: #475569;
@@ -273,10 +273,6 @@ select option:hover {
         min-width: 70px;
         font-size: 11px;
     }
-    .offline-indicator {
-        min-width: 50px;
-        font-size: 11px;
-    }
     .save-status {
         font-size: 11px;
     }
@@ -414,6 +410,10 @@ select option:hover {
 .btn-secondary:hover {
     background: var(--bg-panel-hover);
     border-color: var(--text-muted);
+}
+
+#grading-table-container {
+    transition: opacity 0.15s ease;
 }
 
 #view-container {
@@ -813,7 +813,7 @@ select option:hover {
 }
 
 .tt-day-holiday {
-    color: #f59e0b !important;
+    color: #0d9488 !important;
 }
 
 .tt-day-appointment {
@@ -838,17 +838,17 @@ select option:hover {
 }
 
 .holiday-row {
-    background: rgba(245, 158, 11, 0.12);
+    background: rgba(20, 184, 166, 0.12);
 }
 
 .holiday-row td {
-    color: #b45309;
+    color: #0d9488;
 }
 
 .holiday-marker {
     display: inline-block;
-    background: rgba(245, 158, 11, 0.2);
-    color: #d97706;
+    background: rgba(20, 184, 166, 0.2);
+    color: #0d9488;
     padding: 2px 8px;
     border-radius: 12px;
     font-size: 12px;
@@ -856,13 +856,13 @@ select option:hover {
 }
 
 .supplier-row {
-    background: rgba(59, 130, 246, 0.1);
+    background: rgba(20, 184, 166, 0.1);
 }
 
 .supplier-marker {
     display: inline-block;
-    background: rgba(59, 130, 246, 0.2);
-    color: #2563eb;
+    background: rgba(20, 184, 166, 0.2);
+    color: #0d9488;
     padding: 2px 8px;
     border-radius: 12px;
     font-size: 12px;
@@ -870,8 +870,8 @@ select option:hover {
 }
 
 .tt-holiday {
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid #f59e0b;
+    background: rgba(20, 184, 166, 0.12);
+    border: 1px solid #0d9488;
     color: var(--text-main);
     padding: 8px 10px;
     font-size: 12px;
@@ -987,6 +987,20 @@ select option:hover {
     margin-top: 20px;
 }
 
+#grade-switcher {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg-panel);
+}
+
+.grade-course-title {
+    position: sticky;
+    top: 50px;
+    z-index: 15;
+    background: var(--bg-panel);
+}
+
 .grading-table th,
 .grading-table td {
     padding: 12px 16px;
@@ -1009,7 +1023,11 @@ select option:hover {
     border: 1px solid var(--border-color);
     width: fit-content;
     margin-bottom: 20px;
-    flex-wrap: wrap;
+    align-items: center;
+}
+
+.grade-switcher .plan-new-btn {
+    margin-left: 40px;
 }
 
 .grade-switcher .btn {
@@ -1936,13 +1954,18 @@ select.grade-input option {
     color: var(--text-muted);
 }
 
-.plan-table,
 .plan-table-gz,
-.plan-table-dg,
 .plan-table-other,
 .plan-table-mathe {
     table-layout: fixed;
-    width: 100%;
+    width: calc(100% - 10px);
+    margin-right: 10px;
+}
+
+.plan-table-dg {
+    table-layout: auto;
+    width: calc(100% - 12px);
+    margin-right: 10px;
 }
 
 .plan-table th,
@@ -2024,6 +2047,23 @@ select.grade-input option {
     border-right: 2px solid var(--border-color);
 }
 
+.plan-table-mathe td:nth-child(3),
+.plan-table-mathe td:nth-child(5) {
+    text-align: left;
+    padding-left: 20px;
+}
+
+.plan-table-dg th:nth-child(3),
+.plan-table-dg td:nth-child(3) {
+    width: 250px;
+    text-align: left;
+}
+
+.plan-table-gz th:nth-child(3),
+.plan-table-gz td:nth-child(3) {
+    width: 150px;
+}
+
 .plan-table th:nth-child(4),
 .plan-table td:nth-child(4),
 .plan-table-mathe th:nth-child(4),
@@ -2043,12 +2083,9 @@ select.grade-input option {
 .plan-table-mathe th:nth-child(6),
 .plan-table-mathe td:nth-child(6) {
     width: 60px;
-}
-
-.plan-table:not(.plan-table-dg):not(.plan-table-gz) td:nth-child(3),
-.plan-table:not(.plan-table-dg):not(.plan-table-gz) td:nth-child(5) {
-    text-align: left;
-    padding-left: 20px;
+    text-align: right;
+    padding-right: 4px;
+    padding-left: 0;
 }
 
 .plan-table-gz th:nth-child(2),
@@ -2060,53 +2097,70 @@ select.grade-input option {
 .plan-table-gz th:nth-child(3),
 .plan-table-gz td:nth-child(3) {
     width: 150px;
+    text-align: left;
 }
 
 .plan-table-gz th:nth-child(4),
 .plan-table-gz td:nth-child(4) {
     width: 50px;
-    text-align: center;
+    text-align: right;
+    padding-right: 0;
 }
 
 .plan-table-dg th:nth-child(2),
 .plan-table-dg td:nth-child(2) {
-    width: 50%;
+    width: 60%;
     text-align: left;
     border-right: 2px solid var(--border-color);
 }
 
 .plan-table-dg th:nth-child(3),
 .plan-table-dg td:nth-child(3) {
-    width: 150px;
+    width: auto;
     text-align: left;
 }
 
 .plan-table-dg th:nth-child(4),
 .plan-table-dg td:nth-child(4) {
-    width: 50px;
-    text-align: center;
+    width: 60px;
+    text-align: right;
+    padding-right: 8px;
+}
+.plan-table.plan-table-other th.plan-content-other,
+.plan-table.plan-table-other td.plan-content-other {
+    border-right: none !important;
 }
 
 .plan-table.plan-table-other th.plan-content-other,
 .plan-table.plan-table-other td.plan-content-other {
-    width: 55%;
+    width: 60%;
     text-align: left;
+    padding-left: 20px;
+}
+
+.plan-table:not(.plan-table-dg):not(.plan-table-gz):not(.plan-table-other) th.plan-content-other,
+.plan-table:not(.plan-table-dg):not(.plan-table-gz):not(.plan-table-other) td.plan-content-other {
+    border-right: none !important;
 }
 
 .plan-table.plan-table-other th.plan-hw-other,
 .plan-table.plan-table-other td.plan-hw-other {
-    width: 50px;
+    width: 100px;
     text-align: center;
 }
 
 .plan-table.plan-table-other th.plan-hw-content-other,
 .plan-table.plan-table-other td.plan-hw-content-other {
     width: auto;
-},
-.plan-table.plan-table-other td.plan-hw-content-other {
-    width: auto;
     text-align: left;
 }
+
+.plan-row-blue { background: rgba(59, 130, 246, 0.35) !important; }
+.plan-row-green { background: rgba(34, 197, 94, 0.35) !important; }
+.plan-row-yellow { background: rgba(234, 179, 8, 0.40) !important; }
+.plan-row-red { background: rgba(220, 38, 38, 0.40) !important; }
+.plan-row-purple { background: rgba(168, 85, 247, 0.35) !important; }
+.plan-row-orange { background: rgba(249, 115, 22, 0.35) !important; }
 
 .regular-marker {
     display: inline-block;
@@ -2625,27 +2679,6 @@ select.grade-input option {
 }
 
 /* =============================================
-   OFFLINE INDICATOR
-   ============================================= */
-.offline-indicator {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 12px;
-    min-width: 60px;
-    text-align: center;
-    transition: all 0.3s ease;
-}
-.offline-indicator.online {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-}
-.offline-indicator.offline {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-}
-
-/* =============================================
    LOADING INDICATOR
    ============================================= */
 .loading-overlay {
@@ -2688,6 +2721,26 @@ select.grade-input.invalid {
 /* =============================================
    RESPONSIVE TABLES (Tablets & Mobile)
    ============================================= */
+.plan-table-wrap {
+    overflow-y: auto;
+    max-height: calc(100vh - 200px);
+    background: var(--bg-panel);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    width: 100%;
+}
+
+.plan-table-wrap .grading-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-panel);
+}
+
+.plan-table-wrap .grading-table th {
+    background: var(--bg-panel);
+}
+
 @media (max-width: 1024px) {
     .grading-table th,
     .grading-table td {
@@ -2817,4 +2870,7 @@ select.grade-input.invalid {
         padding: 0 16px;
     }
 }
+
+
+
 

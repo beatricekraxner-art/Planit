@@ -98,7 +98,8 @@ const DB = {
             planMode: mode,
             showExams: type !== 'gz',
             showExerciseNr: type !== 'dg' && type !== 'other',
-            showHomework: true
+            showHomework: true,
+            useDecimalGrades: false
         });
         this.saveClasses(classes);
     },
@@ -265,9 +266,9 @@ const DB = {
     },
     loadTeachingPlan: function(classId) { return this.load('teaching_plan_' + classId, []); },
     saveTeachingPlan: function(classId, plan) { this.save('teaching_plan_' + classId, plan); },
-    addTeachingPlanEntry: function(classId, date, exerciseNr, exerciseContent, homeworkNr, homeworkContent, homeworkSheets, supplier) {
+    addTeachingPlanEntry: function(classId, date, exerciseNr, exerciseContent, homeworkNr, homeworkContent, homeworkSheets, supplier, rowColor) {
         const plan = this.loadTeachingPlan(classId);
-        plan.push({ id: Date.now().toString(), date: date, exerciseNr: exerciseNr, exerciseContent: exerciseContent, homeworkNr: homeworkNr, homeworkContent: homeworkContent, homeworkSheets: homeworkSheets || '', supplier: supplier || false });
+        plan.push({ id: Date.now().toString(), date: date, exerciseNr: exerciseNr, exerciseContent: exerciseContent, homeworkNr: homeworkNr, homeworkContent: homeworkContent, homeworkSheets: homeworkSheets || '', supplier: supplier || false, rowColor: rowColor || '' });
         this.saveTeachingPlan(classId, plan);
     },
     updateTeachingPlanEntry: function(classId, id, fields) {
