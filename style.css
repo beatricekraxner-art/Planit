@@ -1954,8 +1954,11 @@ select.grade-input option {
     color: var(--text-muted);
 }
 
-.plan-table-gz,
-.plan-table-other,
+.plan-table-other {
+    table-layout: auto;
+    width: 100%;
+}
+
 .plan-table-mathe {
     table-layout: fixed;
     width: calc(100% - 10px);
