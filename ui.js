@@ -146,6 +146,7 @@ function switchView(viewName) {
     if (viewName === 'classes') renderClasses();
     if (viewName === 'dashboard') renderDashboard();
     if (viewName === 'grading') {
+        lastRenderedPlanClassId = null;
         populateGradeClassSelect();
         const select = document.getElementById('grade-class-select');
         if (select && !select.value) {
@@ -154,7 +155,6 @@ function switchView(viewName) {
                 select.value = classes[0].id;
             }
         }
-        lastRenderedPlanClassId = null;
         renderGrading();
     }
     if (viewName === 'grades-overview') renderGradesOverview();
@@ -1265,10 +1265,6 @@ function populateGradeClassSelect() {
         select.appendChild(opt);
     });
     select.onchange = renderGrading;
-    if (classes.length > 0 && !select.value) {
-        select.value = classes[0].id;
-        renderGrading();
-    }
 }
 
 let currentGradeTab = 'plan';
@@ -1330,27 +1326,41 @@ function renderGrading() {
         if (shouldScrollToToday) lastRenderedPlanClassId = classId;
         function applyScroll() {
             const wrap = document.querySelector('.plan-table-wrap');
-            if (!wrap) {
-                container.style.opacity = '1';
-                return;
-            }
+            if (!wrap) return false;
             if (shouldScrollToToday) {
                 const todayRow = document.querySelector('.plan-today');
                 if (todayRow) {
                     wrap.scrollTop = todayRow.offsetTop - wrap.offsetTop - 20;
+                    return true;
                 }
             } else {
                 wrap.scrollTop = savedPlanScrollTop;
+                return true;
             }
-            container.style.opacity = '1';
+            return false;
         }
-        if (shouldScrollToToday) {
-            requestAnimationFrame(function() {
-                requestAnimationFrame(applyScroll);
-            });
-        } else {
-            applyScroll();
-        }
+        setTimeout(function() {
+            if (applyScroll()) {
+                container.style.opacity = '1';
+                return;
+            }
+            setTimeout(function() {
+                if (applyScroll()) {
+                    container.style.opacity = '1';
+                    return;
+                }
+                setTimeout(function() {
+                    if (applyScroll()) {
+                        container.style.opacity = '1';
+                        return;
+                    }
+                    setTimeout(function() {
+                        applyScroll();
+                        container.style.opacity = '1';
+                    }, 150);
+                }, 100);
+            }, 100);
+        }, 100);
     } else {
         requestAnimationFrame(function() {
             container.style.opacity = '1';
