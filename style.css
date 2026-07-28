@@ -2109,7 +2109,7 @@ select.grade-input option {
 
 .plan-table-dg th:nth-child(2),
 .plan-table-dg td:nth-child(2) {
-    width: 60%;
+    width: 45%;
     text-align: left;
     border-right: 2px solid var(--border-color);
 }
@@ -2133,7 +2133,7 @@ select.grade-input option {
 
 .plan-table.plan-table-other th.plan-content-other,
 .plan-table.plan-table-other td.plan-content-other {
-    width: 60%;
+    width: 45%;
     text-align: left;
     padding-left: 20px;
 }
