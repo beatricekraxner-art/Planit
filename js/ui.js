@@ -146,6 +146,7 @@ function switchView(viewName) {
     if (viewName === 'classes') renderClasses();
     if (viewName === 'dashboard') renderDashboard();
     if (viewName === 'grading') {
+        lastRenderedPlanClassId = null;
         populateGradeClassSelect();
         const select = document.getElementById('grade-class-select');
         if (select && !select.value) {
@@ -288,7 +289,7 @@ function getClassManagerContent(cls, students) {
             '<span class="stu-name" id="stu-name-' + s.id + '">' + escapeHtml(s.name) + '</span>' +
             '<span class="stu-actions">' +
             '<input type="file" accept="image/*" style="display:none;" id="stu-photo-input-' + s.id + '" onchange="uploadStudentPhoto(this, \'' + s.id + '\', \'' + cls.id + '\')">' +
-            '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="document.getElementById(\'stu-photo-input-' + s.id + '\').click()">📷</button>' +
+            '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="showPhotoMenu(event, \'' + s.id + '\', \'' + cls.id + '\')">📷</button>' +
             '<button class="btn btn-secondary" title="Screenshot einfügen (Strg+V)" onclick="pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
             (s.photo ? '<button class="btn btn-secondary" title="Foto entfernen" onclick="removeStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">🗑️</button>' : '') +
             '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">✎</button>' +
@@ -450,25 +451,42 @@ window.importStudentsFromCsv = function(input, classId) {
                 let lastName = '';
                 let targetClassId = classId;
                 if (parts.length >= 3) {
-                    const vorname = parts[0] || '';
-                    const nachname = parts[1] || '';
-                    fullName = (vornname + ' ' + nachname).trim();
-                    lastName = nachname;
+                    const vorname = (parts[0] || '').trim();
+                    const nachname = (parts[1] || '').trim();
+                    fullName = (nachname + ' ' + vorname).trim();
+                    lastName = nachname.toUpperCase();
                     if (parts[2]) {
                         const classIdOrName = parts[2];
                         const foundClass = classes.find(c => c.id === classIdOrName || c.name === classIdOrName);
                         if (foundClass) targetClassId = foundClass.id;
                     }
                 } else if (parts.length >= 2) {
-                    fullName = parts[0];
-                    const nameParts = fullName.split(' ').filter(Boolean);
-                    lastName = nameParts.length > 1 ? nameParts[0] : (nameParts[0] || fullName);
-                    const classIdOrName = parts[1];
-                    const foundClass = classes.find(c => c.id === classIdOrName || c.name === classIdOrName);
-                    if (foundClass) targetClassId = foundClass.id;
+                    const first = parts[0] || '';
+                    const second = parts[1] || '';
+                    const foundClass = classes.find(c => c.id === second || c.name === second);
+                    if (foundClass) {
+                        fullName = first;
+                        const nameParts = fullName.split(' ').filter(Boolean);
+                        lastName = nameParts.length > 1 ? nameParts[0].toUpperCase() : (nameParts[0] || fullName).toUpperCase();
+                        targetClassId = foundClass.id;
+                    } else {
+                        const nachname = first.toUpperCase();
+                        const vorname = second;
+                        fullName = (nachname + ' ' + vorname).trim();
+                        lastName = nachname;
+                    }
                 } else {
-                    fullName = parts[0];
-                    lastName = fullName;
+                    const raw = parts[0] || '';
+                    const nameParts = raw.split(/\s+/).filter(Boolean);
+                    if (nameParts.length >= 2) {
+                        const nachname = nameParts[0].toUpperCase();
+                        const vorname = nameParts.slice(1).join(' ');
+                        fullName = (nachname + ' ' + vorname).trim();
+                        lastName = nachname;
+                    } else {
+                        fullName = raw;
+                        lastName = raw.toUpperCase();
+                    }
                 }
                 if (fullName) {
                     DB.addStudent(targetClassId, fullName, lastName);
@@ -1072,6 +1090,92 @@ window.removeStudentPhoto = function(studentId, classId) {
     openClassManager(classId);
 };
 
+window.captureScreenForStudentPhoto = function(studentId, classId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert('Bildschirmaufnahme wird von diesem Browser nicht unterstützt.');
+        return;
+    }
+    navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false })
+        .then(function(stream) {
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.onloadedmetadata = function() {
+                video.play();
+                setTimeout(function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0);
+                    stream.getTracks().forEach(track => track.stop());
+                    canvas.toBlob(function(blob) {
+                        if (!blob) { alert('Screenshot konnte nicht erstellt werden.'); return; }
+                        resizeImageFile(blob, 160, function(dataUrl) {
+                            if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
+                            const students = DB.getStudentsSorted();
+                            const stu = students.find(s => s.id === studentId);
+                            if (stu) { stu.photo = dataUrl; DB.saveStudents(students); }
+                            openClassManager(classId);
+                        });
+                    }, 'image/jpeg', 0.75);
+                }, 300);
+            };
+        })
+        .catch(function(err) {
+            if (err.name !== 'NotAllowedError') {
+                alert('Screenshot fehlgeschlagen: ' + err.message);
+            }
+        });
+};
+
+window.showPhotoMenu = function(event, studentId, classId) {
+    event.stopPropagation();
+    const existing = document.getElementById('photo-menu-pop');
+    if (existing) { existing.remove(); return; }
+    document.removeEventListener('click', window._closePhotoMenu);
+
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+
+    const menu = document.createElement('div');
+    menu.id = 'photo-menu-pop';
+    menu.innerHTML =
+        '<button class="photo-menu-item" data-action="file" data-student="' + studentId + '" data-class="' + classId + '">📁 Datei auswählen</button>' +
+        '<button class="photo-menu-item" data-action="screenshot" data-student="' + studentId + '" data-class="' + classId + '">🖥️ Screenshot aufnehmen</button>';
+
+    menu.style.position = 'fixed';
+    menu.style.left = Math.min(rect.left, window.innerWidth - 190) + 'px';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.zIndex = '3500';
+
+    document.body.appendChild(menu);
+
+    window._closePhotoMenu = function(e) {
+        const m = document.getElementById('photo-menu-pop');
+        if (m && !m.contains(e.target) && e.target !== btn) {
+            m.remove();
+        }
+    };
+
+    document.addEventListener('click', window._closePhotoMenu);
+
+    menu.addEventListener('click', function(e) {
+        const item = e.target.closest('.photo-menu-item');
+        if (!item) return;
+        const action = item.getAttribute('data-action');
+        const sid = item.getAttribute('data-student');
+        const cid = item.getAttribute('data-class');
+        menu.remove();
+        document.removeEventListener('click', window._closePhotoMenu);
+        if (action === 'file') {
+            document.getElementById('stu-photo-input-' + sid).click();
+        } else if (action === 'screenshot') {
+            window.captureScreenForStudentPhoto(sid, cid);
+        }
+    });
+};
+
 window.selectStudent = function(el, studentId, classId) {
     document.querySelectorAll('.student-list li.selected').forEach(li => li.classList.remove('selected'));
     if (el) el.classList.add('selected');
@@ -1264,10 +1368,6 @@ function populateGradeClassSelect() {
         select.appendChild(opt);
     });
     select.onchange = renderGrading;
-    if (classes.length > 0 && !select.value) {
-        select.value = classes[0].id;
-        renderGrading();
-    }
 }
 
 let currentGradeTab = 'plan';
@@ -1329,27 +1429,41 @@ function renderGrading() {
         if (shouldScrollToToday) lastRenderedPlanClassId = classId;
         function applyScroll() {
             const wrap = document.querySelector('.plan-table-wrap');
-            if (!wrap) {
-                container.style.opacity = '1';
-                return;
-            }
+            if (!wrap) return false;
             if (shouldScrollToToday) {
                 const todayRow = document.querySelector('.plan-today');
                 if (todayRow) {
                     wrap.scrollTop = todayRow.offsetTop - wrap.offsetTop - 20;
+                    return true;
                 }
             } else {
                 wrap.scrollTop = savedPlanScrollTop;
+                return true;
             }
-            container.style.opacity = '1';
+            return false;
         }
-        if (shouldScrollToToday) {
-            requestAnimationFrame(function() {
-                requestAnimationFrame(applyScroll);
-            });
-        } else {
-            applyScroll();
-        }
+        setTimeout(function() {
+            if (applyScroll()) {
+                container.style.opacity = '1';
+                return;
+            }
+            setTimeout(function() {
+                if (applyScroll()) {
+                    container.style.opacity = '1';
+                    return;
+                }
+                setTimeout(function() {
+                    if (applyScroll()) {
+                        container.style.opacity = '1';
+                        return;
+                    }
+                    setTimeout(function() {
+                        applyScroll();
+                        container.style.opacity = '1';
+                    }, 150);
+                }, 100);
+            }, 100);
+        }, 100);
     } else {
         requestAnimationFrame(function() {
             container.style.opacity = '1';

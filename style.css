@@ -1447,6 +1447,37 @@ select.grade-input option {
     object-fit: cover;
 }
 
+#photo-menu-pop {
+    position: fixed;
+    z-index: 3500;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    min-width: 180px;
+}
+
+.photo-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 6px;
+    text-align: left;
+    font-family: inherit;
+}
+
+.photo-menu-item:hover {
+    background: var(--bg-dark);
+}
+
 .stu-namecell {
     display: inline-flex;
     align-items: center;
