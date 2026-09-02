@@ -3267,22 +3267,25 @@ function formatDateDE(iso) {
 }
 
 function renderHolidays() {
-    const list = (DB.loadManualHolidays() || []).slice().sort((a, b) => {
-        const av = a.from || '';
-        const bv = b.from || '';
+    const original = DB.loadManualHolidays() || [];
+    const indexed = original.map((h, i) => ({ h: h, i: i }));
+    indexed.sort((a, b) => {
+        const av = a.h.from || '';
+        const bv = b.h.from || '';
         if (av < bv) return -1;
         if (av > bv) return 1;
         return 0;
     });
     const container = document.getElementById('manual-holidays-list');
     if (!container) return;
-    if (!list.length) {
+    if (!indexed.length) {
         container.innerHTML = '<p class="subtitle" style="font-size:12px;">Keine Ferien eingetragen.</p>';
         return;
     }
     let html = '<table class="settings-table" style="width:100%;"><thead><tr><th>Bezeichnung</th><th>Von</th><th>Bis</th><th></th></tr></thead><tbody>';
-    list.forEach((h) => {
-        const realIndex = (DB.loadManualHolidays() || []).indexOf(h);
+    indexed.forEach((entry) => {
+        const h = entry.h;
+        const realIndex = entry.i;
         html += '<tr><td>' + escapeHtml(h.name || '') + '</td>' +
             '<td>' + escapeHtml(formatDateDE(h.from)) + '</td>' +
             '<td>' + escapeHtml(formatDateDE(h.to)) + '</td>' +
