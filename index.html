@@ -268,19 +268,15 @@
                         <div class="section-header">
                             <h3>Ferien & freie Tage</h3>
                         </div>
-                        <p class="subtitle" style="margin-bottom:15px;">Tragen Sie Ferien oder freie Tage manuell ein. Einzelne Tage können Sie auch unten als kommagetrennte Liste eingeben.</p>
+                        <p class="subtitle" style="margin-bottom:15px;">Tragen Sie Ferien oder freie Tage manuell ein. Datumsformat: tt.mm.jjjj (z.B. 24.12.2026). Einzelne Tage können Sie auch unten als kommagetrennte Liste eingeben.</p>
                         <div class="form-group exam-form" style="margin-bottom:12px;">
                             <input type="text" id="holiday-name" placeholder="Bezeichnung, z.B. Sommerferien" style="flex:1;">
-                            <input type="date" id="holiday-from">
-                            <input type="date" id="holiday-to">
-                            <button class="btn btn-secondary" onclick="window.addManualHoliday()">Hinzufügen</button>
+                            <input type="text" id="holiday-from" placeholder="tt.mm.jjjj" pattern="[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4}" onchange="document.getElementById('holiday-to').value = this.value">
+                            <input type="text" id="holiday-to" placeholder="tt.mm.jjjj" pattern="[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4}">
+                            <button class="btn btn-secondary" id="holiday-add-btn" onclick="window.addManualHoliday()">Hinzufügen</button>
+                            <input type="hidden" id="holiday-edit-index" value="">
                         </div>
                         <div id="manual-holidays-list" class="holidays-list"></div>
-                        <div style="margin-top:15px;">
-                            <label style="display:block;margin-bottom:6px;font-weight:500;">Einzelne schulautonome Tage (kommagetrennt oder mit Zeilenumbrüchen):</label>
-                            <textarea id="autonomous-days" placeholder="JJJJ-MM-DD, JJJJ-MM-DD ..."></textarea>
-                            <button class="btn btn-secondary" style="margin-top:8px;" onclick="window.saveAutonomousDays()">Speichern</button>
-                        </div>
                     </div>
 
                     <div class="settings-section">

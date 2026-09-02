@@ -509,10 +509,17 @@ window.importStudentsFromCsv = function(input, classId) {
         try {
             const lines = e.target.result.split(/\r?\n/);
             let added = 0;
+            let skipped = 0;
             const classes = DB.loadClasses();
             let headerSkipped = false;
             const newClassIds = [];
             const seenClassNames = new Set();
+            const existingStudents = DB.loadStudents();
+            const existingNamesByClass = {};
+            existingStudents.forEach(function(s) {
+                if (!existingNamesByClass[s.classId]) existingNamesByClass[s.classId] = new Set();
+                existingNamesByClass[s.classId].add((s.name || '').trim().toLowerCase());
+            });
             lines.forEach((line, index) => {
                 const trimmed = line.trim();
                 if (!trimmed) return;
@@ -592,8 +599,15 @@ window.importStudentsFromCsv = function(input, classId) {
                     }
                 }
                 if (fullName) {
-                    DB.addStudent(targetClassId, fullName, lastName);
-                    added++;
+                    const normalized = fullName.trim().toLowerCase();
+                    if (!existingNamesByClass[targetClassId]) existingNamesByClass[targetClassId] = new Set();
+                    if (existingNamesByClass[targetClassId].has(normalized)) {
+                        skipped++;
+                    } else {
+                        existingNamesByClass[targetClassId].add(normalized);
+                        DB.addStudent(targetClassId, fullName, lastName);
+                        added++;
+                    }
                 }
             });
             input.value = '';
@@ -601,7 +615,7 @@ window.importStudentsFromCsv = function(input, classId) {
             const target = refreshed.find(c => c.id === (newClassIds[0] || classId));
             const students = DB.getStudentsForClass(target ? target.id : classId);
             showModal(getClassManagerContent(target || refreshed.find(c => c.id === classId), students));
-            if (added > 0) alert(added + ' Schüler importiert.');
+            if (added > 0) alert(added + ' Schüler importiert.' + (skipped > 0 ? ' (' + skipped + ' Duplikate übersprungen.)' : ''));
             else alert('Keine Schüler gefunden.');
         } catch (err) {
             alert('CSV-Import fehlgeschlagen: ' + err.message);
@@ -685,7 +699,6 @@ function formatDateShort(d) {
 function buildHolidayMap() {
     const map = {};
     (DB.loadHolidays() || []).forEach(h => { map[h.date] = h.localName || h.name; });
-    (DB.loadAutonomousDays() || []).forEach(dt => { if (!map[dt]) map[dt] = 'Schulautonomer Tag'; });
     (DB.loadManualHolidays() || []).forEach(h => {
         if (h.from && h.to) {
             const d = new Date(h.from);
@@ -700,20 +713,48 @@ function buildHolidayMap() {
     return map;
 }
 
+function parseFlexibleDate(input) {
+    if (!input) return '';
+    const trimmed = input.trim();
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) return trimmed;
+    const deMatch = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (deMatch) return deMatch[3] + '-' + deMatch[2].padStart(2, '0') + '-' + deMatch[1].padStart(2, '0');
+    return trimmed;
+}
+
 function addManualHoliday() {
     const name = document.getElementById('holiday-name').value.trim();
-    const from = document.getElementById('holiday-from').value;
-    const to = document.getElementById('holiday-to').value;
+    const from = parseFlexibleDate(document.getElementById('holiday-from').value);
+    const to = parseFlexibleDate(document.getElementById('holiday-to').value);
     if (!name) { alert('Bitte Bezeichnung eingeben.'); return; }
     if (!from || !to) { alert('Bitte Von- und Bis-Datum wählen.'); return; }
     if (to < from) { alert('Bis-Datum muss nach Von-Datum liegen.'); return; }
-    DB.addManualHoliday(name, from, to);
+    const editIndex = document.getElementById('holiday-edit-index').value;
+    if (editIndex !== '') {
+        DB.updateManualHoliday(parseInt(editIndex, 10), name, from, to);
+        document.getElementById('holiday-edit-index').value = '';
+        document.getElementById('holiday-add-btn').textContent = 'Hinzufügen';
+    } else {
+        DB.addManualHoliday(name, from, to);
+    }
     document.getElementById('holiday-name').value = '';
     document.getElementById('holiday-from').value = '';
     document.getElementById('holiday-to').value = '';
     renderHolidays();
     if (window.FilePersist) FilePersist.scheduleSave();
 }
+
+window.editManualHoliday = function(index) {
+    const list = DB.loadManualHolidays() || [];
+    const h = list[index];
+    if (!h) return;
+    document.getElementById('holiday-name').value = h.name || '';
+    document.getElementById('holiday-from').value = formatDateDE(h.from);
+    document.getElementById('holiday-to').value = formatDateDE(h.to);
+    document.getElementById('holiday-edit-index').value = index;
+    document.getElementById('holiday-add-btn').textContent = 'Aktualisieren';
+};
 
 window.deleteManualHoliday = function(index) {
     if (!confirm('Eintrag löschen?')) return;
@@ -1795,7 +1836,6 @@ function renderPlan(classId) {
         const regularDates = generateRegularDates(firstLessonDate, lessonDays, schoolYearEnd);
         const regularDateSet = new Set(regularDates.map(d => d.date));
         const holidays = (DB.loadHolidays() || []).filter(h => h.date >= schoolYearStart && h.date <= schoolYearEnd && !regularDateSet.has(h.date));
-        const autonomous = (DB.loadAutonomousDays() || []).filter(d => d >= schoolYearStart && d <= schoolYearEnd && !regularDateSet.has(d));
         const holidayDates = holidays.map(h => ({ date: h.date, type: 'holiday', name: h.localName || h.name }));
         const allDates = regularDates.concat(supplierDates.map(date => ({ date: date, type: 'supplier' })), holidayDates);
         allDates.sort((a, b) => a.date.localeCompare(b.date));
@@ -3219,6 +3259,13 @@ async function fetchAustrianHolidays() {
     renderHolidays();
 }
 
+function formatDateDE(iso) {
+    if (!iso) return '';
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return iso;
+    return m[3] + '.' + m[2] + '.' + m[1];
+}
+
 function renderHolidays() {
     const list = DB.loadManualHolidays() || [];
     const container = document.getElementById('manual-holidays-list');
@@ -3229,17 +3276,16 @@ function renderHolidays() {
     }
     let html = '<table class="settings-table" style="width:100%;"><thead><tr><th>Bezeichnung</th><th>Von</th><th>Bis</th><th></th></tr></thead><tbody>';
     list.forEach((h, idx) => {
-        html += '<tr><td>' + escapeHtml(h.name || '') + '</td><td>' + escapeHtml(h.from || '') + '</td><td>' + escapeHtml(h.to || '') + '</td>' +
-            '<td><button class="btn btn-secondary" onclick="window.deleteManualHoliday(' + idx + ')">Löschen</button></td></tr>';
+        html += '<tr><td>' + escapeHtml(h.name || '') + '</td>' +
+            '<td>' + escapeHtml(formatDateDE(h.from)) + '</td>' +
+            '<td>' + escapeHtml(formatDateDE(h.to)) + '</td>' +
+            '<td style="white-space:nowrap;">' +
+                '<button class="btn btn-secondary" onclick="window.editManualHoliday(' + idx + ')">Bearbeiten</button> ' +
+                '<button class="btn btn-secondary" onclick="window.deleteManualHoliday(' + idx + ')">Löschen</button>' +
+            '</td></tr>';
     });
     html += '</tbody></table>';
     container.innerHTML = html;
-}
-
-function saveAutonomousDays() {
-    const text = document.getElementById('autonomous-days').value;
-    const days = text.split(/[\n,]+/).map(d => d.trim()).filter(d => d);
-    DB.saveAutonomousDays(days);
 }
 
 function exportData() {
@@ -3412,8 +3458,6 @@ function importData(input) {
 
 function loadTimeSlotsTable() {
     renderHolidays();
-    const days = DB.loadAutonomousDays();
-    document.getElementById('autonomous-days').value = days.join(', ');
     const cb = document.getElementById('show-fruehaufsicht');
     if (cb) cb.checked = DB.loadShowFruehaufsicht();
     const endInput = document.getElementById('timetable-end-time');
@@ -3516,7 +3560,6 @@ window.openExamManagerFromSelect = openExamManagerFromSelect;
 window.openClassGrading = openClassGrading;
 window.addTimeSlot = addTimeSlot;
 window.saveTimeSettings = saveTimeSettings;
-window.saveAutonomousDays = saveAutonomousDays;
 window.exportData = exportData;
 window.backupSchoolYear = backupSchoolYear;
 window.openNewSchoolYearModal = openNewSchoolYearModal;
@@ -3736,9 +3779,7 @@ window.setHwSheetStatus = function(classId, studentId, hwNr, sheetName, value) {
 /* GZ Funktionen */
 function isHoliday(dateStr) {
     const holidays = DB.loadHolidays() || [];
-    const autonomous = DB.loadAutonomousDays() || [];
-    const allDates = holidays.map(h => h.date).concat(autonomous);
-    return allDates.indexOf(dateStr) !== -1;
+    return holidays.some(h => h.date === dateStr);
 }
 
 function getHolidayName(dateStr) {

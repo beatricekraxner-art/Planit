@@ -24,8 +24,6 @@ const DB = {
     },
     loadHolidays: function() { return this.load('holidays', []); },
     saveHolidays: function(holidays) { this.save('holidays', holidays); },
-    loadAutonomousDays: function() { return this.load('autonomous_days', []); },
-    saveAutonomousDays: function(days) { this.save('autonomous_days', days); },
     loadManualHolidays: function() { return this.load('manual_holidays', []); },
     saveManualHolidays: function(list) { this.save('manual_holidays', list); },
     addManualHoliday: function(name, from, to) {
@@ -37,6 +35,13 @@ const DB = {
         const list = this.loadManualHolidays();
         if (index >= 0 && index < list.length) {
             list.splice(index, 1);
+            this.saveManualHolidays(list);
+        }
+    },
+    updateManualHoliday: function(index, name, from, to) {
+        const list = this.loadManualHolidays();
+        if (index >= 0 && index < list.length) {
+            list[index] = { name: name, from: from, to: to };
             this.saveManualHolidays(list);
         }
     },
@@ -391,7 +396,6 @@ const DB = {
     clearSchoolData: function() {
         const keep = new Set([
             'holidays',
-            'autonomous_days',
             'global_settings',
             'time_slots',
             'show_fruehaufsicht',
@@ -410,7 +414,6 @@ const DB = {
     exportSchoolDataOnly: function() {
         const keep = new Set([
             'holidays',
-            'autonomous_days',
             'global_settings',
             'time_slots',
             'show_fruehaufsicht',
