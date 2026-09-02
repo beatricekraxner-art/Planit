@@ -750,8 +750,8 @@ window.editManualHoliday = function(index) {
     const h = list[index];
     if (!h) return;
     document.getElementById('holiday-name').value = h.name || '';
-    document.getElementById('holiday-from').value = formatDateDE(h.from);
-    document.getElementById('holiday-to').value = formatDateDE(h.to);
+    document.getElementById('holiday-from').value = h.from || '';
+    document.getElementById('holiday-to').value = h.to || '';
     document.getElementById('holiday-edit-index').value = index;
     document.getElementById('holiday-add-btn').textContent = 'Aktualisieren';
 };

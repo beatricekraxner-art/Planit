@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="de">
+<html lang="de-DE">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -268,11 +268,11 @@
                         <div class="section-header">
                             <h3>Ferien & freie Tage</h3>
                         </div>
-                        <p class="subtitle" style="margin-bottom:15px;">Tragen Sie Ferien oder freie Tage manuell ein. Datumsformat: tt.mm.jjjj (z.B. 24.12.2026). Einzelne Tage können Sie auch unten als kommagetrennte Liste eingeben.</p>
+                        <p class="subtitle" style="margin-bottom:15px;">Tragen Sie Ferien oder freie Tage manuell ein. Klicken Sie ins Datumfeld, um den Kalender zu öffnen – das Datum wird in der Liste im Format tt.mm.jjjj angezeigt (z.B. 24.12.2026). Einzelne Tage können Sie auch unten als kommagetrennte Liste eingeben.</p>
                         <div class="form-group exam-form" style="margin-bottom:12px;">
                             <input type="text" id="holiday-name" placeholder="Bezeichnung, z.B. Sommerferien" style="flex:1;">
-                            <input type="text" id="holiday-from" placeholder="tt.mm.jjjj" pattern="[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4}" onchange="document.getElementById('holiday-to').value = this.value">
-                            <input type="text" id="holiday-to" placeholder="tt.mm.jjjj" pattern="[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4}">
+                            <input type="date" id="holiday-from" onchange="document.getElementById('holiday-to').value = this.value">
+                            <input type="date" id="holiday-to">
                             <button class="btn btn-secondary" id="holiday-add-btn" onclick="window.addManualHoliday()">Hinzufügen</button>
                             <input type="hidden" id="holiday-edit-index" value="">
                         </div>
