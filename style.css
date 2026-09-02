@@ -906,20 +906,6 @@ select option:disabled {
     border-radius: 4px 4px 0 0;
 }
 
-.tt-day-class-event {
-    position: relative;
-}
-.tt-day-class-event::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 5px;
-    background: var(--primary);
-    border-radius: 4px 4px 0 0;
-}
-
 .tt-event-row {
     min-height: 36px;
 }

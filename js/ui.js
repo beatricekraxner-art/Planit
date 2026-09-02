@@ -887,25 +887,15 @@ function renderDashboard() {
         const key = formatDateKey(d);
         const isHol = holidayMap[key];
         const dayAppts = appointments.filter(a => a.date === key);
-        const dayEvents = classes.filter(c => c.events && c.events.some(e => e.date === key));
-        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '') + (dayAppts.length && !isHol ? ' tt-day-appointment' : '') + (dayEvents.length && !isHol ? ' tt-day-class-event' : '');
+        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '') + (dayAppts.length && !isHol ? ' tt-day-appointment' : '');
         const dayName = isDayView ? formatDateDE(d) : daysOfWeek[i];
         const abbr = isDayView ? formatDateShort(d) : dayName.substring(0, 2);
         if (isHol) {
             html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#0d9488;">' + escapeHtml(isHol) + '</small></div>';
         } else {
             const apptHtml = dayAppts.length ? dayAppts.map(a => '<div style="text-align:left;font-size:11px;color:#fff;font-weight:400;">• ' + escapeHtml(a.title || 'Termin') + '</div>').join('') : '';
-            const eventHtml = dayEvents.length ? dayEvents.map(c => {
-                const ev = c.events.find(e => e.date === key);
-                return '<div style="text-align:left;font-size:11px;color:#fff;font-weight:600;">• ' + escapeHtml(c.name) + ': ' + escapeHtml(ev ? ev.title : '') + '</div>';
-            }).join('') : '';
-            const tooltipParts = dayAppts.map(a => a.title || 'Termin');
-            dayEvents.forEach(c => {
-                const ev = c.events.find(e => e.date === key);
-                if (ev && ev.title) tooltipParts.push(c.name + ': ' + ev.title);
-            });
-            const titleAttr = tooltipParts.length ? ' title="' + escapeHtml(tooltipParts.join(' | ')) + '"' : '';
-            html += '<div class="' + cls + '"' + titleAttr + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + eventHtml + '</div>';
+            const titleAttr = dayAppts.length ? ' title="' + escapeHtml(dayAppts.map(a => a.description || a.title || 'Termin').join(' | ')) + '"' : '';
+            html += '<div class="' + cls + '"' + titleAttr + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + '</div>';
         }
     });
     html += '</div>';
