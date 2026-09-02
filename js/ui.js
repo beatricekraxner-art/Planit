@@ -3267,7 +3267,13 @@ function formatDateDE(iso) {
 }
 
 function renderHolidays() {
-    const list = DB.loadManualHolidays() || [];
+    const list = (DB.loadManualHolidays() || []).slice().sort((a, b) => {
+        const av = a.from || '';
+        const bv = b.from || '';
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+        return 0;
+    });
     const container = document.getElementById('manual-holidays-list');
     if (!container) return;
     if (!list.length) {
@@ -3275,13 +3281,14 @@ function renderHolidays() {
         return;
     }
     let html = '<table class="settings-table" style="width:100%;"><thead><tr><th>Bezeichnung</th><th>Von</th><th>Bis</th><th></th></tr></thead><tbody>';
-    list.forEach((h, idx) => {
+    list.forEach((h) => {
+        const realIndex = (DB.loadManualHolidays() || []).indexOf(h);
         html += '<tr><td>' + escapeHtml(h.name || '') + '</td>' +
             '<td>' + escapeHtml(formatDateDE(h.from)) + '</td>' +
             '<td>' + escapeHtml(formatDateDE(h.to)) + '</td>' +
             '<td style="white-space:nowrap;">' +
-                '<button class="btn btn-secondary" onclick="window.editManualHoliday(' + idx + ')">Bearbeiten</button> ' +
-                '<button class="btn btn-secondary" onclick="window.deleteManualHoliday(' + idx + ')">Löschen</button>' +
+                '<button class="btn btn-secondary" onclick="window.editManualHoliday(' + realIndex + ')">Bearbeiten</button> ' +
+                '<button class="btn btn-secondary" onclick="window.deleteManualHoliday(' + realIndex + ')">Löschen</button>' +
             '</td></tr>';
     });
     html += '</tbody></table>';
