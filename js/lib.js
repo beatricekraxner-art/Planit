@@ -99,7 +99,8 @@ const DB = {
             showExams: type !== 'gz',
             showExerciseNr: type !== 'dg' && type !== 'other',
             showHomework: true,
-            useDecimalGrades: false
+            useDecimalGrades: false,
+            events: []
         });
         this.saveClasses(classes);
     },
@@ -110,6 +111,28 @@ const DB = {
     },
     clearClassData: function(classId) {
         Object.keys(localStorage).filter(k => k.includes(classId)).forEach(k => localStorage.removeItem(k));
+    },
+    addClassEvent: function(classId, event) {
+        const classes = this.loadClasses();
+        const cls = classes.find(c => c.id === classId);
+        if (!cls) return;
+        if (!cls.events) cls.events = [];
+        cls.events.push({ id: Date.now().toString(), ...event });
+        this.saveClasses(classes);
+    },
+    updateClassEvent: function(classId, eventId, data) {
+        const classes = this.loadClasses();
+        const cls = classes.find(c => c.id === classId);
+        if (!cls || !cls.events) return;
+        const idx = cls.events.findIndex(e => e.id === eventId);
+        if (idx >= 0) { cls.events[idx] = { ...cls.events[idx], ...data }; this.saveClasses(classes); }
+    },
+    deleteClassEvent: function(classId, eventId) {
+        const classes = this.loadClasses();
+        const cls = classes.find(c => c.id === classId);
+        if (!cls || !cls.events) return;
+        cls.events = cls.events.filter(e => e.id !== eventId);
+        this.saveClasses(classes);
     },
     loadStudents: function() { return this.load('students', []); },
     saveStudents: function(students) { this.save('students', students); },

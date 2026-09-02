@@ -100,6 +100,11 @@ select option:hover {
     color: var(--text-main);
 }
 
+select option:disabled {
+    color: #94a3b8;
+    background-color: rgba(100, 116, 139, 0.1);
+}
+
 /* =============================================
    LAYOUT (App Shell)
    ============================================= */
@@ -633,6 +638,76 @@ select option:hover {
     margin-top: 15px;
 }
 
+.class-events-section {
+    margin-top: 15px;
+}
+
+.class-events-section h3 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px 0;
+}
+
+.class-events-list {
+    background: var(--bg-dark);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.class-events-ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.class-event-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-panel);
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+.class-event-item:last-child {
+    margin-bottom: 0;
+}
+
+.class-event-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.class-event-main strong {
+    font-size: 13px;
+    color: var(--text-color);
+}
+
+.class-event-date {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.class-event-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
 .modal-plan {
     max-width: 80% !important;
 }
@@ -831,6 +906,40 @@ select option:hover {
     border-radius: 4px 4px 0 0;
 }
 
+.tt-day-class-event {
+    position: relative;
+}
+.tt-day-class-event::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: var(--primary);
+    border-radius: 4px 4px 0 0;
+}
+
+.tt-event-row {
+    min-height: 36px;
+}
+.tt-event-row .tt-time-col {
+    font-size: 11px;
+    padding: 8px 6px;
+}
+.tt-event-entry {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    cursor: default;
+    border-radius: 6px;
+}
+.tt-event-entry:hover {
+    opacity: 0.9;
+}
+
 .tt-holiday-row .tt-day-col {
     min-height: 0;
     padding: 0;
@@ -951,6 +1060,20 @@ select option:hover {
 .timetable-entry:hover {
     opacity: 0.85;
     transform: scale(1.02);
+}
+
+.timetable-entry-event-override {
+    background: rgba(100, 116, 139, 0.15) !important;
+    border-left: 4px solid #94a3b8 !important;
+    color: #94a3b8 !important;
+    cursor: default !important;
+}
+.timetable-entry-event-override strong,
+.timetable-entry-event-override small {
+    color: #94a3b8 !important;
+}
+.timetable-entry-event-override .tt-edit-btn {
+    display: none !important;
 }
 
 .timetable-free {

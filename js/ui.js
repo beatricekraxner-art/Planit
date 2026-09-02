@@ -331,6 +331,10 @@ function getClassManagerContent(cls, students) {
         '<div class="student-section">' +
         '<h3>Schüler <span class="class-count" style="font-size:13px;margin-left:8px;">' + studentCount + ' Schüler</span></h3>' + studentList +
         '</div>' +
+        '<div class="class-events-section">' +
+        '<h3>Termine <button class="btn btn-secondary" onclick="window.openClassEventModal(\'' + cls.id + '\')" style="font-size:12px;padding:4px 10px;">+ Hinzufügen</button></h3>' +
+        '<div class="class-events-list" id="class-events-' + cls.id + '">' + renderClassEventsList(cls.events || [], cls.id) + '</div>' +
+        '</div>' +
         '<div class="form-group exam-form" style="margin-top:10px;">' +
         '<button class="btn btn-secondary" onclick="document.getElementById(\'csv-import-' + cls.id + '\').click()">Schüler importieren</button>' +
         '<input type="file" id="csv-import-' + cls.id + '" accept=".csv" style="display:none;" onchange="window.importStudentsFromCsv(this, \'' + cls.id + '\')">' +
@@ -402,6 +406,79 @@ function subjectToType(subject) {
     if (s.indexOf('darstellende geometrie') !== -1 || s.indexOf('dg') !== -1) return 'dg';
     if (s.indexOf('geometrisches zeichnen') !== -1 || s.indexOf('gz') !== -1) return 'gz';
     return 'other';
+}
+
+function renderClassEventsList(events, classId) {
+    if (!events || !events.length) return '<p style="font-size:13px;color:var(--text-muted);">Keine Termine vorhanden</p>';
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const color = cls ? cls.color : '#6366f1';
+    let html = '<ul class="class-events-ul">';
+    events.forEach(ev => {
+        html += '<li class="class-event-item" style="border-left:3px solid ' + color + ';">' +
+            '<div class="class-event-main">' +
+            '<strong>' + escapeHtml(ev.title || 'Termin') + '</strong>' +
+            '<span class="class-event-date">' + escapeHtml(ev.date || '') + '</span>' +
+            '</div>' +
+            (ev.description ? '<div style="font-size:12px;color:var(--text-muted);">' + escapeHtml(ev.description) + '</div>' : '') +
+            '<div class="class-event-actions">' +
+            '<button class="btn btn-secondary" title="Bearbeiten" onclick="window.openClassEventModal(\'' + classId + '\', \'' + ev.id + '\')">✎</button>' +
+            '<button class="btn btn-secondary" title="Löschen" onclick="window.deleteClassEvent(\'' + classId + '\', \'' + ev.id + '\')">×</button>' +
+            '</div>' +
+            '</li>';
+    });
+    html += '</ul>';
+    return html;
+}
+
+window.openClassEventModal = function(classId, eventId) {
+    const classes = DB.loadClasses();
+    const cls = classes.find(c => c.id === classId);
+    const events = cls ? (cls.events || []) : [];
+    const ev = eventId ? events.find(e => e.id === eventId) : null;
+    const title = ev ? ev.title : '';
+    const date = ev ? ev.date : '';
+    const description = ev ? ev.description : '';
+    const html = '<div class="modal-header">' +
+        '<h2>' + (ev ? 'Termin bearbeiten' : 'Neuer Termin') + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<div class="form-group exam-form">' +
+        '<label style="width:100%;font-size:13px;color:var(--text-muted);">Titel</label>' +
+        '<input type="text" id="class-event-title" value="' + escapeHtml(title) + '" placeholder="z. B. Skikurs" style="width:100%;">' +
+        '<label style="width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;">Datum</label>' +
+        '<input type="date" id="class-event-date" value="' + escapeHtml(date) + '" style="width:100%;">' +
+        '<label style="width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;">Beschreibung (optional)</label>' +
+        '<input type="text" id="class-event-desc" value="' + escapeHtml(description) + '" placeholder="z. B. Abfahrt 7:00 Uhr" style="width:100%;">' +
+        '<button class="btn" onclick="window.saveClassEvent(\'' + classId + '\', \'' + (eventId || '') + '\')">Speichern</button>' +
+        '</div>';
+    showModal(html);
+};
+
+window.saveClassEvent = function(classId, eventId) {
+    const title = document.getElementById('class-event-title').value.trim();
+    const date = document.getElementById('class-event-date').value;
+    const description = document.getElementById('class-event-desc').value.trim();
+    if (!title) { alert('Bitte Titel eingeben.'); return; }
+    if (eventId) {
+        DB.updateClassEvent(classId, eventId, { title, date, description });
+    } else {
+        DB.addClassEvent(classId, { title, date, description });
+    }
+    hideModal();
+    refreshClassManager(classId);
+};
+
+window.deleteClassEvent = function(classId, eventId) {
+    if (!confirm('Termin wirklich löschen?')) return;
+    DB.deleteClassEvent(classId, eventId);
+    refreshClassManager(classId);
+};
+
+function refreshClassManager(classId) {
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const students = DB.getStudentsForClass(classId);
+    if (cls) {
+        const content = getClassManagerContent(cls, students);
+        showModal(content);
+    }
 }
 
 function addStudentToClass(classId) {
@@ -810,17 +887,59 @@ function renderDashboard() {
         const key = formatDateKey(d);
         const isHol = holidayMap[key];
         const dayAppts = appointments.filter(a => a.date === key);
-        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '') + (dayAppts.length && !isHol ? ' tt-day-appointment' : '');
+        const dayEvents = classes.filter(c => c.events && c.events.some(e => e.date === key));
+        const cls = 'tt-day-col' + (isHol ? ' tt-day-holiday' : '') + (dayAppts.length && !isHol ? ' tt-day-appointment' : '') + (dayEvents.length && !isHol ? ' tt-day-class-event' : '');
         const dayName = isDayView ? formatDateDE(d) : daysOfWeek[i];
         const abbr = isDayView ? formatDateShort(d) : dayName.substring(0, 2);
         if (isHol) {
             html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#0d9488;">' + escapeHtml(isHol) + '</small></div>';
         } else {
             const apptHtml = dayAppts.length ? dayAppts.map(a => '<div style="text-align:left;font-size:11px;color:#fff;font-weight:400;">• ' + escapeHtml(a.title || 'Termin') + '</div>').join('') : '';
-            html += '<div class="' + cls + '"' + (dayAppts.length ? ' title="' + escapeHtml(dayAppts.map(a => (a.description || a.title || 'Termin')).join(' | ')) + '"' : '') + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + '</div>';
+            const eventHtml = dayEvents.length ? dayEvents.map(c => {
+                const ev = c.events.find(e => e.date === key);
+                return '<div style="text-align:left;font-size:11px;color:#fff;font-weight:600;">• ' + escapeHtml(c.name) + ': ' + escapeHtml(ev ? ev.title : '') + '</div>';
+            }).join('') : '';
+            const tooltipParts = dayAppts.map(a => a.title || 'Termin');
+            dayEvents.forEach(c => {
+                const ev = c.events.find(e => e.date === key);
+                if (ev && ev.title) tooltipParts.push(c.name + ': ' + ev.title);
+            });
+            const titleAttr = tooltipParts.length ? ' title="' + escapeHtml(tooltipParts.join(' | ')) + '"' : '';
+            html += '<div class="' + cls + '"' + titleAttr + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + eventHtml + '</div>';
         }
     });
     html += '</div>';
+
+    const dayEventMap = {};
+    const dayEventClassMap = {};
+    classes.forEach(c => {
+        if (c.events && c.events.length) {
+            c.events.forEach(ev => {
+                if (!dayEventMap[ev.date]) dayEventMap[ev.date] = [];
+                dayEventMap[ev.date].push({ classId: c.id, className: c.name, title: ev.title, description: ev.description, color: c.color });
+            });
+        }
+    });
+
+    viewDates.forEach((d, i) => {
+        const key = formatDateKey(d);
+        const dayEvents = dayEventMap[key] || [];
+        if (!dayEvents.length) return;
+        html += '<div class="tt-row tt-event-row"><div class="tt-time-col">Termin</div>';
+        viewDates.forEach((d2, i2) => {
+            const key2 = formatDateKey(d2);
+            const events = dayEventMap[key2] || [];
+            if (i === i2 && events.length) {
+                const ev = events[0];
+                const styleAttr = ' style="background-color:' + (ev.color || '#6366f1') + '22;border-left:4px solid ' + (ev.color || '#6366f1') + ';"';
+                const titles = events.map(e => escapeHtml(e.title)).join(', ');
+                html += '<div class="tt-day-col tt-event-entry"' + styleAttr + ' title="' + escapeHtml(titles) + '">' + escapeHtml(titles) + '</div>';
+            } else {
+                html += '<div class="tt-day-col timetable-free"></div>';
+            }
+        });
+        html += '</div>';
+    });
 
     timeSlots.forEach(slot => {
         const firstWord = slot.name.split(' ')[0];
@@ -853,15 +972,22 @@ function renderDashboard() {
                         html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="' + escapeHtml(entry.subject) + ' bearbeiten"><div><strong>' + escapeHtml(entry.subject === 'Sprechstunde' ? 'Sprstde' : 'Bibl') + '</strong></div><small>' + entry.room + '</small></div>';
                     } else {
                         const color = cls ? cls.color : null;
-                        const styleAttr = color ? ' style="background-color:' + color + '66;border-left:8px solid ' + color + ';"' : '';
-                        const abbr = subjectAbbr(entry.subject);
-                        const clsLower = className.toLowerCase();
-                        const redundant = abbr && (clsLower.indexOf(abbr.toLowerCase()) !== -1 || (entry.subject && clsLower.indexOf(entry.subject.toLowerCase()) !== -1));
-                        const subjectHtml = (!className || !redundant) ? '<strong>' + (abbr || entry.subject) + '</strong>' : '';
-                        const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
-                        html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
-                            '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' +
-                            '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
+                        const dayClassEvents = (dayEventMap[key] || []).filter(e => e.classId === entry.classId);
+                        if (dayClassEvents.length) {
+                            const ev = dayClassEvents[0];
+                            const evTitle = escapeHtml(ev.title);
+                            html += '<div class="' + entryClass + ' timetable-entry-event-override" title="' + evTitle + '"><div><strong>' + evTitle + '</strong></div><small>Termin</small></div>';
+                        } else {
+                            const styleAttr = color ? ' style="background-color:' + color + '66;border-left:8px solid ' + color + ';"' : '';
+                            const abbr = subjectAbbr(entry.subject);
+                            const clsLower = className.toLowerCase();
+                            const redundant = abbr && (clsLower.indexOf(abbr.toLowerCase()) !== -1 || (entry.subject && clsLower.indexOf(entry.subject.toLowerCase()) !== -1));
+                            const subjectHtml = (!className || !redundant) ? '<strong>' + (abbr || entry.subject) + '</strong>' : '';
+                            const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
+                            html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
+                                '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' +
+                                '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
+                        }
                     }
                 } else {
                     html += '<div class="tt-day-col timetable-free' + (timetableEditMode ? ' timetable-edit-mode' : '') + '"' + (timetableEditMode ? ' onclick="window.openTimetableEditorFromCell(\'' + day + '\', \'' + slot.start + '\')"' : '') + '></div>';
@@ -884,9 +1010,17 @@ function openTimetableEditor(preDay, prePeriod) {
     let html = '<div class="modal-header">' +
         '<h2>Stundenplan bearbeiten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
     html += '<div class="form-group exam-form">' +
-        '<select id="tt-day">' + daysOfWeek.map(d => '<option value="' + d + '"' + (preDay && d === preDay ? ' selected' : '') + '>' + d + '</option>').join('') + '</select>' +
+        '<select id="tt-day">' + daysOfWeek.map((d, i) => {
+            const weekDate = currentWeekStart ? new Date(currentWeekStart.getTime() + i * 86400000) : new Date();
+            const dateKey = formatDateKey(weekDate);
+            const classEvents = (classes.find(c => c.id === (document.getElementById('tt-course')?.value || ''))?.events || []).filter(e => e.date === dateKey);
+            const eventNote = classEvents.map(e => e.title).join(', ');
+            const disabled = eventNote ? ' disabled' : '';
+            const label = eventNote ? d + ' (Termin: ' + eventNote + ')' : d;
+            return '<option value="' + d + '"' + (preDay && d === preDay ? ' selected' : '') + disabled + '>' + escapeHtml(label) + '</option>';
+        }).join('') + '</select>' +
         '<select id="tt-period">' + timeSlots.map(s => '<option value="' + s.start + '"' + (prePeriod && s.start === prePeriod ? ' selected' : '') + '>' + s.name + ' (' + s.start + '–' + s.end + ')</option>').join('') + '</select>' +
-        '<select id="tt-course">' +
+        '<select id="tt-course" onchange="window.updateTimetableEditorDays()">' +
         getClassesSortedByName().map(function(c) { return '<option value="' + c.id + '">' + c.name + ' – ' + classSubjectAbbr(c) + '</option>'; }).join('') +
         '<option value="Gangaufsicht">Gangaufsicht (Pause)</option>' +
         '<option value="Sprechstunde">Sprechstunde</option>' +
@@ -905,6 +1039,26 @@ function openTimetableEditor(preDay, prePeriod) {
     });
     showModal(html);
 }
+
+window.updateTimetableEditorDays = function() {
+    const daySelect = document.getElementById('tt-day');
+    const courseSelect = document.getElementById('tt-course');
+    if (!daySelect || !courseSelect) return;
+    const classId = courseSelect.value;
+    const classes = DB.loadClasses();
+    const cls = classes.find(c => c.id === classId);
+    const events = cls?.events || [];
+    const options = daySelect.options;
+    for (let i = 0; i < options.length; i++) {
+        const dayName = options[i].value;
+        const weekDate = currentWeekStart ? new Date(currentWeekStart.getTime() + i * 86400000) : new Date();
+        const dateKey = formatDateKey(weekDate);
+        const classEvents = events.filter(e => e.date === dateKey);
+        const eventNote = classEvents.map(e => e.title).join(', ');
+        options[i].disabled = !!eventNote;
+        options[i].textContent = eventNote ? dayName + ' (Termin: ' + eventNote + ')' : dayName;
+    }
+};
 
 function addTimetableEntryModal() {
     const day = document.getElementById('tt-day').value;
