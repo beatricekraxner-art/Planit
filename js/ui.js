@@ -434,6 +434,8 @@ window.importStudentsFromCsv = function(input, classId) {
             let added = 0;
             const classes = DB.loadClasses();
             let headerSkipped = false;
+            const newClassIds = [];
+            const seenClassNames = new Set();
             lines.forEach((line, index) => {
                 const trimmed = line.trim();
                 if (!trimmed) return;
@@ -450,20 +452,44 @@ window.importStudentsFromCsv = function(input, classId) {
                 let fullName = '';
                 let lastName = '';
                 let targetClassId = classId;
-                if (parts.length >= 3) {
+                if (parts.length >= 4) {
                     const vorname = (parts[0] || '').trim();
                     const nachname = (parts[1] || '').trim();
+                    const className = (parts[2] || '').trim();
+                    const classSubject = (parts[3] || '').trim();
                     fullName = (nachname + ' ' + vorname).trim();
                     lastName = nachname.toUpperCase();
-                    if (parts[2]) {
-                        const classIdOrName = parts[2];
-                        const foundClass = classes.find(c => c.id === classIdOrName || c.name === classIdOrName);
+                    if (className) {
+                        let foundClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+                        if (!foundClass && !seenClassNames.has(className.toLowerCase())) {
+                            seenClassNames.add(className.toLowerCase());
+                            const type = classSubject ? subjectToType(classSubject) : 'other';
+                            DB.addClass(className, type, classSubject || className);
+                            const updated = DB.loadClasses();
+                            foundClass = updated.find(c => c.name.toLowerCase() === className.toLowerCase());
+                            if (foundClass) newClassIds.push(foundClass.id);
+                        }
                         if (foundClass) targetClassId = foundClass.id;
                     }
+                } else if (parts.length >= 3) {
+                    const vorname = (parts[0] || '').trim();
+                    const nachname = (parts[1] || '').trim();
+                    const classIdOrName = (parts[2] || '').trim();
+                    fullName = (nachname + ' ' + vorname).trim();
+                    lastName = nachname.toUpperCase();
+                    let foundClass = classes.find(c => c.id === classIdOrName || c.name.toLowerCase() === classIdOrName.toLowerCase());
+                    if (!foundClass && !seenClassNames.has(classIdOrName.toLowerCase())) {
+                        seenClassNames.add(classIdOrName.toLowerCase());
+                        DB.addClass(classIdOrName, 'other', classIdOrName);
+                        const updated = DB.loadClasses();
+                        foundClass = updated.find(c => c.name.toLowerCase() === classIdOrName.toLowerCase());
+                        if (foundClass) newClassIds.push(foundClass.id);
+                    }
+                    if (foundClass) targetClassId = foundClass.id;
                 } else if (parts.length >= 2) {
-                    const first = parts[0] || '';
-                    const second = parts[1] || '';
-                    const foundClass = classes.find(c => c.id === second || c.name === second);
+                    const first = (parts[0] || '').trim();
+                    const second = (parts[1] || '').trim();
+                    const foundClass = classes.find(c => c.id === second || c.name.toLowerCase() === second.toLowerCase());
                     if (foundClass) {
                         fullName = first;
                         const nameParts = fullName.split(' ').filter(Boolean);
@@ -494,9 +520,10 @@ window.importStudentsFromCsv = function(input, classId) {
                 }
             });
             input.value = '';
-            const cls = DB.loadClasses().find(c => c.id === classId);
-            const students = DB.getStudentsForClass(classId);
-            showModal(getClassManagerContent(cls, students));
+            const refreshed = DB.loadClasses();
+            const target = refreshed.find(c => c.id === (newClassIds[0] || classId));
+            const students = DB.getStudentsForClass(target ? target.id : classId);
+            showModal(getClassManagerContent(target || refreshed.find(c => c.id === classId), students));
             if (added > 0) alert(added + ' Schüler importiert.');
             else alert('Keine Schüler gefunden.');
         } catch (err) {
