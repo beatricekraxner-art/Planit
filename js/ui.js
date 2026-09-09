@@ -281,6 +281,16 @@ function openClassManager(classId) {
     const cls = DB.loadClasses().find(c => c.id === classId);
     const students = DB.getStudentsForClass(classId);
     showModal(getClassManagerContent(cls, students));
+    if (window._lastFocusedStudentId && window._lastFocusedClassId === classId) {
+        setTimeout(function() {
+            const li = document.querySelector('.student-list li[data-student-id="' + window._lastFocusedStudentId + '"]');
+            if (li) {
+                li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const actions = li.querySelector('.stu-actions');
+                if (actions) actions.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        }, 50);
+    }
 }
 
 function getClassForm() {
@@ -309,8 +319,8 @@ function getClassManagerContent(cls, students) {
             '<span class="stu-name" id="stu-name-' + s.id + '">' + escapeHtml(s.name) + '</span>' +
             '<span class="stu-actions">' +
             '<input type="file" accept="image/*" style="display:none;" id="stu-photo-input-' + s.id + '" onchange="uploadStudentPhoto(this, \'' + s.id + '\', \'' + cls.id + '\')">' +
-            '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="showPhotoMenu(event, \'' + s.id + '\', \'' + cls.id + '\')">📷</button>' +
-            '<button class="btn btn-secondary" title="Screenshot einfügen (Strg+V)" onclick="pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
+            '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="window._lastFocusedStudentId=\'' + s.id + '\'; window._lastFocusedClassId=\'' + cls.id + '\'; document.getElementById(\'stu-photo-input-' + s.id + '\').click()">📷</button>' +
+            '<button class="btn btn-secondary photo-paste-btn" title="Screenshot einfügen (Strg+V)" onclick="pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
             (s.photo ? '<button class="btn btn-secondary" title="Foto entfernen" onclick="removeStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">🗑️</button>' : '') +
             '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">✎</button>' +
             '<button class="btn btn-secondary" title="Löschen" onclick="deleteStudent(\'' + s.id + '\', \'' + cls.id + '\')">×</button>' +
@@ -1289,27 +1299,63 @@ window.enlargeStudentPhoto = function(event, img) {
     if (existing) {
         const sameSrc = existing.getAttribute('data-src') === img.src;
         existing.remove();
-        if (sameSrc) return; // Toggle: erneuter Klick schließt
+        if (sameSrc) return;
     }
     const base = img.getBoundingClientRect();
-    const size = Math.min(Math.max(base.width * 3, 90), 150);
+    const startSize = Math.min(Math.max(base.width * 3, 120), 220);
     const pop = document.createElement('div');
     pop.id = 'stu-photo-pop';
     pop.setAttribute('data-src', img.src);
-    pop.innerHTML = '<img src="' + img.src + '" style="width:' + size + 'px;height:' + size + 'px;">';
+    pop.innerHTML = '<img src="' + img.src + '" style="width:' + startSize + 'px;height:' + startSize + 'px;cursor:zoom-in;" data-zoom="1">';
     document.body.appendChild(pop);
     let left = base.left + base.width + 8;
-    let top = base.top + base.height / 2 - size / 2;
-    if (left + size > window.innerWidth - 8) left = base.left - size - 8;
+    let top = base.top + base.height / 2 - startSize / 2;
+    if (left + startSize > window.innerWidth - 8) left = base.left - startSize - 8;
     if (left < 8) left = 8;
     if (top < 8) top = 8;
-    if (top + size > window.innerHeight - 8) top = window.innerHeight - size - 8;
+    if (top + startSize > window.innerHeight - 8) top = window.innerHeight - startSize - 8;
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
+
+    const popImg = pop.querySelector('img');
+    popImg.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        const currentZoom = parseInt(popImg.getAttribute('data-zoom') || '1', 10);
+        const newZoom = currentZoom + 1;
+        const newSize = Math.min(startSize * newZoom, Math.min(window.innerWidth * 0.85, window.innerHeight * 0.85));
+        popImg.style.width = newSize + 'px';
+        popImg.style.height = newSize + 'px';
+        popImg.style.cursor = newZoom >= 3 ? 'zoom-out' : 'zoom-in';
+        popImg.setAttribute('data-zoom', newZoom);
+        left = Math.max(8, Math.min(left, window.innerWidth - newSize - 8));
+        top = Math.max(8, Math.min(top, window.innerHeight - newSize - 8));
+        pop.style.left = left + 'px';
+        pop.style.top = top + 'px';
+    });
+
+    popImg.addEventListener('dblclick', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        pop.remove();
+        document.removeEventListener('click', closePop);
+    });
+
+    pop.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        pop.remove();
+        document.removeEventListener('click', closePop);
+    });
+
     setTimeout(function() {
-        document.addEventListener('click', function closePop() {
+        document.addEventListener('click', function closePop(e) {
             const p = document.getElementById('stu-photo-pop');
-            if (p) p.remove();
+            if (!p) {
+                document.removeEventListener('click', closePop);
+                return;
+            }
+            if (p.contains(e.target)) return;
+            p.remove();
             document.removeEventListener('click', closePop);
         });
     }, 0);
@@ -1342,18 +1388,26 @@ function resizeImageFile(file, maxSize, callback) {
 }
 
 window.uploadStudentPhoto = function(input, studentId, classId) {
+    console.log('[UPLOAD PHOTO] called', studentId, classId, typeof studentId);
+    window._lastFocusedStudentId = String(studentId);
+    window._lastFocusedClassId = classId;
     const file = input.files && input.files[0];
     if (!file) return;
     resizeImageFile(file, 160, function(dataUrl) {
         if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
         const students = DB.getStudentsSorted();
-        const stu = students.find(s => s.id === studentId);
+        const sid = String(studentId);
+        const stu = students.find(function(s) { return String(s.id) === sid; });
+        console.log('[UPLOAD PHOTO] target student', sid, 'found', stu ? stu.name : 'NOT FOUND', 'total students', students.length);
         if (stu) { stu.photo = dataUrl; DB.saveStudents(students); }
         openClassManager(classId);
     });
 };
 
 window.pasteStudentPhoto = function(studentId, classId) {
+    console.log('[PASTE PHOTO] called', studentId, classId, typeof studentId);
+    window._lastFocusedStudentId = String(studentId);
+    window._lastFocusedClassId = classId;
     if (!navigator.clipboard || !navigator.clipboard.read) {
         alert('Zwischenablage kann nicht gelesen werden. Bitte erneut versuchen oder Bild-Datei verwenden.');
         return;
@@ -1366,7 +1420,9 @@ window.pasteStudentPhoto = function(studentId, classId) {
                         resizeImageFile(blob, 160, function(dataUrl) {
                             if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
                             const students = DB.getStudentsSorted();
-                            const stu = students.find(s => s.id === studentId);
+                            const sid = String(studentId);
+                            const stu = students.find(function(s) { return String(s.id) === sid; });
+                            console.log('[PASTE PHOTO] target student', sid, 'found', stu ? stu.name : 'NOT FOUND', 'total students', students.length);
                             if (stu) { stu.photo = dataUrl; DB.saveStudents(students); }
                             openClassManager(classId);
                         });
@@ -1386,92 +1442,6 @@ window.removeStudentPhoto = function(studentId, classId) {
     const stu = students.find(s => s.id === studentId);
     if (stu) { delete stu.photo; DB.saveStudents(students); }
     openClassManager(classId);
-};
-
-window.captureScreenForStudentPhoto = function(studentId, classId) {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        alert('Bildschirmaufnahme wird von diesem Browser nicht unterstützt.');
-        return;
-    }
-    navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false })
-        .then(function(stream) {
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.onloadedmetadata = function() {
-                video.play();
-                setTimeout(function() {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0);
-                    stream.getTracks().forEach(track => track.stop());
-                    canvas.toBlob(function(blob) {
-                        if (!blob) { alert('Screenshot konnte nicht erstellt werden.'); return; }
-                        resizeImageFile(blob, 160, function(dataUrl) {
-                            if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
-                            const students = DB.getStudentsSorted();
-                            const stu = students.find(s => s.id === studentId);
-                            if (stu) { stu.photo = dataUrl; DB.saveStudents(students); }
-                            openClassManager(classId);
-                        });
-                    }, 'image/jpeg', 0.75);
-                }, 300);
-            };
-        })
-        .catch(function(err) {
-            if (err.name !== 'NotAllowedError') {
-                alert('Screenshot fehlgeschlagen: ' + err.message);
-            }
-        });
-};
-
-window.showPhotoMenu = function(event, studentId, classId) {
-    event.stopPropagation();
-    const existing = document.getElementById('photo-menu-pop');
-    if (existing) { existing.remove(); return; }
-    document.removeEventListener('click', window._closePhotoMenu);
-
-    const btn = event.currentTarget;
-    const rect = btn.getBoundingClientRect();
-
-    const menu = document.createElement('div');
-    menu.id = 'photo-menu-pop';
-    menu.innerHTML =
-        '<button class="photo-menu-item" data-action="file" data-student="' + studentId + '" data-class="' + classId + '">📁 Datei auswählen</button>' +
-        '<button class="photo-menu-item" data-action="screenshot" data-student="' + studentId + '" data-class="' + classId + '">🖥️ Screenshot aufnehmen</button>';
-
-    menu.style.position = 'fixed';
-    menu.style.left = Math.min(rect.left, window.innerWidth - 190) + 'px';
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.zIndex = '3500';
-
-    document.body.appendChild(menu);
-
-    window._closePhotoMenu = function(e) {
-        const m = document.getElementById('photo-menu-pop');
-        if (m && !m.contains(e.target) && e.target !== btn) {
-            m.remove();
-        }
-    };
-
-    document.addEventListener('click', window._closePhotoMenu);
-
-    menu.addEventListener('click', function(e) {
-        const item = e.target.closest('.photo-menu-item');
-        if (!item) return;
-        const action = item.getAttribute('data-action');
-        const sid = item.getAttribute('data-student');
-        const cid = item.getAttribute('data-class');
-        menu.remove();
-        document.removeEventListener('click', window._closePhotoMenu);
-        if (action === 'file') {
-            document.getElementById('stu-photo-input-' + sid).click();
-        } else if (action === 'screenshot') {
-            window.captureScreenForStudentPhoto(sid, cid);
-        }
-    });
 };
 
 window.selectStudent = function(el, studentId, classId) {
@@ -1943,7 +1913,7 @@ function renderPlan(classId) {
                     plan.find(e => e.date === date && !e.supplier);
                  const nr = entry ? entry.homeworkNr : '';
                 const title = entry ? (entry.homeworkContent || '') : '';
-                const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+                const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
                  const actions = entry ?
@@ -1978,7 +1948,7 @@ function renderPlan(classId) {
                  const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + escapeHtml(sheetsText) + '</small>') : (hwNr || '–');
                  const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                  const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
-                 const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+                 const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 html += '<tr class="' + rowClass.trim() + '">' +
                     '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>' +
@@ -2006,10 +1976,10 @@ function renderPlan(classId) {
                 const isFuture = date > todayStr;
                 const isSupplier = item.type === 'supplier';
                 const holiday = isHoliday(date);
-                const entry = isSupplier ?
-                    supplierEntries.find(e => e.date === date) :
-                    plan.find(e => e.date === date && !e.supplier);
-                 const typeLabel = holiday ? '<span class="holiday-marker">Ferien</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
+                 const entry = isSupplier ?
+                     supplierEntries.find(e => e.date === date) :
+                     plan.find(e => e.date === date && !e.supplier);
+                 const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                  const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                  const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
                  let cells = '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
@@ -3875,13 +3845,24 @@ window.setHwSheetStatus = function(classId, studentId, hwNr, sheetName, value) {
 /* GZ Funktionen */
 function isHoliday(dateStr) {
     const holidays = DB.loadHolidays() || [];
-    return holidays.some(h => h.date === dateStr);
+    if (holidays.some(h => h.date === dateStr)) return true;
+    const manual = DB.loadManualHolidays() || [];
+    return manual.some(h => {
+        if (!h.from || !h.to) return false;
+        return dateStr >= h.from && dateStr <= h.to;
+    });
 }
 
 function getHolidayName(dateStr) {
     const holidays = DB.loadHolidays() || [];
     const h = holidays.find(h => h.date === dateStr);
-    return h ? (h.localName || h.name) : '';
+    if (h) return h.localName || h.name;
+    const manual = DB.loadManualHolidays() || [];
+    const m = manual.find(h => {
+        if (!h.from || !h.to) return false;
+        return dateStr >= h.from && dateStr <= h.to;
+    });
+    return m ? m.name : '';
 }
 
 function getGZPlannedWorksheets(classId) {

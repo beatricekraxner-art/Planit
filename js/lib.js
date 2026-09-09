@@ -152,7 +152,7 @@ const DB = {
     },
     addStudent: function(classId, name, lastName) {
         const students = this.loadStudents();
-        students.push({ id: Date.now().toString(), classId: classId, name: name, lastName: lastName || '' });
+        students.push({ id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 9), classId: classId, name: name, lastName: lastName || '' });
         this.saveStudents(students);
     },
     deleteStudent: function(id) { this.saveStudents(this.loadStudents().filter(s => s.id !== id)); },
