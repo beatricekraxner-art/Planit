@@ -114,6 +114,9 @@ const DB = {
         this.saveStudents(this.loadStudents().filter(s => s.classId !== id));
         this.clearClassData(id);
     },
+    deleteAllStudents: function(classId) {
+        this.saveStudents(this.loadStudents().filter(s => s.classId !== classId));
+    },
     clearClassData: function(classId) {
         Object.keys(localStorage).filter(k => k.includes(classId)).forEach(k => localStorage.removeItem(k));
     },

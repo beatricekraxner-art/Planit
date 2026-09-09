@@ -126,6 +126,27 @@ function showModal(content) {
 function hideModal() {
     const modal = document.getElementById('modal-overlay');
     modal.style.display = 'none';
+    const modalContent = document.getElementById('modal-content');
+    if (modalContent) modalContent.innerHTML = '';
+}
+
+function safeConfirm(message) {
+    const result = confirm(message);
+    if (result) {
+        setTimeout(function() {
+            try { window.focus(); } catch (e) {}
+            try { document.body.focus(); } catch (e) {}
+        }, 0);
+        setTimeout(function() {
+            try { window.focus(); } catch (e) {}
+            try { document.body.focus(); } catch (e) {}
+        }, 100);
+        setTimeout(function() {
+            try { window.focus(); } catch (e) {}
+            try { document.body.focus(); } catch (e) {}
+        }, 300);
+    }
+    return result;
 }
 
 function switchView(viewName) {
@@ -225,7 +246,6 @@ window.addEventListener('od-save-error', (e) => {
 function renderClasses() {
     const grid = document.getElementById('classes-grid');
     const classes = DB.getSortedClasses();
-    const students = DB.getStudentsSorted();
     grid.innerHTML = '';
     const subjectOrder = { math: 'Mathematik', gz: 'Geometrisches Zeichnen', dg: 'Darstellende Geometrie', other: 'Andere Fächer' };
     let currentType = null;
@@ -241,7 +261,7 @@ function renderClasses() {
             group.appendChild(currentList);
             grid.appendChild(group);
         }
-        const count = students.filter(s => s.classId === cls.id).length;
+        const count = (DB.getStudentsForClass(cls.id) || []).length;
         const card = document.createElement('div');
         card.className = 'class-card';
         card.style.borderTopColor = cls.color || 'var(--primary)';
@@ -297,7 +317,6 @@ function getClassManagerContent(cls, students) {
             '</span></li>';
     });
     studentList += '</ul>';
-    studentList += '</ul>';
     if (students.length === 0) studentList = '<p>Keine Schüler vorhanden</p>';
     const clsColor = cls.color || '#6366f1';
     const studentCount = students.length;
@@ -344,10 +363,11 @@ function getClassManagerContent(cls, students) {
         '<input type="text" id="new-student-input" placeholder="Schülername" onkeydown="if(event.key===\'Enter\') addStudentToClass(\'' + cls.id + '\')">' +
         '<button class="btn" onclick="addStudentToClass(\'' + cls.id + '\')">Hinzufügen</button>' +
         '</div>' +
+        '<button class="btn btn-secondary" onclick="window.deleteAllStudents(\'' + cls.id + '\')">Alle Schüler löschen</button>' +
         '<button class="btn btn-secondary" onclick="deleteClass(\'' + cls.id + '\')">Kurs löschen</button>' +
         '</div>' +
         '</div>';
-}
+    }
 
 function saveClassDetails(classId) {
     captureUndo();
@@ -505,9 +525,29 @@ window.importStudentsFromCsv = function(input, classId) {
     const file = input.files && input.files[0];
     if (!file) return;
     const reader = new FileReader();
+    reader.readAsArrayBuffer(file);
     reader.onload = function(e) {
         try {
-            const lines = e.target.result.split(/\r?\n/);
+            let text = '';
+            const buf = new Uint8Array(e.target.result);
+            const candidates = [
+                new TextDecoder('utf-8').decode(buf),
+                new TextDecoder('iso-8859-1').decode(buf),
+                new TextDecoder('windows-1252').decode(buf)
+            ];
+            let best = candidates[0];
+            let bestScore = -1;
+            candidates.forEach(function(candidate) {
+                const umlauts = (candidate.match(/[äöüÄÖÜß]/g) || []).length;
+                const mojibake = (candidate.match(/[ÃÂÊË]/g) || []).length;
+                const score = umlauts - mojibake;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = candidate;
+                }
+            });
+            text = best;
+            const lines = text.split(/\r?\n/);
             let added = 0;
             let skipped = 0;
             const classes = DB.loadClasses();
@@ -523,11 +563,18 @@ window.importStudentsFromCsv = function(input, classId) {
             lines.forEach((line, index) => {
                 const trimmed = line.trim();
                 if (!trimmed) return;
-                const parts = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+                const delimiter = trimmed.indexOf(';') !== -1 ? ';' : ',';
+                const parts = trimmed.split(delimiter).map(s => s.trim()).filter(Boolean);
                 if (!headerSkipped && parts.length >= 2) {
                     const first = (parts[0] || '').toLowerCase();
                     const second = (parts[1] || '').toLowerCase();
-                    if (first.indexOf('name') !== -1 || first.indexOf('vorname') !== -1 || first.indexOf('schüler') !== -1 || first.indexOf('schueler') !== -1 || second.indexOf('nachname') !== -1 || second.indexOf('klasse') !== -1) {
+                    const third = (parts[2] || '').toLowerCase();
+                    const fourth = (parts[3] || '').toLowerCase();
+                    const looksLikeHeader = (first === 'vorname' || first === 'nachname' || first === 'name' || first === 'schüler' || first === 'schueler' || first === 'first' || first === 'last') ||
+                        (second === 'vorname' || second === 'nachname' || second === 'name' || second === 'schüler' || second === 'schueler' || second === 'first' || second === 'last') ||
+                        (third === 'klasse' || third === 'class' || third === 'fach' || third === 'subject') ||
+                        (fourth === 'klasse' || fourth === 'class' || fourth === 'fach' || fourth === 'subject');
+                    if (looksLikeHeader) {
                         headerSkipped = true;
                         return;
                     }
@@ -536,31 +583,34 @@ window.importStudentsFromCsv = function(input, classId) {
                 let fullName = '';
                 let lastName = '';
                 let targetClassId = classId;
+                const normalizeFirst = (name) => {
+                    if (!name) return '';
+                    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+                };
                 if (parts.length >= 4) {
-                    const vorname = (parts[0] || '').trim();
-                    const nachname = (parts[1] || '').trim();
+                    const nachname = (parts[0] || '').trim().toUpperCase();
+                    const vorname = normalizeFirst((parts[1] || '').trim());
                     const className = (parts[2] || '').trim();
                     const classSubject = (parts[3] || '').trim();
                     fullName = (nachname + ' ' + vorname).trim();
-                    lastName = nachname.toUpperCase();
+                    lastName = nachname;
                     if (className) {
-                        let foundClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
-                        if (!foundClass && !seenClassNames.has(className.toLowerCase())) {
-                            seenClassNames.add(className.toLowerCase());
+                        let foundClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase() && (!classSubject || c.subject.toLowerCase() === classSubject.toLowerCase()));
+                        if (!foundClass && !seenClassNames.has(className.toLowerCase() + '|' + classSubject.toLowerCase())) {
+                            seenClassNames.add(className.toLowerCase() + '|' + classSubject.toLowerCase());
                             const type = classSubject ? subjectToType(classSubject) : 'other';
                             DB.addClass(className, type, classSubject || className);
                             const updated = DB.loadClasses();
-                            foundClass = updated.find(c => c.name.toLowerCase() === className.toLowerCase());
-                            if (foundClass) newClassIds.push(foundClass.id);
+                            foundClass = updated.find(c => c.name.toLowerCase() === className.toLowerCase() && (!classSubject || c.subject.toLowerCase() === classSubject.toLowerCase()));
                         }
                         if (foundClass) targetClassId = foundClass.id;
                     }
                 } else if (parts.length >= 3) {
-                    const vorname = (parts[0] || '').trim();
-                    const nachname = (parts[1] || '').trim();
+                    const nachname = (parts[0] || '').trim().toUpperCase();
+                    const vorname = normalizeFirst((parts[1] || '').trim());
                     const classIdOrName = (parts[2] || '').trim();
                     fullName = (nachname + ' ' + vorname).trim();
-                    lastName = nachname.toUpperCase();
+                    lastName = nachname;
                     let foundClass = classes.find(c => c.id === classIdOrName || c.name.toLowerCase() === classIdOrName.toLowerCase());
                     if (!foundClass && !seenClassNames.has(classIdOrName.toLowerCase())) {
                         seenClassNames.add(classIdOrName.toLowerCase());
@@ -575,13 +625,20 @@ window.importStudentsFromCsv = function(input, classId) {
                     const second = (parts[1] || '').trim();
                     const foundClass = classes.find(c => c.id === second || c.name.toLowerCase() === second.toLowerCase());
                     if (foundClass) {
-                        fullName = first;
-                        const nameParts = fullName.split(' ').filter(Boolean);
-                        lastName = nameParts.length > 1 ? nameParts[0].toUpperCase() : (nameParts[0] || fullName).toUpperCase();
+                        const nameParts = first.split(/\s+/).filter(Boolean);
+                        if (nameParts.length >= 2) {
+                            const nachname = nameParts[0].toUpperCase();
+                            const vorname = normalizeFirst(nameParts.slice(1).join(' '));
+                            fullName = (nachname + ' ' + vorname).trim();
+                            lastName = nachname;
+                        } else {
+                            fullName = normalizeFirst(first);
+                            lastName = (first || '').toUpperCase();
+                        }
                         targetClassId = foundClass.id;
                     } else {
                         const nachname = first.toUpperCase();
-                        const vorname = second;
+                        const vorname = normalizeFirst(second);
                         fullName = (nachname + ' ' + vorname).trim();
                         lastName = nachname;
                     }
@@ -590,7 +647,7 @@ window.importStudentsFromCsv = function(input, classId) {
                     const nameParts = raw.split(/\s+/).filter(Boolean);
                     if (nameParts.length >= 2) {
                         const nachname = nameParts[0].toUpperCase();
-                        const vorname = nameParts.slice(1).join(' ');
+                        const vorname = normalizeFirst(nameParts.slice(1).join(' '));
                         fullName = (nachname + ' ' + vorname).trim();
                         lastName = nachname;
                     } else {
@@ -611,8 +668,9 @@ window.importStudentsFromCsv = function(input, classId) {
                 }
             });
             input.value = '';
+            renderClasses();
             const refreshed = DB.loadClasses();
-            const target = refreshed.find(c => c.id === (newClassIds[0] || classId));
+            const target = refreshed.find(c => c.id === classId);
             const students = DB.getStudentsForClass(target ? target.id : classId);
             showModal(getClassManagerContent(target || refreshed.find(c => c.id === classId), students));
             if (added > 0) alert(added + ' Schüler importiert.' + (skipped > 0 ? ' (' + skipped + ' Duplikate übersprungen.)' : ''));
@@ -621,7 +679,6 @@ window.importStudentsFromCsv = function(input, classId) {
             alert('CSV-Import fehlgeschlagen: ' + err.message);
         }
     };
-    reader.readAsText(file);
 };
 
 function deleteStudent(id, classId) {
@@ -664,13 +721,42 @@ function saveStudentEdit(id, classId) {
     openClassManager(classId);
 }
 
+function safeConfirm(message) {
+    return new Promise(function(resolve) {
+        const modal = document.getElementById('modal-overlay');
+        const modalContent = document.getElementById('modal-content');
+        modalContent.innerHTML = '<div class="modal-header"><h2>Bestätigung</h2><button class="btn btn-secondary" onclick="window._confirmResolve(false)">×</button></div>' +
+            '<div class="form-group exam-form"><p>' + escapeHtml(message) + '</p>' +
+            '<button class="btn" onclick="window._confirmResolve(true)">Ja</button>' +
+            '<button class="btn btn-secondary" onclick="window._confirmResolve(false)">Nein</button></div>';
+        modal.style.display = 'flex';
+        window._confirmResolve = function(result) {
+            hideModal();
+            resolve(result);
+        };
+    });
+}
+
 function deleteClass(id) {
     captureUndo();
-    if (!confirm('Möchten Sie den Kurs wirklich löschen? Alle zugehörigen Daten (Schüler, Stundenplan, Noten) werden unwiderruflich entfernt.')) return;
-    DB.deleteClass(id);
-    hideModal();
-    renderClasses();
+    safeConfirm('Möchten Sie den Kurs wirklich löschen? Alle zugehörigen Daten (Schüler, Stundenplan, Noten) werden unwiderruflich entfernt.').then(function(result) {
+        if (!result) return;
+        DB.deleteClass(id);
+        renderClasses();
+    });
 }
+
+window.deleteAllStudents = function(classId) {
+    captureUndo();
+    safeConfirm('Möchten Sie wirklich alle Schüler dieses Kurses löschen?').then(function(result) {
+        if (!result) return;
+        DB.deleteAllStudents(classId);
+        const students = DB.getStudentsForClass(classId);
+        const cls = DB.loadClasses().find(c => c.id === classId);
+        showModal(getClassManagerContent(cls, students));
+        renderClasses();
+    });
+};
 
 let currentWeekStart = null;
 let timetableViewMode = 'week';
