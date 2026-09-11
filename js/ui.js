@@ -1028,11 +1028,11 @@ function renderDashboard() {
         const dayName = isDayView ? formatDateDE(d) : daysOfWeek[i];
         const abbr = isDayView ? formatDateShort(d) : dayName.substring(0, 2);
         if (isHol) {
-            html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#0d9488;">' + escapeHtml(isHol) + '</small></div>';
+            html += '<div class="' + cls + '">' + abbr + (isDayView ? '' : ' <small class="tt-date-small">' + formatDateShort(d) + '</small>') + ' <small style="font-weight:600;color:#0d9488;">' + escapeHtml(isHol) + '</small></div>';
         } else {
             const apptHtml = dayAppts.length ? dayAppts.map(a => '<div style="text-align:left;font-size:11px;color:#fff;font-weight:400;">• ' + escapeHtml(a.title || 'Termin') + '</div>').join('') : '';
             const titleAttr = dayAppts.length ? ' title="' + escapeHtml(dayAppts.map(a => a.description || a.title || 'Termin').join(' | ')) + '"' : '';
-            html += '<div class="' + cls + '"' + titleAttr + '>' + abbr + (isDayView ? '' : ' <small>' + formatDateShort(d) + '</small>') + apptHtml + '</div>';
+            html += '<div class="' + cls + '"' + titleAttr + '>' + abbr + (isDayView ? '' : ' <small class="tt-date-small">' + formatDateShort(d) + '</small>') + apptHtml + '</div>';
         }
     });
     html += '</div>';
@@ -1521,7 +1521,8 @@ window.printTimetable = function() {
         '.tt-holiday-row .tt-day-col { min-height: 0; padding: 0; background: transparent; border: none; }',
         '.tt-patrol, .tt-sprechstunde { background: #e2e8f0 !important; border-left: 3px solid #475569 !important; font-weight: 600 !important; color: #000 !important; min-height: 24px !important; padding: 3px 6px !important; font-size: 11px !important; }',
         '.tt-patrol strong, .tt-sprechstunde strong, .tt-patrol small, .tt-sprechstunde small { color: #000 !important; font-size: 11px !important; }',
-        '.tt-row.tt-head .tt-day-col small { display: inline; font-size: 12px; color: #333; }'
+        '.tt-row.tt-head .tt-day-col small { display: inline; font-size: 12px; color: #333; }',
+        '@media print { .tt-date-small { display: none !important; } }'
     ].join('\n');
 
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stundenplan</title>' +
@@ -1546,7 +1547,10 @@ window.printTimetable = function() {
         'var ttPrintBtn = document.getElementById("tt-print-btn");' +
         'if (ttPrintBtn) ttPrintBtn.addEventListener("click", function(){ window.print(); });' +
         'window.addEventListener("load", function() {' +
-        '  setTimeout(function() { ttInput && ttInput.dispatchEvent(new Event("input")); }, 300);' +
+        '  var dateSmalls = ttWrap.querySelectorAll(".tt-date-small");' +
+        '  for (var i = 0; i < dateSmalls.length; i++) { dateSmalls[i].style.display = "none"; }' +
+        '  var input = document.getElementById("tt-width");' +
+        '  if (input) input.focus();' +
         '});' +
         '</script>' +
         '</body></html>';
