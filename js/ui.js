@@ -1092,7 +1092,7 @@ function renderDashboard() {
                     const isPatrol = entry.subject.toLowerCase() === 'gangaufsicht';
                     const isSprechstunde = entry.subject.toLowerCase() === 'sprechstunde';
                     const isBibliothek = entry.subject.toLowerCase() === 'bibliothek';
-                    const entryClass = 'tt-day-col' + (isPause ? ' tt-pause-entry' : ' timetable-entry') + (isPatrol ? ' tt-patrol' : '') + (isSprechstunde || isBibliothek ? ' tt-sprechstunde' : '');
+                    const entryClass = 'tt-day-col' + (isPause ? ' tt-pause-entry' : ' timetable-entry') + (isPatrol ? ' tt-patrol' : '') + (isSprechstunde || isBibliothek ? ' tt-sprechstunde' : '') + (timetableEditMode ? ' timetable-edit-mode' : '');
                     if (isPatrol) {
                         html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Aufsicht bearbeiten"><small>' + escapeHtml(entry.room || '') + '</small></div>';
                     } else if (isSprechstunde || isBibliothek) {
@@ -1112,7 +1112,7 @@ function renderDashboard() {
                             const subjectHtml = (!className || !redundant) ? '<strong>' + (abbr || entry.subject) + '</strong>' : '';
                             const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
                             html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
-                                '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' +
+                                (timetableEditMode ? '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' : '') +
                                 '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
                         }
                     }
@@ -1125,6 +1125,37 @@ function renderDashboard() {
     });
     html += '</div>';
     wrapper.innerHTML = html;
+
+    const swipeArea = wrapper;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeStartTime = 0;
+
+    function onSwipeTouchStart(e) {
+        if (timetableViewMode !== 'week') return;
+        if (e.touches && e.touches.length === 1) {
+            const t = e.touches[0];
+            swipeStartX = t.clientX;
+            swipeStartY = t.clientY;
+            swipeStartTime = e.timeStamp;
+        }
+    }
+
+    function onSwipeTouchEnd(e) {
+        if (timetableViewMode !== 'week') return;
+        const dx = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0) - swipeStartX;
+        const dy = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0) - swipeStartY;
+        const dt = (e.timeStamp || 0) - swipeStartTime;
+        if (dt > 0 && dt < 600 && Math.abs(dx) > 50 && Math.abs(dy) < 80 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx > 0) shiftWeek(-1);
+            else shiftWeek(1);
+        }
+    }
+
+    swipeArea.removeEventListener('touchstart', onSwipeTouchStart);
+    swipeArea.removeEventListener('touchend', onSwipeTouchEnd);
+    swipeArea.addEventListener('touchstart', onSwipeTouchStart, { passive: true });
+    swipeArea.addEventListener('touchend', onSwipeTouchEnd, { passive: true });
 }
 
 function openTimetableEditor(preDay, prePeriod) {
@@ -1463,18 +1494,18 @@ window.printTimetable = function() {
     const printHtml = '<div id="tt-controls" style="margin-bottom:15px;display:flex;gap:10px;align-items:center;">' +
         '<label>Breite: <input type="text" id="tt-width" value="100%" style="width:70px;padding:6px;border:1px solid #888;border-radius:4px;"></label>' +
         '<button id="tt-print-btn" style="padding:8px 16px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🖨️ Drucken</button>' +
-        '<span style="font-size:12px;color:#666;">Wert z. B. 10cm oder 100%</span>' +
+        '<span style="font-size:12px;color:#666;">Wert z. B. 20cm oder 100%</span>' +
         '</div>' +
-        '<div id="tt-print-wrap" style="width:100%;overflow:auto;">' + grid.outerHTML + '</div>';
+        '<div id="tt-print-wrap" style="width:100%;">' + grid.outerHTML + '</div>';
 
     const printStyles = [
         '@page { margin: 10mm; size: A4 landscape; }',
         'body { font-family: Inter, Arial, sans-serif; background: #fff !important; color: #000 !important; padding: 10px; margin: 0; }',
         '@media print { #tt-controls { display: none !important; } }',
         'h2 { font-size: 16px; margin-bottom: 8px; color: #000 !important; }',
-        '#tt-print-wrap { width: 100%; }',
-        '.timetable-grid { display: flex; flex-direction: column; gap: 1px; border: 1px solid #888; border-radius: 4px; overflow: hidden; background: #fff; }',
-        '.tt-row { display: grid; grid-template-columns: 90px repeat(5, minmax(0, 1fr)); gap: 1px; }',
+        '#tt-print-wrap { width: 100%; box-sizing: border-box; overflow: visible; }',
+        '.timetable-grid { display: flex; flex-direction: column; gap: 1px; border: 1px solid #888; border-radius: 4px; overflow: hidden; background: #fff; box-sizing: border-box; }',
+        '.tt-row { display: grid; grid-template-columns: 0.83fr repeat(5, 1fr); gap: 1px; box-sizing: border-box; }',
         '.tt-time-col { padding: 6px 4px; font-size: 11px; font-weight: 600; color: #222; background: #f4f4f4; border-radius: 2px; text-align: center; line-height: 1.2; }',
         '.tt-day-col { padding: 6px; border-radius: 2px; min-height: 48px; display: flex; flex-direction: column; justify-content: center; font-size: 12px; line-height: 1.25; }',
         '.tt-head .tt-day-col { font-weight: 700; text-transform: uppercase; font-size: 12px; color: #111; padding: 8px 6px; text-align: center; }',
@@ -1498,11 +1529,25 @@ window.printTimetable = function() {
         '<style>' + printStyles + '</style>' +
         '</head><body>' + printHtml +
         '<script>' +
-        'document.getElementById("tt-width").addEventListener("input", function(e){' +
-        '  var w = e.target.value || "100%";' +
-        '  document.getElementById("tt-print-wrap").style.width = w;' +
+        'var ttWrap = document.getElementById("tt-print-wrap");' +
+        'function setWidth(w) {' +
+        '  if (!w || w === "100%") {' +
+        '    ttWrap.style.removeProperty("width");' +
+        '    return;' +
+        '  }' +
+        '  if (w.indexOf("cm") !== -1) {' +
+        '    ttWrap.style.width = w;' +
+        '  } else {' +
+        '    ttWrap.style.width = w;' +
+        '  }' +
+        '}' +
+        'var ttInput = document.getElementById("tt-width");' +
+        'if (ttInput) ttInput.addEventListener("input", function(e) { setWidth(e.target.value || "100%"); });' +
+        'var ttPrintBtn = document.getElementById("tt-print-btn");' +
+        'if (ttPrintBtn) ttPrintBtn.addEventListener("click", function(){ window.print(); });' +
+        'window.addEventListener("load", function() {' +
+        '  setTimeout(function() { ttInput && ttInput.dispatchEvent(new Event("input")); }, 300);' +
         '});' +
-        'document.getElementById("tt-print-btn").addEventListener("click", function(){ window.print(); });' +
         '</script>' +
         '</body></html>';
 
