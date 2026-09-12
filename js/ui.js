@@ -1126,42 +1126,45 @@ function renderDashboard() {
     html += '</div>';
     wrapper.innerHTML = html;
 
-    const swipeArea = wrapper;
-    let swipeStartX = 0;
-    let swipeStartY = 0;
-    let swipeStartTime = 0;
-    let swipeActive = false;
-    let swipeDebounceUntil = 0;
+    if (typeof window._ttSwipeStart === 'undefined') window._ttSwipeStart = 0;
+    if (typeof window._ttSwipeStartTime === 'undefined') window._ttSwipeStartTime = 0;
+    if (typeof window._ttSwipeActive === 'undefined') window._ttSwipeActive = false;
+    if (typeof window._ttSwipeDebounce === 'undefined') window._ttSwipeDebounce = 0;
 
     function onSwipeTouchStart(e) {
         if (timetableViewMode !== 'week') return;
+        if (Date.now() < window._ttSwipeDebounce) return;
         if (e.touches && e.touches.length === 1) {
             const t = e.touches[0];
-            swipeStartX = t.clientX;
-            swipeStartY = t.clientY;
-            swipeStartTime = e.timeStamp;
-            swipeActive = true;
+            window._ttSwipeStart = { x: t.clientX, y: t.clientY };
+            window._ttSwipeStartTime = e.timeStamp;
+            window._ttSwipeActive = true;
         }
     }
 
     function onSwipeTouchEnd(e) {
-        if (Date.now() < swipeDebounceUntil) { swipeActive = false; return; }
-        if (!swipeActive || timetableViewMode !== 'week') { swipeActive = false; return; }
-        const dx = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0) - swipeStartX;
-        const dy = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0) - swipeStartY;
-        const dt = (e.timeStamp || 0) - swipeStartTime;
-        swipeActive = false;
-        if (dt > 0 && dt < 400 && Math.abs(dx) > 80 && Math.abs(dy) < 100 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (timetableViewMode !== 'week') { window._ttSwipeActive = false; return; }
+        if (!window._ttSwipeActive) { window._ttSwipeActive = false; return; }
+        const start = window._ttSwipeStart || { x: 0, y: 0 };
+        const touch = e.changedTouches && e.changedTouches[0];
+        if (!touch) { window._ttSwipeActive = false; return; }
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        const dt = (e.timeStamp || 0) - window._ttSwipeStartTime;
+        window._ttSwipeActive = false;
+        if (dt > 50 && dt < 300 && Math.abs(dx) > 60 && Math.abs(dy) < 80 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+            window._ttSwipeDebounce = Date.now() + 500;
             if (dx > 0) shiftWeek(-1);
             else shiftWeek(1);
-            swipeDebounceUntil = Date.now() + 500;
         }
     }
 
-    swipeArea.removeEventListener('touchstart', onSwipeTouchStart);
-    swipeArea.removeEventListener('touchend', onSwipeTouchEnd);
-    swipeArea.addEventListener('touchstart', onSwipeTouchStart, { passive: true });
-    swipeArea.addEventListener('touchend', onSwipeTouchEnd, { passive: true });
+    window._ttOnSwipeStart = onSwipeTouchStart;
+    window._ttOnSwipeEnd = onSwipeTouchEnd;
+    swipeArea.removeEventListener('touchstart', window._ttOnSwipeStart);
+    swipeArea.removeEventListener('touchend', window._ttOnSwipeEnd);
+    swipeArea.addEventListener('touchstart', window._ttOnSwipeStart, { passive: true });
+    swipeArea.addEventListener('touchend', window._ttOnSwipeEnd, { passive: true });
 }
 
 function openTimetableEditor(preDay, prePeriod) {
