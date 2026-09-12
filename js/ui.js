@@ -1125,45 +1125,6 @@ function renderDashboard() {
     });
     html += '</div>';
     wrapper.innerHTML = html;
-
-    if (!window._ttSwipeInit) {
-        window._ttSwipeInit = true;
-        window._ttSwipeStart = { x: 0, y: 0 };
-        window._ttSwipeStartTime = 0;
-        window._ttSwipeActive = false;
-        window._ttSwipeDebounce = 0;
-
-        window._ttOnSwipeStart = function(e) {
-            if (timetableViewMode !== 'week') return;
-            if (Date.now() < window._ttSwipeDebounce) return;
-            if (e.touches && e.touches.length === 1) {
-                const t = e.touches[0];
-                window._ttSwipeStart = { x: t.clientX, y: t.clientY };
-                window._ttSwipeStartTime = e.timeStamp;
-                window._ttSwipeActive = true;
-            }
-        };
-
-        window._ttOnSwipeEnd = function(e) {
-            if (timetableViewMode !== 'week') { window._ttSwipeActive = false; return; }
-            if (!window._ttSwipeActive) { window._ttSwipeActive = false; return; }
-            const start = window._ttSwipeStart;
-            const touch = e.changedTouches && e.changedTouches[0];
-            if (!touch) { window._ttSwipeActive = false; return; }
-            const dx = touch.clientX - start.x;
-            const dy = touch.clientY - start.y;
-            const dt = (e.timeStamp || 0) - window._ttSwipeStartTime;
-            window._ttSwipeActive = false;
-            if (dt > 50 && dt < 300 && Math.abs(dx) > 60 && Math.abs(dy) < 80 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-                window._ttSwipeDebounce = Date.now() + 500;
-                if (dx > 0) shiftWeek(-1);
-                else shiftWeek(1);
-            }
-        };
-
-        wrapper.addEventListener('touchstart', window._ttOnSwipeStart, { passive: true });
-        wrapper.addEventListener('touchend', window._ttOnSwipeEnd, { passive: true });
-    }
 }
 
 function openTimetableEditor(preDay, prePeriod) {
