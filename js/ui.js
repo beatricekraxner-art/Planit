@@ -1130,6 +1130,8 @@ function renderDashboard() {
     let swipeStartX = 0;
     let swipeStartY = 0;
     let swipeStartTime = 0;
+    let swipeActive = false;
+    let swipeDebounceUntil = 0;
 
     function onSwipeTouchStart(e) {
         if (timetableViewMode !== 'week') return;
@@ -1138,17 +1140,21 @@ function renderDashboard() {
             swipeStartX = t.clientX;
             swipeStartY = t.clientY;
             swipeStartTime = e.timeStamp;
+            swipeActive = true;
         }
     }
 
     function onSwipeTouchEnd(e) {
-        if (timetableViewMode !== 'week') return;
+        if (Date.now() < swipeDebounceUntil) { swipeActive = false; return; }
+        if (!swipeActive || timetableViewMode !== 'week') { swipeActive = false; return; }
         const dx = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0) - swipeStartX;
         const dy = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0) - swipeStartY;
         const dt = (e.timeStamp || 0) - swipeStartTime;
-        if (dt > 0 && dt < 600 && Math.abs(dx) > 50 && Math.abs(dy) < 80 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        swipeActive = false;
+        if (dt > 0 && dt < 400 && Math.abs(dx) > 80 && Math.abs(dy) < 100 && Math.abs(dx) > Math.abs(dy) * 1.5) {
             if (dx > 0) shiftWeek(-1);
             else shiftWeek(1);
+            swipeDebounceUntil = Date.now() + 500;
         }
     }
 
@@ -1503,7 +1509,7 @@ window.printTimetable = function() {
         'body { font-family: Inter, Arial, sans-serif; background: #fff !important; color: #000 !important; padding: 10px; margin: 0; }',
         '@media print { #tt-controls { display: none !important; } }',
         'h2 { font-size: 16px; margin-bottom: 8px; color: #000 !important; }',
-        '#tt-print-wrap { width: 100%; box-sizing: border-box; overflow: visible; }',
+        '#tt-print-wrap { width: 100%; box-sizing: border-box; }',
         '.timetable-grid { display: flex; flex-direction: column; gap: 1px; border: 1px solid #888; border-radius: 4px; overflow: hidden; background: #fff; box-sizing: border-box; }',
         '.tt-row { display: grid; grid-template-columns: 0.83fr repeat(5, 1fr); gap: 1px; box-sizing: border-box; }',
         '.tt-time-col { padding: 6px 4px; font-size: 11px; font-weight: 600; color: #222; background: #f4f4f4; border-radius: 2px; text-align: center; line-height: 1.2; }',
@@ -1536,11 +1542,7 @@ window.printTimetable = function() {
         '    ttWrap.style.removeProperty("width");' +
         '    return;' +
         '  }' +
-        '  if (w.indexOf("cm") !== -1) {' +
-        '    ttWrap.style.width = w;' +
-        '  } else {' +
-        '    ttWrap.style.width = w;' +
-        '  }' +
+        '  ttWrap.style.width = w;' +
         '}' +
         'var ttInput = document.getElementById("tt-width");' +
         'if (ttInput) ttInput.addEventListener("input", function(e) { setWidth(e.target.value || "100%"); });' +

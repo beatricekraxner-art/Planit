@@ -191,7 +191,7 @@ const DB = {
     saveTimetableCutoff: function(v) { this.save('timetable_cutoff', v); },
     loadTimetableEndTime: function() { return this.load('timetable_end_time', '16:30'); },
     saveTimetableEndTime: function(v) { this.save('timetable_end_time', v); },
-    loadHideHolidayColumns: function() { return this.load('hide_holiday_columns', true); },
+    loadHideHolidayColumns: function() { return this.load('hide_holiday_columns', false); },
     saveHideHolidayColumns: function(v) { this.save('hide_holiday_columns', v); },
     loadHwGradeThresholds: function() {
         return this.load('hw_grade_thresholds', { g1: 92, g2: 79, g3: 62, g4: 50 });
