@@ -119,8 +119,18 @@ function subjectAbbr(subject) {
 function showModal(content) {
     const modal = document.getElementById('modal-overlay');
     const modalContent = document.getElementById('modal-content');
+    if (!modal || !modalContent) return;
     modalContent.innerHTML = content;
     modal.style.display = 'flex';
+    const firstInput = modalContent.querySelector('input:not([type="hidden"]), select, textarea, button');
+    if (firstInput) {
+        setTimeout(function() {
+            try {
+                window.focus();
+                firstInput.focus();
+            } catch (e) {}
+        }, 0);
+    }
 }
 
 function hideModal() {
@@ -187,6 +197,8 @@ function switchView(viewName) {
     window.closeSidebar();
 }
 
+window.switchView = switchView;
+
 window.openSidebar = function() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebar-overlay');
@@ -198,15 +210,42 @@ window.openSidebar = function() {
 window.closeSidebar = function() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebar-overlay');
+    const container = document.querySelector('.app-container');
     if (sidebar) sidebar.classList.remove('open');
     if (overlay) overlay.classList.remove('show');
-    document.querySelector('.app-container').classList.add('sidebar-collapsed');
+    if (container) {
+        container.classList.add('sidebar-collapsed');
+        container.classList.remove('sidebar-icon-only');
+    }
 };
 
 window.toggleSidebar = function() {
+    const container = document.querySelector('.app-container');
     const sidebar = document.querySelector('.sidebar');
-    if (sidebar && sidebar.classList.contains('open')) window.closeSidebar();
-    else window.openSidebar();
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!container || !sidebar) return;
+    if (window.innerWidth <= 768) {
+        if (container.classList.contains('sidebar-collapsed')) {
+            container.classList.remove('sidebar-collapsed');
+            sidebar.classList.add('open');
+        } else {
+            container.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('open');
+        }
+        return;
+    }
+    if (container.classList.contains('sidebar-collapsed')) {
+        container.classList.remove('sidebar-collapsed');
+        sidebar.classList.add('open');
+    } else if (container.classList.contains('sidebar-icon-only')) {
+        container.classList.remove('sidebar-icon-only');
+        container.classList.add('sidebar-collapsed');
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('show');
+    } else {
+        container.classList.add('sidebar-icon-only');
+        if (overlay) overlay.classList.remove('show');
+    }
 };
 
 document.addEventListener('click', function(e) {
@@ -1015,7 +1054,7 @@ function renderDashboard() {
         '<button class="btn btn-secondary" onclick="setTimetableViewMode(\'week\')" ' + (!isDayView ? 'disabled' : '') + '>Woche</button>' +
         '<button class="btn btn-secondary" onclick="setTimetableViewMode(\'day\')" ' + (isDayView ? 'disabled' : '') + '>Tag</button>' +
         '<button class="btn" onclick="goToToday()">📍 Heute</button>' +
-        '<button class="btn btn-secondary" onclick="window.openAppointmentModal()">📅 Termin</button>' +
+        '<button class="btn btn-secondary" onclick="window.openAppointmentModal()">📌 Termin</button>' +
         '</div>';
 
     html += '<div class="timetable-grid">';

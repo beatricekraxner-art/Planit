@@ -14,12 +14,12 @@
     <div class="app-container">
         <nav class="sidebar">
             <ul class="nav-links">
-                <li class="active" data-view="dashboard">📅 Stundenplan</li>
-                <li data-view="classes">👥 Meine Klassen</li>
-                <li data-view="grading">📈 Unterricht & Noten</li>
-                <li data-view="grades-overview">📊 Notenübersicht</li>
-                <li data-view="todos">📝 To-do</li>
-                <li data-view="settings">⚙️ Einstellungen</li>
+                <li class="active" data-view="dashboard" data-tooltip="Stundenplan"><span class="nav-icon">📅</span><span class="nav-text">Stundenplan</span></li>
+                <li data-view="classes" data-tooltip="Meine Klassen"><span class="nav-icon">👥</span><span class="nav-text">Meine Klassen</span></li>
+                <li data-view="grading" data-tooltip="Unterricht & Noten"><span class="nav-icon">📈</span><span class="nav-text">Unterricht & Noten</span></li>
+                <li data-view="grades-overview" data-tooltip="Notenübersicht"><span class="nav-icon">📊</span><span class="nav-text">Notenübersicht</span></li>
+                <li data-view="todos" data-tooltip="To-do"><span class="nav-icon">📝</span><span class="nav-text">To-do</span></li>
+                <li data-view="settings" data-tooltip="Einstellungen"><span class="nav-icon">⚙️</span><span class="nav-text">Einstellungen</span></li>
             </ul>
         </nav>
 
@@ -39,13 +39,14 @@
                 <div class="topbar-actions">
                 <span id="sync-status" class="sync-status" title="Sync-Status">--</span>
                 <span id="provider-badge" class="provider-badge" title="Speicher-Provider">lokale Speicherung</span>
+                    <button class="btn btn-secondary" onclick="window.switchView('dashboard')" title="Zum Stundenplan">📅</button>
                     <button class="btn btn-secondary" id="undo-btn" onclick="window.UndoManager.undo()" disabled title="Rückgängig (Ctrl+Z)">↶</button>
                     <button class="btn btn-secondary" id="redo-btn" onclick="window.UndoManager.redo()" disabled title="Wiederholen (Ctrl+Shift+Z)">↷</button>
                     <button class="btn btn-secondary" id="theme-toggle-btn" onclick="window.toggleTheme()" title="Design umschalten">🌙</button>
                     <div id="loading-overlay" class="loading-overlay" style="display:none;"><div class="loading-spinner"></div><span class="loading-text">Speichert...</span></div>
                     <button class="btn btn-secondary" onclick="window.syncNow()" title="Mit OneDrive synchronisieren">🔄</button>
                     <button class="btn btn-secondary" onclick="window.print()">🖨️</button>
-                    <button class="btn" id="save-btn" onclick="window.manualSave()" title="Jetzt speichern">💾</button>
+                    <button class="btn btn-secondary" id="save-btn" onclick="window.manualSave()" title="Jetzt speichern">💾</button>
                     <span id="save-status" class="save-status">Bereit</span>
                 </div>
             </header>
@@ -57,7 +58,7 @@
                         <p class="subtitle">Ihr Stundenplan und Kalender für die aktuelle Woche.</p>
                     </div>
                     <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-                        <button class="btn" id="open-timetable-btn">Stundenplan bearbeiten</button>
+                        <button class="btn btn-secondary" id="open-timetable-btn">Stundenplan bearbeiten</button>
                         <button class="btn btn-secondary" onclick="window.printTimetable()">🖨️ Stundenplan drucken</button>
                         <select id="timetable-cutoff" onchange="window.setTimetableCutoff(this.value)" style="padding: 10px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px;">
                             <option value="">Alle Stunden</option>

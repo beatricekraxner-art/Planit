@@ -13,12 +13,13 @@ async function ensureServer() {
     localServer = serverModule.server;
     await serverModule.start();
 }
-const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+const WINDOW_STATE_FILE = null;
 
 function loadWindowState() {
+    const stateFile = path.join(app.getPath('userData'), 'window-state.json');
     try {
-        if (fs.existsSync(WINDOW_STATE_FILE)) {
-            return JSON.parse(fs.readFileSync(WINDOW_STATE_FILE, 'utf8'));
+        if (fs.existsSync(stateFile)) {
+            return JSON.parse(fs.readFileSync(stateFile, 'utf8'));
         }
     } catch (e) { console.error('Failed to load window state:', e); }
     return { width: 1280, height: 900, x: undefined, y: undefined, maximized: false };
@@ -27,6 +28,7 @@ function loadWindowState() {
 function saveWindowState() {
     if (!mainWindow) return;
     try {
+        const stateFile = path.join(app.getPath('userData'), 'window-state.json');
         const bounds = mainWindow.getBounds();
         const state = {
             width: bounds.width,
@@ -35,7 +37,7 @@ function saveWindowState() {
             y: bounds.y,
             maximized: mainWindow.isMaximized()
         };
-        fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify(state), 'utf8');
+        fs.writeFileSync(stateFile, JSON.stringify(state), 'utf8');
     } catch (e) { console.error('Failed to save window state:', e); }
 }
 
@@ -141,7 +143,13 @@ function createTray() {
     tray.setToolTip('Plan-it');
     tray.setContextMenu(contextMenu);
     tray.on('click', () => {
-        if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+            mainWindow.webContents.executeJavaScript(
+                "if (window.switchView) window.switchView('dashboard');"
+            );
+        }
     });
 }
 
