@@ -363,12 +363,12 @@
             renderODStatus();
         },
         connect() {
-            if (!getClientId()) { alert('Bitte zuerst Client-ID und Tenant konfigurieren.'); return; }
+            if (!getClientId()) { alertModal('Bitte zuerst Client-ID und Tenant konfigurieren.'); return; }
             localStorage.setItem(PENDING_KEY, '1');
             localStorage.setItem(PROVIDER_KEY, 'onedrive');
             Promise.resolve().then(function () { return OneDrivePersist.login(); }).catch(function (e) {
                 localStorage.removeItem(PENDING_KEY);
-                alert('Verbindung fehlgeschlagen: ' + (e && e.message ? e.message : e));
+                alertModal('Verbindung fehlgeschlagen: ' + (e && e.message ? e.message : e));
             });
         },
         useCloud() { localStorage.setItem(PROVIDER_KEY, 'onedrive'); applyCloud(); },
@@ -398,7 +398,7 @@
             out.push('PENDING_KEY: ' + localStorage.getItem(PENDING_KEY));
             out.push('========================');
             console.log(out.join('\n'));
-            alert(out.join('\n'));
+            alertModal(out.join('\n'));
         }
     };
 

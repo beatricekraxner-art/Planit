@@ -1,4 +1,4 @@
-﻿const daysOfWeek = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+const daysOfWeek = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
 const DB = {
     load: function(key, defaultValue) {
         try {
@@ -15,9 +15,9 @@ const DB = {
         } catch (e) {
             console.error('DB.save failed for key:', key, e);
             if (e.name === 'QuotaExceededError' || e.code === 22 || (e.message && e.message.indexOf('quota') !== -1)) {
-                alert('Speicher voll: Der Browser-Speicher (localStorage) ist voll. Bitte lösche alte Daten oder nutze Export/Import.');
+                alertModal('Speicher voll: Der Browser-Speicher (localStorage) ist voll. Bitte lösche alte Daten oder nutze Export/Import.');
             } else {
-                alert('Speichern fehlgeschlagen: ' + e.message);
+                alertModal('Speichern fehlgeschlagen: ' + e.message);
             }
         }
         if (window.FilePersist) FilePersist.scheduleSave();
@@ -454,7 +454,7 @@ let FilePersist = {
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
     },
     chooseFile: async function() {
-        alert('Automatische Speicherung ist aktiv. Die Datei planit-daten.json im Hauptordner wird alle 30 Sekunden automatisch gespeichert und von OneDrive synchronisiert.');
+        alertModal('Automatische Speicherung ist aktiv. Die Datei planit-daten.json im Hauptordner wird alle 30 Sekunden automatisch gespeichert und von OneDrive synchronisiert.');
         return true;
     },
     bootstrap: async function() {

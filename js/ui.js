@@ -1,4 +1,4 @@
-﻿function showLoading(text) {
+function showLoading(text) {
     const el = document.getElementById('loading-overlay');
     if (el) {
         el.style.display = 'inline-flex';
@@ -122,14 +122,14 @@ function showModal(content) {
     if (!modal || !modalContent) return;
     modalContent.innerHTML = content;
     modal.style.display = 'flex';
-    const firstInput = modalContent.querySelector('input:not([type="hidden"]), select, textarea, button');
+    const firstInput = modalContent.querySelector('input:not([type="hidden"]), select, textarea');
     if (firstInput) {
         setTimeout(function() {
-            try {
-                window.focus();
-                firstInput.focus();
-            } catch (e) {}
-        }, 0);
+            try { window.focus(); } catch (e) {}
+            setTimeout(function() {
+                try { firstInput.focus(); } catch (e) {}
+            }, 100);
+        }, 100);
     }
 }
 
@@ -138,6 +138,11 @@ function hideModal() {
     modal.style.display = 'none';
     const modalContent = document.getElementById('modal-content');
     if (modalContent) modalContent.innerHTML = '';
+}
+
+function alertModal(message) {
+    showModal('<div class="modal-header"><h2>Info</h2><button class="btn" onclick="hideModal()">OK</button></div>' +
+        '<div class="form-group exam-form"><p>' + escapeHtml(message) + '</p></div>');
 }
 
 function safeConfirm(message) {
@@ -359,9 +364,9 @@ function getClassManagerContent(cls, students) {
             '<span class="stu-actions">' +
             '<input type="file" accept="image/*" style="display:none;" id="stu-photo-input-' + s.id + '" onchange="uploadStudentPhoto(this, \'' + s.id + '\', \'' + cls.id + '\')">' +
             '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="window._lastFocusedStudentId=\'' + s.id + '\'; window._lastFocusedClassId=\'' + cls.id + '\'; document.getElementById(\'stu-photo-input-' + s.id + '\').click()">📷</button>' +
-            '<button class="btn btn-secondary photo-paste-btn" title="Screenshot einfügen (Strg+V)" onclick="pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
-            (s.photo ? '<button class="btn btn-secondary" title="Foto entfernen" onclick="removeStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">🗑️</button>' : '') +
-            '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">✎</button>' +
+            '<button class="btn btn-secondary photo-paste-btn" title="Screenshot einfügen (Strg+V)" onclick="window.pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
+            (s.photo ? '<button class="btn btn-secondary" title="Foto entfernen" onclick="window.removeStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">🗑️</button>' : '') +
+            '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">🖉</button>' +
             '<button class="btn btn-secondary" title="Löschen" onclick="deleteStudent(\'' + s.id + '\', \'' + cls.id + '\')">×</button>' +
             '</span></li>';
     });
@@ -490,7 +495,7 @@ function renderClassEventsList(events, classId) {
             '</div>' +
             (ev.description ? '<div style="font-size:12px;color:var(--text-muted);">' + escapeHtml(ev.description) + '</div>' : '') +
             '<div class="class-event-actions">' +
-            '<button class="btn btn-secondary" title="Bearbeiten" onclick="window.openClassEventModal(\'' + classId + '\', \'' + ev.id + '\')">✎</button>' +
+            '<button class="btn btn-secondary" title="Bearbeiten" onclick="window.openClassEventModal(\'' + classId + '\', \'' + ev.id + '\')">🖉</button>' +
             '<button class="btn btn-secondary" title="Löschen" onclick="window.deleteClassEvent(\'' + classId + '\', \'' + ev.id + '\')">×</button>' +
             '</div>' +
             '</li>';
@@ -525,7 +530,7 @@ window.saveClassEvent = function(classId, eventId) {
     const title = document.getElementById('class-event-title').value.trim();
     const date = document.getElementById('class-event-date').value;
     const description = document.getElementById('class-event-desc').value.trim();
-    if (!title) { alert('Bitte Titel eingeben.'); return; }
+    if (!title) { alertModal('Bitte Titel eingeben.'); return; }
     if (eventId) {
         DB.updateClassEvent(classId, eventId, { title, date, description });
     } else {
@@ -536,9 +541,11 @@ window.saveClassEvent = function(classId, eventId) {
 };
 
 window.deleteClassEvent = function(classId, eventId) {
-    if (!confirm('Termin wirklich löschen?')) return;
-    DB.deleteClassEvent(classId, eventId);
-    refreshClassManager(classId);
+    safeConfirm('Termin wirklich löschen?').then(function(result) {
+        if (!result) return;
+        DB.deleteClassEvent(classId, eventId);
+        refreshClassManager(classId);
+    });
 };
 
 function refreshClassManager(classId) {
@@ -722,22 +729,24 @@ window.importStudentsFromCsv = function(input, classId) {
             const target = refreshed.find(c => c.id === classId);
             const students = DB.getStudentsForClass(target ? target.id : classId);
             showModal(getClassManagerContent(target || refreshed.find(c => c.id === classId), students));
-            if (added > 0) alert(added + ' Schüler importiert.' + (skipped > 0 ? ' (' + skipped + ' Duplikate übersprungen.)' : ''));
-            else alert('Keine Schüler gefunden.');
+            if (added > 0) alertModal(added + ' Schüler importiert.' + (skipped > 0 ? ' (' + skipped + ' Duplikate übersprungen.)' : ''));
+            else alertModal('Keine Schüler gefunden.');
         } catch (err) {
-            alert('CSV-Import fehlgeschlagen: ' + err.message);
+            alertModal('CSV-Import fehlgeschlagen: ' + err.message);
         }
     };
 };
 
 function deleteStudent(id, classId) {
-    if (!confirm('Schüler wirklich löschen?')) return;
-    captureUndo();
-    DB.deleteStudent(id);
-    hideModal();
-    const cls = DB.loadClasses().find(c => c.id === classId);
-    const students = DB.getStudentsForClass(classId);
-    showModal(getClassManagerContent(cls, students));
+    safeConfirm('Schüler wirklich löschen?').then(function(result) {
+        if (!result) return;
+        captureUndo();
+        DB.deleteStudent(id);
+        hideModal();
+        const cls = DB.loadClasses().find(c => c.id === classId);
+        const students = DB.getStudentsForClass(classId);
+        showModal(getClassManagerContent(cls, students));
+    });
 }
 
 function editStudent(id, classId) {
@@ -862,9 +871,9 @@ function addManualHoliday() {
     const name = document.getElementById('holiday-name').value.trim();
     const from = parseFlexibleDate(document.getElementById('holiday-from').value);
     const to = parseFlexibleDate(document.getElementById('holiday-to').value);
-    if (!name) { alert('Bitte Bezeichnung eingeben.'); return; }
-    if (!from || !to) { alert('Bitte Von- und Bis-Datum wählen.'); return; }
-    if (to < from) { alert('Bis-Datum muss nach Von-Datum liegen.'); return; }
+    if (!name) { alertModal('Bitte Bezeichnung eingeben.'); return; }
+    if (!from || !to) { alertModal('Bitte Von- und Bis-Datum wählen.'); return; }
+    if (to < from) { alertModal('Bis-Datum muss nach Von-Datum liegen.'); return; }
     const editIndex = document.getElementById('holiday-edit-index').value;
     if (editIndex !== '') {
         DB.updateManualHoliday(parseInt(editIndex, 10), name, from, to);
@@ -892,11 +901,13 @@ window.editManualHoliday = function(index) {
 };
 
 window.deleteManualHoliday = function(index) {
-    if (!confirm('Eintrag löschen?')) return;
-    captureUndo();
-    DB.deleteManualHoliday(index);
-    renderHolidays();
-    if (window.FilePersist) FilePersist.scheduleSave();
+    safeConfirm('Eintrag löschen?').then(function(result) {
+        if (!result) return;
+        captureUndo();
+        DB.deleteManualHoliday(index);
+        renderHolidays();
+        if (window.FilePersist) FilePersist.scheduleSave();
+    });
 };
 
 window.setTimetableEditMode = function(active) {
@@ -1151,7 +1162,7 @@ function renderDashboard() {
                             const subjectHtml = (!className || !redundant) ? '<strong>' + (abbr || entry.subject) + '</strong>' : '';
                             const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
                             html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
-                                (timetableEditMode ? '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' : '') +
+                                (timetableEditMode ? '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">🖉</button>' : '') +
                                 '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
                         }
                     }
@@ -1198,7 +1209,7 @@ function openTimetableEditor(preDay, prePeriod) {
     timetable.forEach(e => {
         const cls = classes.find(c => c.id === e.classId);
         const className = cls ? cls.name : '–';
-        html += '<div style="padding:10px;margin:5px 0;background:var(--bg-dark);border-radius:8px;" oncontextmenu="if(event.target.tagName !== \'BUTTON\'){event.preventDefault();if(confirm(\'Eintrag löschen: ' + e.day + ' - ' + e.period + '?\'))deleteTimetableEntry(\'' + e.id + '\');}">' +
+        html += '<div style="padding:10px;margin:5px 0;background:var(--bg-dark);border-radius:8px;" oncontextmenu="if(event.target.tagName !== \'BUTTON\'){event.preventDefault();safeConfirm(\'Eintrag löschen: \' + e.day + \' - \' + e.period + \'?\').then(function(r){if(r)deleteTimetableEntry(\'' + e.id + '\');})}">' +
             e.day + ' - ' + e.period + ': ' + e.subject + ' (' + className + ', ' + e.room + ') ' +
             '<button class="btn btn-secondary" onclick="deleteTimetableEntry(\'' + e.id + '\')">×</button>' +
             '</div>';
@@ -1254,11 +1265,13 @@ function addTimetableEntryModal() {
 }
 
 function deleteTimetableEntry(id) {
-    if (!confirm('Eintrag wirklich löschen?')) return;
-    captureUndo();
-    DB.deleteTimetableEntry(id);
-    hideModal();
-    renderDashboard();
+    safeConfirm('Eintrag wirklich löschen?').then(function(result) {
+        if (!result) return;
+        captureUndo();
+        DB.deleteTimetableEntry(id);
+        hideModal();
+        renderDashboard();
+    });
 }
 
 function editTimetableEntry(id) {
@@ -1433,7 +1446,7 @@ window.uploadStudentPhoto = function(input, studentId, classId) {
     const file = input.files && input.files[0];
     if (!file) return;
     resizeImageFile(file, 160, function(dataUrl) {
-        if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
+        if (!dataUrl) { alertModal('Bild konnte nicht verarbeitet werden.'); return; }
         const students = DB.getStudentsSorted();
         const sid = String(studentId);
         const stu = students.find(function(s) { return String(s.id) === sid; });
@@ -1448,7 +1461,7 @@ window.pasteStudentPhoto = function(studentId, classId) {
     window._lastFocusedStudentId = String(studentId);
     window._lastFocusedClassId = classId;
     if (!navigator.clipboard || !navigator.clipboard.read) {
-        alert('Zwischenablage kann nicht gelesen werden. Bitte erneut versuchen oder Bild-Datei verwenden.');
+        alertModal('Zwischenablage kann nicht gelesen werden. Bitte erneut versuchen oder Bild-Datei verwenden.');
         return;
     }
     navigator.clipboard.read().then(clipboardItems => {
@@ -1457,7 +1470,7 @@ window.pasteStudentPhoto = function(studentId, classId) {
                 if (type.startsWith('image/')) {
                     item.getType(type).then(blob => {
                         resizeImageFile(blob, 160, function(dataUrl) {
-                            if (!dataUrl) { alert('Bild konnte nicht verarbeitet werden.'); return; }
+                            if (!dataUrl) { alertModal('Bild konnte nicht verarbeitet werden.'); return; }
                             const students = DB.getStudentsSorted();
                             const sid = String(studentId);
                             const stu = students.find(function(s) { return String(s.id) === sid; });
@@ -1470,9 +1483,9 @@ window.pasteStudentPhoto = function(studentId, classId) {
                 }
             }
         }
-        alert('Kein Bild in der Zwischenablage gefunden.');
+        alertModal('Kein Bild in der Zwischenablage gefunden.');
     }).catch(err => {
-        alert('Zugriff auf Zwischenablage fehlgeschlagen: ' + err.message);
+        alertModal('Zugriff auf Zwischenablage fehlgeschlagen: ' + err.message);
     });
 };
 
@@ -1970,7 +1983,7 @@ function renderPlan(classId) {
                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
                  const actions = entry ?
-                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' :
+                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' :
                      '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
                 const contentClass = nr ? 'pre plan-content-gz' : 'pre plan-content-gz plan-content-only';
                 html += '<tr class="' + rowClass.trim() + '">' +
@@ -2006,7 +2019,7 @@ function renderPlan(classId) {
                     '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>' +
                     '<td>' + hwDisplay + '</td>' +
-                    '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>' +
+                    '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">🖉</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>' +
                     '</tr>';
             });
         } else {
@@ -2040,7 +2053,7 @@ function renderPlan(classId) {
                 cells += '<td class="pre plan-content-other">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>';
                  if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr || '–') : '–') + '</td>';
                  cells += '<td class="pre plan-hw-content-other" style="border-left:none;">' + escapeHtml(entry ? (entry.homeworkContent || '') : '') + '</td>';
-                cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
+                cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">🖉</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
                 html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
             });
         }
@@ -2067,7 +2080,7 @@ function renderPlan(classId) {
                 '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td>' + (nr ? (nr + '<span style="margin-left:20px;">' + escapeHtml(title) + '</span>') : '–') + '</td>' +
                 '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
-                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -2088,7 +2101,7 @@ function renderPlan(classId) {
                 '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
                 '<td>' + hwDisplay + '</td>' +
-                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -2114,7 +2127,7 @@ function renderPlan(classId) {
              cells += '<td class="pre plan-content-other">' + escapeHtml(e.exerciseContent || '') + '</td>';
              if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>';
             cells += '<td class="pre plan-hw-content-other">' + escapeHtml(e.homeworkContent || '') + '</td>';
-            cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
+            cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
             html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
         });
         html += '</tbody></table>';
@@ -2182,7 +2195,7 @@ function openPlanModal(classId, id, date) {
 function savePlanEntry(classId, id) {
     captureUndo();
     const date = document.getElementById('plan-date').value;
-    if (!date) { alert('Bitte Datum angeben'); return; }
+    if (!date) { alertModal('Bitte Datum angeben'); return; }
     const isDG = isDGClass(classId);
     const isGZ = isGZClass(classId);
     let exNr = '', exContent = '';
@@ -2229,10 +2242,12 @@ function savePlanEntry(classId, id) {
 }
 
 function deletePlanEntry(classId, id) {
-    if (!confirm('Eintrag wirklich löschen?')) return;
-    captureUndo();
-    DB.deleteTeachingPlanEntry(classId, id);
-    renderGrading();
+    safeConfirm('Eintrag wirklich löschen?').then(function(result) {
+        if (!result) return;
+        captureUndo();
+        DB.deleteTeachingPlanEntry(classId, id);
+        renderGrading();
+    });
 }
 
 window.openSupplierModal = function(classId, date) {
@@ -2270,7 +2285,7 @@ window.openSupplierModal = function(classId, date) {
 
 window.saveSupplierEntry = function(classId) {
     const date = document.getElementById('plan-date').value;
-    if (!date) { alert('Bitte Datum angeben'); return; }
+    if (!date) { alertModal('Bitte Datum angeben'); return; }
     const isGZ = isGZClass(classId);
     let exNr = '', exContent = '';
     if (!isGZ) {
@@ -2650,8 +2665,8 @@ function renderMissingHwOverview(classId) {
                 let cellText = '';
                 if (val === 'k') { cellClass = 'hw-status-sick'; cellText = 'k'; }
                 else if (val === 'improve') { cellClass = 'hw-status-improve'; cellText = 'V!'; }
-                else if (val === 'done' || val === 'improved' || val === 'collected') { cellText = '✓'; }
-                else if (val === 'forgotten' || val === '0' || val === '') { cellClass = 'hw-status-forgotten'; cellText = '✗'; }
+                else if (val === 'done' || val === 'improved' || val === 'collected') { cellText = '?'; }
+                else if (val === 'forgotten' || val === '0' || val === '') { cellClass = 'hw-status-forgotten'; cellText = '?'; }
                 else cellText = '–';
                 html += '<td class="' + cellClass + '" style="text-align:center;">' + cellText + '</td>';
             });
@@ -2663,9 +2678,9 @@ function renderMissingHwOverview(classId) {
                 let cellText = '';
                 if (s === 'sick') { cellClass = 'hw-status-sick'; cellText = 'k'; }
                 else if (s === 'improve') { cellClass = 'hw-status-improve'; cellText = 'V!'; }
-                else if (s === 'done' || s === 'improved' || s === 'collected') { cellText = '✓'; }
-                else if (s === 'forgotten') { cellClass = 'hw-status-forgotten'; cellText = '✗'; }
-                else if (!corrected[h.nr]) { cellClass = 'hw-status-forgotten'; cellText = '✗'; }
+                else if (s === 'done' || s === 'improved' || s === 'collected') { cellText = '?'; }
+                else if (s === 'forgotten') { cellClass = 'hw-status-forgotten'; cellText = '?'; }
+                else if (!corrected[h.nr]) { cellClass = 'hw-status-forgotten'; cellText = '?'; }
                 else cellText = '–';
                 html += '<td class="' + cellClass + '" style="text-align:center;">' + cellText + '</td>';
             });
@@ -2763,7 +2778,7 @@ function setExamReturned(classId, studentId, examId, returned, inputEl) {
             const studentRec = (rec[studentId] && rec[studentId][examId]) ? rec[studentId][examId] : { examplePoints: {}, returned: false };
             const returnCell = row.querySelector('.exam-return-cell');
             if (returnCell) {
-                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '✓' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (studentRec.absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
+                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '?' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (studentRec.absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
             }
             const statsEl = document.getElementById('exam-stats-' + examId);
             if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
@@ -2796,7 +2811,7 @@ function setExamAbsent(classId, studentId, examId, absent, inputEl) {
                 sumCell.innerHTML = '<strong>' + (absent ? '–' : (exam.maxPoints > 0 ? sumPointsForRec(studentRec, exam) : '–')) + '</strong>';
             }
             if (returnCell) {
-                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '✓' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
+                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '?' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
             }
             const statsEl = document.getElementById('exam-stats-' + examId);
             if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
@@ -2881,7 +2896,7 @@ function saveExam(classId, id) {
     captureUndo();
     const title = document.getElementById('exam-title').value;
     const date = document.getElementById('exam-date').value;
-    if (!title) { alert('Titel angeben'); return; }
+    if (!title) { alertModal('Titel angeben'); return; }
     const examples = [];
     document.querySelectorAll('#exam-examples .exam-ex-row').forEach(row => {
         const l = row.querySelector('.ex-label').value;
@@ -2924,11 +2939,12 @@ function saveExam(classId, id) {
 
 function deleteExamConfirm(classId, examId) {
     captureUndo();
-    if (confirm('Schularbeit wirklich löschen?')) {
+    safeConfirm('Schularbeit wirklich löschen?').then(function(result) {
+        if (!result) return;
         DB.deleteExam(classId, examId);
         currentExamId = null;
         renderGrading();
-    }
+    });
 }
 
 function setCurrentExam(id) {
@@ -2958,11 +2974,11 @@ function renderExamTable(classId, exam) {
         if (subSet.has(ord)) {
             let blockMax = 0;
             for (let k = prevBoundary; k <= i; k++) blockMax += exam.examples[k].maxPoints;
-            html += '<th class="exam-subtotal-col">Σ<br><small>' + blockMax + ' P</small></th>';
+            html += '<th class="exam-subtotal-col">S<br><small>' + blockMax + ' P</small></th>';
             prevBoundary = i + 1;
         }
     });
-    html += '<th class="exam-sum-cell exam-sticky-right">Σ / ' + exam.maxPoints + '</th><th class="exam-sticky-right exam-grade-col">Note</th><th class="exam-sticky-right">zurück</th><th class="exam-sticky-right">abwesend</th></tr></thead><tbody>';
+    html += '<th class="exam-sum-cell exam-sticky-right">S / ' + exam.maxPoints + '</th><th class="exam-sticky-right exam-grade-col">Note</th><th class="exam-sticky-right">zurück</th><th class="exam-sticky-right">abwesend</th></tr></thead><tbody>';
     students.forEach((s, rowIdx) => {
         const rec = (records[s.id] && records[s.id][exam.id]) ? records[s.id][exam.id] : { examplePoints: {}, returned: false };
         const isAbsent = !!rec.absent;
@@ -3047,7 +3063,7 @@ function renderExamsView(classId) {
         '</div>';
     html += renderExamTable(classId, exam);
     html += renderExamStats(classId, exam, 'exam-stats-' + exam.id);
-    html += '<div class="no-print" style="margin-top:15px;"><button class="btn btn-secondary" onclick="openExamModal(\'' + classId + '\',\'' + exam.id + '\')">✎ Bearbeiten</button> <button class="btn btn-secondary" onclick="deleteExamConfirm(\'' + classId + '\',\'' + exam.id + '\')">Schularbeit löschen</button></div>';
+    html += '<div class="no-print" style="margin-top:15px;"><button class="btn btn-secondary" onclick="openExamModal(\'' + classId + '\',\'' + exam.id + '\')">? Bearbeiten</button> <button class="btn btn-secondary" onclick="deleteExamConfirm(\'' + classId + '\',\'' + exam.id + '\')">Schularbeit löschen</button></div>';
     return html;
 }
 
@@ -3129,11 +3145,11 @@ function renderProjects(classId) {
     students.forEach(s => {
         const d = data[s.id] || {};
         const ot = d.onTime || '';
-        const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
+        const otLabel = ot === 'pos' ? '?' : (ot === 'neg' ? '?' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelectDecimal(d.grade, "setProjectGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
-            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
+            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ?=ja, ?=nein" onclick="toggleProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
     html += '</tbody></table>';
@@ -3445,14 +3461,16 @@ window.restoreBackup = function() {
         const text = await file.text();
         try {
             const data = JSON.parse(text);
-            if (!confirm('Achtung: Dies überschreibt alle aktuellen Daten (Klassen, Schüler, Stundenplan, Noten). Fortfahren?')) return;
-            DB.importAll(text);
-            alert('Backup erfolgreich eingespielt.');
-            renderDashboard();
-            renderClasses();
-            renderGrading();
+            safeConfirm('Achtung: Dies überschreibt alle aktuellen Daten (Klassen, Schüler, Stundenplan, Noten). Fortfahren?').then(function(result) {
+                if (!result) return;
+                DB.importAll(text);
+                alertModal('Backup erfolgreich eingespielt.');
+                renderDashboard();
+                renderClasses();
+                renderGrading();
+            });
         } catch (err) {
-            alert('Ungültige Backup-Datei: ' + err.message);
+            alertModal('Ungültige Backup-Datei: ' + err.message);
         }
     };
     input.click();
@@ -3473,10 +3491,10 @@ function openNewSchoolYearModal() {
     ).join('');
     const html = '<div class="modal-header">' +
         '<h2>Neues Schuljahr starten</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
-        '<p>Damit Sie das aktuelle Jahr nicht verlieren, empfehle ich zuerst:<br><strong>📁 Schuljahr sichern</strong>.</p>' +
+        '<p>Damit Sie das aktuelle Jahr nicht verlieren, empfehle ich zuerst:<br><strong>💾 Schuljahr sichern</strong>.</p>' +
         '<div class="form-group exam-form">' +
         '<h3>Klassen auswählen und umbenennen</h3>' +
-        '<p class="subtitle" style="font-size:12px;">Markieren Sie Klassen, die Sie ins nächste Schuljahr übernehmen möchten. Optional können Sie einen neuen Namen eingeben (z.B. 4A → 5A).</p>' +
+        '<p class="subtitle" style="font-size:12px;">Markieren Sie Klassen, die Sie ins nächste Schuljahr übernehmen möchten. Optional können Sie einen neuen Namen eingeben (z.B. 4A ? 5A).</p>' +
         classListHtml +
         '<label style="display:flex;align-items:center;gap:6px;margin-top:12px;width:auto;"><input type="checkbox" id="archive-school-year"> Aktuelles Jahr vorher archivieren</label>' +
         '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;width:auto;"><input type="checkbox" id="clear-timetable" checked> Stundenplan leeren</label>' +
@@ -3504,11 +3522,12 @@ function executeSchoolYearChange() {
         }
     });
     if (toKeep.length === 0) {
-        alert('Bitte mindestens eine Klasse auswählen.');
+        alertModal('Bitte mindestens eine Klasse auswählen.');
         return;
     }
-    if (!confirm('Wirklich das Schuljahr wechseln? Nicht ausgewählte Klassen werden gelöscht.')) return;
-    const archive = document.getElementById('archive-school-year') && document.getElementById('archive-school-year').checked;
+    safeConfirm('Wirklich das Schuljahr wechseln? Nicht ausgewählte Klassen werden gelöscht.').then(function(result) {
+        if (!result) return;
+        const archive = document.getElementById('archive-school-year') && document.getElementById('archive-school-year').checked;
     const clearTimetable = document.getElementById('clear-timetable') && document.getElementById('clear-timetable').checked;
     const clearGrades = document.getElementById('clear-grades') && document.getElementById('clear-grades').checked;
     if (archive) {
@@ -3552,7 +3571,8 @@ function executeSchoolYearChange() {
     switchView('dashboard');
     renderDashboard();
     renderClasses();
-    alert('Neues Schuljahr gestartet.');
+    alertModal('Neues Schuljahr gestartet.');
+    });
 }
 
 function importData(input) {
@@ -3566,9 +3586,9 @@ function importData(input) {
             switchView('dashboard');
             renderDashboard();
             renderClasses();
-            alert('Daten erfolgreich importiert.');
+            alertModal('Daten erfolgreich importiert.');
         } catch (err) {
-            alert('Import fehlgeschlagen: Datei ist kein gültiges Plan-it-Backup.');
+            alertModal('Import fehlgeschlagen: Datei ist kein gültiges Plan-it-Backup.');
         }
         input.value = '';
     };
@@ -3621,7 +3641,7 @@ window.saveAppointment = function() {
     const date = document.getElementById('appt-date').value;
     const title = document.getElementById('appt-title').value.trim();
     const desc = document.getElementById('appt-desc').value.trim();
-    if (!date || !title) { alert('Bitte Datum und Titel angeben.'); return; }
+    if (!date || !title) { alertModal('Bitte Datum und Titel angeben.'); return; }
     DB.addAppointment({ date: date, title: title, description: desc });
     document.getElementById('appt-title').value = '';
     document.getElementById('appt-desc').value = '';
@@ -3645,19 +3665,21 @@ window.updateAppointment = function(id) {
     const date = document.getElementById('edit-appt-date').value;
     const title = document.getElementById('edit-appt-title').value.trim();
     const desc = document.getElementById('edit-appt-desc').value.trim();
-    if (!date || !title) { alert('Bitte Datum und Titel angeben.'); return; }
+    if (!date || !title) { alertModal('Bitte Datum und Titel angeben.'); return; }
     DB.updateAppointment(id, { date: date, title: title, description: desc });
     hideModal();
     renderAppointmentsList();
     renderDashboard();
 };
 window.deleteAppointment = function(id) {
-    if (!confirm('Termin wirklich löschen?')) return;
-    captureUndo();
-    DB.deleteAppointment(id);
-    hideModal();
-    renderAppointmentsList();
-    renderDashboard();
+    safeConfirm('Termin wirklich löschen?').then(function(result) {
+        if (!result) return;
+        captureUndo();
+        DB.deleteAppointment(id);
+        hideModal();
+        renderAppointmentsList();
+        renderDashboard();
+    });
 };
 function renderAppointmentsList() {
     const list = DB.loadAppointments() || [];
@@ -3719,14 +3741,14 @@ window.saveHwGradeThresholds = function() {
     const g3 = parseInt(document.getElementById('hw-threshold-g3').value, 10);
     const g4 = parseInt(document.getElementById('hw-threshold-g4').value, 10);
     DB.saveHwGradeThresholds({ g1: g1, g2: g2, g3: g3, g4: g4 });
-    alert('Notengrenzen gespeichert.');
+    alertModal('Notengrenzen gespeichert.');
 };
 window.saveGlobalSettings = function() {
     captureUndo();
     const start = document.getElementById('school-year-start').value;
     const end = document.getElementById('school-year-end').value;
     DB.saveGlobalSettings({ schoolYearStart: start, schoolYearEnd: end });
-    alert('Schuljahr gespeichert.');
+    alertModal('Schuljahr gespeichert.');
 };
 function setSyncStatus(text) {
     const el = document.getElementById('sync-status');
@@ -3747,11 +3769,11 @@ function setODStatus(connected) {
 window.syncNow = async function() {
     if (!(FilePersist && FilePersist.saveToFile && FilePersist.loadFromFile)) {
         setSyncStatus('nicht verknüpft');
-        alert('Keine Datei-Speicherung verknüpft.');
+        alertModal('Keine Datei-Speicherung verknüpft.');
         return;
     }
     if (!validateAllGrades()) {
-        alert('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
+        alertModal('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
         return;
     }
     showLoading('Sync läuft...');
@@ -3760,10 +3782,10 @@ window.syncNow = async function() {
         await FilePersist.loadFromFile();
         await FilePersist.saveToFile();
         setSyncStatus('gespeichert');
-        alert('Sync abgeschlossen.');
+        alertModal('Sync abgeschlossen.');
     } catch (e) {
         setSyncStatus('Fehler');
-        alert('Sync fehlgeschlagen: ' + (e && e.message ? e.message : e));
+        alertModal('Sync fehlgeschlagen: ' + (e && e.message ? e.message : e));
     }
     hideLoading();
 };
@@ -3771,7 +3793,7 @@ window.syncNow = async function() {
 window.manualSave = async function() {
     if (FilePersist && FilePersist.saveToFile) {
         if (!validateAllGrades()) {
-            alert('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
+            alertModal('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
             return;
         }
         showLoading('Speichert...');
@@ -3785,7 +3807,7 @@ window.manualSave = async function() {
 async function linkDataFile() {
     const ok = await FilePersist.chooseFile();
     updateDataFileUI();
-    if (ok) { alert('Datendatei verknüpft. Alle Änderungen werden jetzt automatisch gespeichert.'); renderDashboard(); renderClasses(); }
+    if (ok) { alertModal('Datendatei verknüpft. Alle Änderungen werden jetzt automatisch gespeichert.'); renderDashboard(); renderClasses(); }
 }
 
 
@@ -3803,7 +3825,7 @@ function updateProviderBadge() {
         el.textContent = '☁️ OneDrive';
         el.className = 'provider-badge od-active';
     } else {
-        el.textContent = '💾 Lokal';
+        el.textContent = '💻 Lokal';
         el.className = 'provider-badge local-active';
     }
 }
@@ -3814,7 +3836,7 @@ window.ODSaveConfig = function () {
     if (window.OD) window.OD.setConfig(cid ? cid.value : '', ten ? ten.value : '');
     if (window.OD) window.OD.renderStatus();
     updateProviderBadge();
-    alert('Konfiguration gespeichert. Jetzt auf „Mit OneDrive verbinden" klicken.');
+    alertModal('Konfiguration gespeichert. Jetzt auf „Mit OneDrive verbinden" klicken.');
 };
 
 window.ODConnect = function () {
@@ -3999,7 +4021,7 @@ window.exportWorksheetsCSV = function(classId) {
     const globalSettings = DB.loadGlobalSettings();
     const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
     if (!planned.length) {
-        alert('Keine Übungsblätter zum Exportieren vorhanden.');
+        alertModal('Keine Übungsblätter zum Exportieren vorhanden.');
         return;
     }
     const lines = ['Nr.;Titel;Datum;Nur Computer'];
@@ -4036,7 +4058,7 @@ function renderGZGrades(classId) {
     html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left">Schüler</th>';
     worksheets.forEach(w => {
         const co = w.isComputerOnly ? ' <small style="color:#16a34a;font-style:italic;">(nur Computer)</small>' : '';
-        const toggleBtn = '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? '✓ Nur Computer' : '○ Ausgeteilt') + '</button>';
+        const toggleBtn = '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? '? Nur Computer' : '? Ausgeteilt') + '</button>';
         html += '<th colspan="4" class="gz-ws-sep">' + w.nr + toggleBtn + '<br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small>' + co + '</th>';
     });
     html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
@@ -4180,11 +4202,11 @@ function renderGZProject(classId) {
         const grade = st.project || '';
         const note = st.projectNote || '';
         const ot = st.projectOnTime || '';
-        const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
+        const otLabel = ot === 'pos' ? '?' : (ot === 'neg' ? '?' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' +
-            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
+            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ?=ja, ?=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(note) + '" onchange="setGZProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
     html += '</tbody></table>';
@@ -4809,7 +4831,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const modal = document.getElementById('modal-overlay');
         if (!modal || modal.style.display === 'none') return;
         e.preventDefault();
-        pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
+        window.pasteStudentPhoto(window._selectedStudentId, window._selectedClassId);
     });
     let startRendered = false;
     function tryRenderStartup() {
@@ -4999,7 +5021,7 @@ window.addTodo = function() {
     const saveHandler = function() {
         const text = document.getElementById('new-todo-text').value.trim();
         const date = document.getElementById('new-todo-date').value;
-        if (!text) { alert('Bitte Text eingeben.'); return; }
+        if (!text) { alertModal('Bitte Text eingeben.'); return; }
         DB.addTodo(text, date);
         hideModal();
         renderTodos();
