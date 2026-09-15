@@ -366,7 +366,7 @@ function getClassManagerContent(cls, students) {
             '<button class="btn btn-secondary" title="Foto hinzufügen/ändern" onclick="window._lastFocusedStudentId=\'' + s.id + '\'; window._lastFocusedClassId=\'' + cls.id + '\'; document.getElementById(\'stu-photo-input-' + s.id + '\').click()">📷</button>' +
             '<button class="btn btn-secondary photo-paste-btn" title="Screenshot einfügen (Strg+V)" onclick="window.pasteStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">📋</button>' +
             (s.photo ? '<button class="btn btn-secondary" title="Foto entfernen" onclick="window.removeStudentPhoto(\'' + s.id + '\', \'' + cls.id + '\')">🗑️</button>' : '') +
-            '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">🖉</button>' +
+            '<button class="btn btn-secondary stu-edit" title="Name bearbeiten" onclick="editStudent(\'' + s.id + '\', \'' + cls.id + '\')">✎</button>' +
             '<button class="btn btn-secondary" title="Löschen" onclick="deleteStudent(\'' + s.id + '\', \'' + cls.id + '\')">×</button>' +
             '</span></li>';
     });
@@ -495,7 +495,7 @@ function renderClassEventsList(events, classId) {
             '</div>' +
             (ev.description ? '<div style="font-size:12px;color:var(--text-muted);">' + escapeHtml(ev.description) + '</div>' : '') +
             '<div class="class-event-actions">' +
-            '<button class="btn btn-secondary" title="Bearbeiten" onclick="window.openClassEventModal(\'' + classId + '\', \'' + ev.id + '\')">🖉</button>' +
+            '<button class="btn btn-secondary" title="Bearbeiten" onclick="window.openClassEventModal(\'' + classId + '\', \'' + ev.id + '\')">✎</button>' +
             '<button class="btn btn-secondary" title="Löschen" onclick="window.deleteClassEvent(\'' + classId + '\', \'' + ev.id + '\')">×</button>' +
             '</div>' +
             '</li>';
@@ -1162,7 +1162,7 @@ function renderDashboard() {
                             const subjectHtml = (!className || !redundant) ? '<strong>' + (abbr || entry.subject) + '</strong>' : '';
                             const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
                             html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
-                                (timetableEditMode ? '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">🖉</button>' : '') +
+                                (timetableEditMode ? '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' : '') +
                                 '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
                         }
                     }
@@ -1983,7 +1983,7 @@ function renderPlan(classId) {
                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
                  const actions = entry ?
-                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' :
+                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' :
                      '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
                 const contentClass = nr ? 'pre plan-content-gz' : 'pre plan-content-gz plan-content-only';
                 html += '<tr class="' + rowClass.trim() + '">' +
@@ -2019,7 +2019,7 @@ function renderPlan(classId) {
                     '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>' +
                     '<td>' + hwDisplay + '</td>' +
-                    '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">🖉</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>' +
+                    '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>' +
                     '</tr>';
             });
         } else {
@@ -2053,7 +2053,7 @@ function renderPlan(classId) {
                 cells += '<td class="pre plan-content-other">' + escapeHtml(entry ? (entry.exerciseContent || '') : '') + '</td>';
                  if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr || '–') : '–') + '</td>';
                  cells += '<td class="pre plan-hw-content-other" style="border-left:none;">' + escapeHtml(entry ? (entry.homeworkContent || '') : '') + '</td>';
-                cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">🖉</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
+                cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
                 html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
             });
         }
@@ -2080,7 +2080,7 @@ function renderPlan(classId) {
                 '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td>' + (nr ? (nr + '<span style="margin-left:20px;">' + escapeHtml(title) + '</span>') : '–') + '</td>' +
                 '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
-                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -2101,7 +2101,7 @@ function renderPlan(classId) {
                 '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td class="pre">' + escapeHtml(e.exerciseContent || '') + '</td>' +
                 '<td>' + hwDisplay + '</td>' +
-                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -2127,7 +2127,7 @@ function renderPlan(classId) {
              cells += '<td class="pre plan-content-other">' + escapeHtml(e.exerciseContent || '') + '</td>';
              if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>';
             cells += '<td class="pre plan-hw-content-other">' + escapeHtml(e.homeworkContent || '') + '</td>';
-            cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">🖉</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
+            cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
             html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
         });
         html += '</tbody></table>';
