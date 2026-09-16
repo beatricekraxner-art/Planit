@@ -1695,11 +1695,17 @@ let currentGradeTab = 'plan';
 let hwScrollRestored = false;
 let gradeOverviewScope = 'semester';
 let lastRenderedPlanClassId = null;
+let lastSelectedGradeClassId = null;
 let currentExamId = null;
 let examPointGrid = [];
 
 function renderGrading() {
-    const classId = document.getElementById('grade-class-select').value;
+    let classId = document.getElementById('grade-class-select').value;
+    if (!classId && lastSelectedGradeClassId) {
+        classId = lastSelectedGradeClassId;
+        const select = document.getElementById('grade-class-select');
+        if (select) select.value = classId;
+    }
     const switcher = document.getElementById('grade-switcher');
     const container = document.getElementById('grading-table-container');
     if (!classId) {
@@ -1707,6 +1713,7 @@ function renderGrading() {
         container.innerHTML = '';
         return;
     }
+    lastSelectedGradeClassId = classId;
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
@@ -1728,6 +1735,7 @@ function renderGrading() {
     tabs.push(['pruef', 'Prüfungen']);
     tabs.push(['mit', 'Mitarbeit']);
     tabs.push(['overview', 'Übersicht']);
+    tabs.push(['sammeln', 'Checklisten']);
     if (planMode === 'dg') tabs.push(['project', 'Projekt']);
     if (planMode === 'gz') {
         const gzTabs = [
@@ -1740,6 +1748,7 @@ function renderGrading() {
         gzTabs.push(['gz-forgotten', 'Vergessenes']);
         gzTabs.push(['worksheets', 'Liste der ÜB']);
         gzTabs.push(['gz-overview', 'Übersicht']);
+        gzTabs.push(['sammeln', 'Checklisten']);
         tabs = gzTabs;
     }
     switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('') + (currentGradeTab === 'plan' ? '<button class="btn grade-tab plan-new-btn" onclick="openPlanModal(\'' + classId + '\')">+ Neue Stunde</button>' : '');
@@ -1878,8 +1887,149 @@ function renderGradeContent(classId) {
     if (currentGradeTab === 'gz-project') return renderGZProject(classId);
     if (currentGradeTab === 'gz-forgotten') return renderGZForgotten(classId);
     if (currentGradeTab === 'gz-overview') return renderGZOverview(classId);
+    if (currentGradeTab === 'sammeln') return renderCollections(classId);
     return '';
 }
+
+function renderCollections(classId) {
+    var cls = DB.loadClasses().find(function(c) { return c.id === classId; });
+    if (!cls) return '<p>Keine Klasse gefunden</p>';
+    var collections = cls.collections || [];
+    var students = DB.getStudentsForClass(classId);
+    var html = '<div class="view-header"><div><h2>Checklisten</h2><p class="subtitle">Für jeden Schüler abhaken, wenn etwas erhalten wurde.</p></div></div>';
+    html += '<div id="collection-add-form-' + classId + '"></div>';
+    html += '<button class="btn collection-new-btn" onclick="window.addCollection(\'' + classId + '\')">&#128203; Checkliste</button>';
+    if (!collections.length) {
+        html += '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;">Noch keine Checklisten angelegt.</p>';
+        return html;
+    }
+    html += '<div class="collection-wrap"><table class="collection-table"><thead><tr><th>Name</th>';
+    for (var i = 1; i < collections.length; i++) {
+        var hc = collections[i];
+        var hd = 0;
+        students.forEach(function(s) {
+            if (hc.completed && hc.completed[s.id]) hd++;
+        });
+        html += '<th class="collection-col-header" title="' + escapeHtml(hc.name) + (hc.date ? ' — Frist: ' + formatDateDE(hc.date) : '') + '">' +
+            '<span class="collection-col-name">' + escapeHtml(hc.name) + '</span>' +
+            '<small class="collection-col-progress">' + hd + '/' + students.length + '</small>' +
+            (hc.date ? '<small class="collection-col-date">' + formatDateDE(hc.date) + '</small>' : '') +
+            '<button class="btn btn-secondary" onclick="window.deleteCollection(\'' + classId + '\', \'' + hc.id + '\')" style="font-size:10px;padding:1px 4px;">×</button>' +
+            '</th>';
+    }
+    html += '</tr></thead><tbody>';
+    students.forEach(function(s) {
+        html += '<tr><td class="collection-student-name">' + studentNameHtml(s) + '</td>';
+        for (var ci = 1; ci < collections.length; ci++) {
+            var c = collections[ci];
+            var checked = c.completed && c.completed[s.id];
+            html += '<td><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="window.toggleCollectionStudent(\'' + classId + '\', \'' + c.id + '\', \'' + s.id + '\')"></td>';
+        }
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+window.addCollection = function(classId) {
+    var form = document.getElementById('collection-add-form-' + classId);
+    if (!form) return;
+    if (form.style.display === 'block') { form.style.display = 'none'; return; }
+    form.style.display = 'block';
+    form.innerHTML = '<div class="collection-add-form">' +
+        '<input type="text" id="collection-new-name" placeholder="Name (z.B. Geld Ausflug)" style="width:100%;">' +
+        '<input type="date" id="collection-new-date" placeholder="Datum" style="width:150px;margin-top:4px;">' +
+        '<div style="display:flex;gap:6px;margin-top:4px;">' +
+        '<button class="btn" onclick="window.saveCollection(\'' + classId + '\')">Erstellen</button>' +
+        '<button class="btn btn-secondary" onclick="window.cancelAddCollection(\'' + classId + '\')">Abbrechen</button>' +
+        '</div></div>';
+    setTimeout(function() { var inp = document.getElementById('collection-new-name'); if (inp) inp.focus(); }, 50);
+};
+
+window.cancelAddCollection = function(classId) {
+    var form = document.getElementById('collection-add-form-' + classId);
+    if (form) { form.style.display = 'none'; form.innerHTML = ''; }
+};
+
+window.saveCollection = function(classId) {
+    var nameEl = document.getElementById('collection-new-name');
+    var dateEl = document.getElementById('collection-new-date');
+    if (!nameEl || !nameEl.value.trim()) return;
+    var classes = DB.loadClasses();
+    var cls = classes.find(function(c) { return c.id === classId; });
+    if (!cls) return;
+    if (!cls.collections) cls.collections = [];
+    cls.collections.push({
+        id: Date.now().toString(),
+        name: nameEl.value.trim(),
+        date: dateEl ? dateEl.value : '',
+        completed: {}
+    });
+    DB.saveClasses(classes);
+    var form = document.getElementById('collection-add-form-' + classId);
+    if (form) { form.style.display = 'none'; form.innerHTML = ''; }
+    var container = document.getElementById('grading-table-container');
+    if (container) container.innerHTML = renderCollections(classId);
+};
+
+window.toggleCollectionStudent = function(classId, collectionId, studentId) {
+    var classes = DB.loadClasses();
+    var cls = classes.find(function(c) { return c.id === classId; });
+    if (!cls) return;
+    var collection = cls.collections.find(function(c) { return c.id === collectionId; });
+    if (!collection) return;
+    if (!collection.completed) collection.completed = {};
+    collection.completed[studentId] = !collection.completed[studentId];
+    DB.saveClasses(classes);
+    var container = document.getElementById('grading-table-container');
+    if (container) container.innerHTML = renderCollections(classId);
+};
+
+window.deleteCollection = function(classId, collectionId) {
+    safeConfirm('Diese Checkliste wirklich löschen?').then(function(ok) {
+        if (!ok) return;
+        var classes = DB.loadClasses();
+        var cls = classes.find(function(c) { return c.id === classId; });
+        if (!cls) return;
+        cls.collections = cls.collections.filter(function(c) { return c.id !== collectionId; });
+        DB.saveClasses(classes);
+        var container = document.getElementById('grading-table-container');
+        if (container) container.innerHTML = renderCollections(classId);
+    });
+};
+
+window.editCollectionName = function(classId, collectionId, el) {
+    if (el.querySelector('input')) return;
+    var name = el.textContent;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = name;
+    input.style.cssText = 'font-size:inherit;font-weight:inherit;padding:2px 4px;background:var(--bg-panel);border:1px solid var(--primary);border-radius:3px;';
+    el.textContent = '';
+    el.appendChild(input);
+    input.focus();
+    input.select();
+    var save = function() {
+        var newName = input.value.trim();
+        var classes = DB.loadClasses();
+        var cls = classes.find(function(c) { return c.id === classId; });
+        if (cls) {
+            var collection = cls.collections.find(function(c) { return c.id === collectionId; });
+            if (collection) {
+                collection.name = newName || name;
+                DB.saveClasses(classes);
+                el.textContent = collection.name;
+                return;
+            }
+        }
+        el.textContent = name;
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') el.textContent = name;
+    });
+};
 
 /* ============ STUNDENPLANUNG ============ */
 function sortedPlan(classId) {
@@ -3321,6 +3471,7 @@ function openClassGrading(classId) {
     const select = document.getElementById('grade-class-select');
     if (select) {
         select.value = classId;
+        lastSelectedGradeClassId = classId;
         renderGrading();
     }
 }

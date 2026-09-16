@@ -77,9 +77,9 @@ const DB = {
     },
     loadClasses: function() {
         return this.load('classes', [
-            { id: '1', name: '4A GZ', subject: 'Geometrisches Zeichnen', type: 'gz', color: '#6366f1', firstLessonDate: '2025-09-15', lessonDays: ['Montag'] },
-            { id: '2', name: '7B DG', subject: 'Darstellende Geometrie', type: 'dg', color: '#ec4899', firstLessonDate: '2026-07-14', lessonDays: ['Dienstag', 'Donnerstag'] },
-            { id: '3', name: '1C Mathematik', subject: 'Mathematik', type: 'math', color: '#10b981', firstLessonDate: '2026-07-14', lessonDays: ['Montag', 'Mittwoch', 'Freitag'] }
+            { id: '1', name: '4A GZ', subject: 'Geometrisches Zeichnen', type: 'gz', color: '#6366f1', firstLessonDate: '2025-09-15', lessonDays: ['Montag'], collections: [] },
+            { id: '2', name: '7B DG', subject: 'Darstellende Geometrie', type: 'dg', color: '#ec4899', firstLessonDate: '2026-07-14', lessonDays: ['Dienstag', 'Donnerstag'], collections: [] },
+            { id: '3', name: '1C Mathematik', subject: 'Mathematik', type: 'math', color: '#10b981', firstLessonDate: '2026-07-14', lessonDays: ['Montag', 'Mittwoch', 'Freitag'], collections: [] }
         ]);
     },
     getSortedClasses: function() {
@@ -105,7 +105,8 @@ const DB = {
             showExerciseNr: type !== 'dg' && type !== 'other',
             showHomework: true,
             useDecimalGrades: false,
-            events: []
+            events: [],
+            collections: []
         });
         this.saveClasses(classes);
     },

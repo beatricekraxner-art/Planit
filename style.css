@@ -2958,6 +2958,30 @@ select.grade-input.invalid {
     outline: none;
 }
 
+.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; }
+.collection-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.collection-table th,
+.collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
+.collection-table thead th { background: linear-gradient(to bottom, var(--bg-panel), var(--bg-dark)); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+.collection-table thead th:first-child,
+.collection-table tbody td:first-child { text-align: left; font-weight: 500; width: auto; padding-right: 0; white-space: nowrap; }
+.collection-table thead th:nth-child(2),
+.collection-table tbody td:nth-child(2) { padding-left: 0; padding-right: 0; }
+
+.collection-table thead th:nth-child(n+3),
+.collection-table tbody td:nth-child(n+3) { padding-left: 4px; padding-right: 4px; }
+.collection-new-btn { margin-bottom: 10px; padding: 8px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.collection-table tbody tr { transition: background 0.15s; }
+.collection-table tbody tr:hover { background: rgba(99, 102, 241, 0.06); }
+.collection-table tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.015); }
+.collection-table tbody tr:nth-child(even):hover { background: rgba(99, 102, 241, 0.06); }
+.collection-table td:last-child, .collection-table th:last-child { border-right: none; }
+.collection-col-header { position: relative; min-width: 90px; vertical-align: top; }
+.collection-col-name { display: inline; font-size: 12px; font-weight: 600; max-width: 100px; margin: 0; color: var(--text-main); }
+.collection-col-progress { display: inline; font-size: 10px; color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+.collection-col-date { display: inline; font-size: 10px; color: var(--text-muted); margin-left: 4px; }
+.collection-table td input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+
 /* =============================================
    RESPONSIVE TABLES (Tablets & Mobile)
    ============================================= */
