@@ -925,8 +925,8 @@ select option:disabled {
 }
 
 .tt-sprechstunde {
-    background: rgba(148, 163, 184, 0.15) !important;
-    border-left: 4px solid #94a3b8 !important;
+    background: #cbd5e1 !important;
+    border-left: 4px solid #64748b !important;
     cursor: pointer;
     transition: all 0.2s;
     display: block;
@@ -934,8 +934,8 @@ select option:disabled {
 }
 
 .tt-patrol {
-    background: rgba(148, 163, 184, 0.25) !important;
-    border-left: 4px solid #64748b !important;
+    background: #94a3b8 !important;
+    border-left: 4px solid #475569 !important;
     cursor: pointer;
     display: block;
     position: relative;
@@ -947,7 +947,7 @@ select option:disabled {
 }
 
 .tt-sprechstunde strong {
-    color: #cbd5e1;
+    color: #1e293b !important;
 }
 
 .tt-patrol strong {
@@ -2962,7 +2962,7 @@ select.grade-input.invalid {
 .collection-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .collection-table th,
 .collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
-.collection-table thead th { background: linear-gradient(to bottom, var(--bg-panel), var(--bg-dark)); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+.collection-table thead th { background: linear-gradient(to bottom, var(--bg-panel), var(--bg-dark)); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: normal; overflow-wrap: break-word; position: sticky; top: 0; z-index: 2; }
 .collection-table thead th:first-child,
 .collection-table tbody td:first-child { text-align: left; font-weight: 500; width: auto; padding-right: 0; white-space: nowrap; }
 .collection-table thead th:nth-child(2),
@@ -2977,7 +2977,7 @@ select.grade-input.invalid {
 .collection-table tbody tr:nth-child(even):hover { background: rgba(99, 102, 241, 0.06); }
 .collection-table td:last-child, .collection-table th:last-child { border-right: none; }
 .collection-col-header { position: relative; min-width: 90px; vertical-align: top; }
-.collection-col-name { display: inline; font-size: 12px; font-weight: 600; max-width: 100px; margin: 0; color: var(--text-main); }
+.collection-col-name { display: inline-block; font-size: 12px; font-weight: 600; max-width: 100px; margin: 0; color: var(--text-main); overflow-wrap: break-word; }
 .collection-col-progress { display: inline; font-size: 10px; color: var(--text-muted); font-weight: 400; margin-left: 4px; }
 .collection-col-date { display: inline; font-size: 10px; color: var(--text-muted); margin-left: 4px; }
 .collection-table td input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }

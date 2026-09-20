@@ -107,6 +107,108 @@ window.exportGradesCSV = function() {
     });
 };
 
+window.exportTimetablesPDF = async function() {
+    const classes = DB.loadClasses();
+    if (!classes.length) { alertModal('Keine Klassen vorhanden.'); return; }
+    const css = [
+        '@page { margin: 15mm; size: A4 portrait; }',
+        'body { font-family: Arial, Helvetica, sans-serif; background: #fff !important; color: #000 !important; padding: 20px; font-size: 9px; }',
+        'h1 { font-size: 18px; margin-bottom: 15px; }',
+        'h2 { font-size: 14px; font-weight: 400; margin-top: 20px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }',
+        '.plan-print { margin-bottom: 15mm; }',
+        '.plan-print table { width: 190mm; max-width: 190mm; table-layout: auto; border-collapse: collapse; }',
+        '.plan-print th, .plan-print td { border: 1px solid #999; padding: 3px 4px; font-size: 9px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-wrap: break-word; }',
+        '.plan-print th { background: #f0f0f0; font-weight: 600; }',
+        '.plan-print .pre { white-space: normal; }',
+        '.plan-print .row-actions { display: none; }',
+        '.plan-print thead th:empty { display: none; }',
+        '.plan-print .view-header .btn { display: none !important; }',
+        '.plan-print .holiday-row td { color: #888; background: #d0d0d0; }',
+        '.plan-print .plan-today td { background: #eef2ff; }',
+        '.plan-print .plan-future td { color: #999; }',
+        '@media print { h1 { color: #000 !important; } }'
+    ].join('\n');
+    const parser = new DOMParser();
+    let sections = '';
+    classes.forEach((cls, idx) => {
+        try {
+            const fullHtml = buildPlanExportHTML(cls.id);
+            const doc = parser.parseFromString(fullHtml, 'text/html');
+            const planPrint = doc.querySelector('.plan-print');
+            if (planPrint) {
+                const pageBreak = idx > 0 ? 'page-break-before: always;' : '';
+                sections += '<h2 style="' + pageBreak + '">' + escapeHtml(cls.name) + ' – ' + escapeHtml(cls.subject) + '</h2>';
+                sections += '<div class="plan-print">' + planPrint.innerHTML + '</div>';
+            }
+        } catch (e) {
+            console.error('Timetable export error for ' + cls.name + ':', e);
+        }
+    });
+    const fullHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stundenpläne</title>' +
+        '<style>' + css + '</style></head><body>' +
+        '<h1>Stundenpläne</h1>' + sections +
+        '</body></html>';
+    try {
+        const result = await window.electronAPI.exportPdf(fullHtml, '', 'Stundenplaene');
+        alertModal('PDF gespeichert:\n' + result.filePath);
+    } catch (e) {
+        alertModal('Fehler beim PDF-Export: ' + e.message);
+    }
+};
+
+window.exportGradesPDF = async function(nameOverride) {
+    const isYear = allGradesOverviewScope === 'year';
+    const classes = DB.getSortedClasses();
+    let html = '';
+    classes.forEach(cls => {
+        const students = DB.getStudentsForClass(cls.id);
+        if (!students.length) return;
+        html += '<div class="all-grades-section">';
+        html += '<h2>' + escapeHtml(cls.name) + ' – ' + escapeHtml(cls.subject) + '</h2>';
+        if (cls.type === 'gz') {
+            html += renderGZAllOverview(cls, students);
+        } else {
+            html += renderStandardAllOverview(cls, students, isYear);
+        }
+        html += '</div>';
+    });
+    if (!html) {
+        alertModal('Keine Noten zum Exportieren vorhanden.');
+        return;
+    }
+    const ps = [
+        '@page { margin: 15mm; size: A4 portrait; }',
+        'body { font-family: Arial, Helvetica, sans-serif; background: #fff !important; color: #555 !important; padding: 20px; font-size: 11px; font-weight: 400; }',
+        'h2 { font-size: 13px; font-weight: 300; margin-top: 18px; margin-bottom: 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; color: #333 !important; page-break-after: avoid; }',
+        '.all-grades-section { margin-bottom: 20px; page-break-inside: avoid; }',
+        'table { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: auto; }',
+        'th, td { border: 1px solid #ddd; padding: 3px 5px; text-align: left; color: #555 !important; background: #fff !important; }',
+        'th { background: #f4f4f4 !important; font-weight: 300; }',
+        '.grade-cell { text-align: center; }',
+        '.grade-1 { color: #2d6a4f !important; background: #d1fae5 !important; }',
+        '.grade-4 { color: #8a5a16 !important; background: #fef3c7 !important; }',
+        '.grade-5 { color: #8b2020 !important; background: #fee2e2 !important; }',
+        '.ov-pts { font-size: 9px; color: #666 !important; }',
+        'small { color: #888 !important; }',
+        '.stu-avatar { display: none !important; }',
+        '.stu-namecell { display: inline; }',
+        '.view-header, .grading-controls { display: none !important; }'
+    ].join('\n');
+    const fullHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Notenübersicht</title>' +
+        '<style>' + ps + '</style></head><body>' + html + '</body></html>';
+    const cls = DB.loadClasses().find(c => c.id === window._selectedClassId);
+    const scopeLabel = isYear ? 'Ganzes Jahr' : '1. Semester';
+    const name = nameOverride || ('Notenuebersicht-' + scopeLabel);
+    try {
+        const result = await window.electronAPI.exportPdf(fullHtml, window._selectedClassId || '', name);
+        let msg = 'PDF gespeichert:\n' + result.filePath;
+        if (result.directory) msg += '\n\nOrdner: ' + result.directory;
+        alertModal(msg);
+    } catch (e) {
+        alertModal('Fehler beim PDF-Export: ' + (e.message || e));
+    }
+};
+
 function subjectAbbr(subject) {
     if (!subject) return '';
     const s = subject.toLowerCase();
@@ -1127,7 +1229,7 @@ function renderDashboard() {
                     if (isPatrol) {
                         html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Aufsicht bearbeiten"><small>' + escapeHtml(entry.room || '') + '</small></div>';
                     } else if (isSprechstunde || isBibliothek) {
-                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="' + escapeHtml(entry.subject) + ' bearbeiten"><div><strong>' + escapeHtml(entry.subject === 'Sprechstunde' ? 'Sprstde' : 'Bibl') + '</strong></div><small>' + entry.room + '</small></div>';
+                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="' + escapeHtml(entry.subject) + ' bearbeiten"><div><strong>' + (entry.subject === 'Sprechstunde' ? '<span style="display:block;">Sprech-</span><span style="display:block;">stunde</span>' : 'Bibliothek') + '</strong></div><small>' + entry.room + '</small></div>';
                     } else {
                         const color = cls ? cls.color : null;
                         const dayClassEvents = (dayEventMap[key] || []).filter(e => e.classId === entry.classId);
@@ -1527,7 +1629,7 @@ window.printTimetable = function() {
         '.tt-pause-entry { background: #eee !important; border-left: 3px solid #94a3b8 !important; }',
         '.tt-pause-row .tt-day-col, .tt-pause-row .tt-time-col { min-height: 0; padding: 0 4px; font-size: 0; }',
         '.tt-holiday-row .tt-day-col { min-height: 0; padding: 0; background: transparent; border: none; }',
-        '.tt-patrol, .tt-sprechstunde { background: #e2e8f0 !important; border-left: 3px solid #475569 !important; font-weight: 600 !important; color: #000 !important; min-height: 24px !important; padding: 3px 6px !important; font-size: 11px !important; }',
+        '.tt-patrol, .tt-sprechstunde { background: #cbd5e1 !important; border-left: 3px solid #475569 !important; font-weight: 600 !important; color: #1e293b !important; min-height: 24px !important; padding: 3px 6px !important; font-size: 11px !important; }',
         '.tt-patrol strong, .tt-sprechstunde strong, .tt-patrol small, .tt-sprechstunde small { color: #000 !important; font-size: 11px !important; }',
         '.tt-row.tt-head .tt-day-col small { display: inline; font-size: 12px; color: #333; }',
         '@media print { .tt-date-small { display: none !important; } }'
@@ -1714,6 +1816,7 @@ function renderGrading() {
         return;
     }
     lastSelectedGradeClassId = classId;
+    window._selectedClassId = classId;
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
@@ -1904,7 +2007,7 @@ function renderCollections(classId) {
         return html;
     }
     html += '<div class="collection-wrap"><table class="collection-table"><thead><tr><th>Name</th>';
-    for (var i = 1; i < collections.length; i++) {
+    for (var i = 0; i < collections.length; i++) {
         var hc = collections[i];
         var hd = 0;
         students.forEach(function(s) {
@@ -1920,7 +2023,7 @@ function renderCollections(classId) {
     html += '</tr></thead><tbody>';
     students.forEach(function(s) {
         html += '<tr><td class="collection-student-name">' + studentNameHtml(s) + '</td>';
-        for (var ci = 1; ci < collections.length; ci++) {
+        for (var ci = 0; ci < collections.length; ci++) {
             var c = collections[ci];
             var checked = c.completed && c.completed[s.id];
             html += '<td><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="window.toggleCollectionStudent(\'' + classId + '\', \'' + c.id + '\', \'' + s.id + '\')"></td>';
@@ -2080,7 +2183,7 @@ function renderPlan(classId) {
     const isDG = planMode === 'dg';
     const lessonDays = cls && cls.lessonDays && cls.lessonDays.length ? cls.lessonDays : (isGZ ? ['Montag'] : (isDG ? ['Dienstag'] : []));
     const hasAutoSchedule = lessonDays.length > 0;
-    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen. <span style="font-size:11px;color:var(--text-muted);">Tipp: Wichtiges mit **Text** hervorheben</span></p></div></div>';
+    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen. <span style="font-size:11px;color:var(--text-muted);">Tipp: Wichtiges mit **Text** hervorheben</span></p></div><button class="btn" onclick="window.exportPlan()">🖨️ Exportieren</button></div>';
     if (hasAutoSchedule) {
         const firstLessonDate = cls && cls.firstLessonDate ? cls.firstLessonDate : null;
         const globalSettings = DB.loadGlobalSettings();
@@ -2271,6 +2374,111 @@ function renderPlan(classId) {
     }
     return html;
 }
+
+function buildPlanExportHTML(classId) {
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const planHtml = renderPlan(classId);
+    const title = cls ? cls.name : 'Stundenplan';
+    const ps = [
+        '@page { margin: 10mm; size: A4 portrait; }',
+        'body { font-family: Inter, Arial, sans-serif; background: #fff !important; color: #000 !important; padding: 0; margin: 0; }',
+        'h1 { font-size: 18px; margin-bottom: 10px; color: #000; }',
+        '.plan-print { margin-bottom: 15mm; }',
+        '.plan-print table { width: 190mm; max-width: 190mm; table-layout: auto; border-collapse: collapse; }',
+        '.plan-print th, .plan-print td { border: 1px solid #999; padding: 3px 4px; font-size: 9px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-wrap: break-word; }',
+        '.plan-print th { background: #f0f0f0; font-weight: 600; }',
+        '.plan-print .pre { white-space: normal; }',
+        '.plan-print .row-actions { display: none; }',
+        '.plan-print thead th:empty { display: none; }',
+        '.plan-print .view-header .btn { display: none !important; }',
+        '.plan-print .holiday-row td { color: #888; background: #d0d0d0; }',
+        '.plan-print .plan-today td { background: #eef2ff; }',
+        '.plan-print .plan-future td { color: #999; }',
+        '@media print { h1 { color: #000 !important; } }'
+    ].join('\n');
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(title) + ' - Stundenplan</title>' +
+        '<style>' + ps + '</style></head><body>' +
+        '<h1>' + escapeHtml(title) + '</h1>' +
+        '<div class="plan-print">' + planHtml + '</div>' +
+        '</body></html>';
+}
+
+function getSchoolYearLabel() {
+    const { start, end } = getCurrentSchoolYearDates();
+    if (!start || !end) return '';
+    return start.substring(0, 4) + '_' + end.substring(0, 4);
+}
+
+window.exportPlan = function() {
+    const cls = DB.loadClasses().find(c => c.id === window._selectedClassId);
+    const allClasses = DB.loadClasses();
+    if (!window._selectedClassId) {
+        alertModal('Keine Klasse ausgewählt.');
+        return;
+    }
+    const html = buildPlanExportHTML(window._selectedClassId);
+    const singleLabel = cls ? cls.name + ' – ' + cls.subject : 'aktuelle Klasse';
+    const previewHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stundenplan Vorschau</title>' +
+        '<style>body{font-family:Inter,Arial,sans-serif;padding:20px;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #999;padding:3px 4px;font-size:11px;}</style></head><body>' + html + '</body></html>';
+    const modalHtml = '<div id="export-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+        '<div style="background:#fff;padding:24px;border-radius:12px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+        '<h2 style="margin:0 0 8px;font-size:20px;">📄 PDF exportieren</h2>' +
+        '<p style="color:#666;margin-bottom:20px;font-size:14px;">Exportiert als PDF in den Downloads-Ordner.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:10px;">' +
+        '<button id="export-save" style="padding:12px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">' + escapeHtml(singleLabel) + ' als PDF speichern</button>' +
+        '<button id="export-all" style="padding:12px;background:#f1f5f9;color:#1e293b;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Alle ' + allClasses.length + ' Klassen als PDF speichern</button>' +
+        '<button id="export-preview" style="padding:10px;background:#fff;color:#6366f1;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:14px;">Vorschau im Browser</button>' +
+        '<button id="export-cancel" style="padding:8px;background:none;color:#94a3b8;border:none;cursor:pointer;font-size:13px;">Abbrechen</button>' +
+        '</div></div></div>';
+    const overlay = document.createElement('div');
+    overlay.innerHTML = modalHtml;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#export-save').addEventListener('click', async () => {
+        overlay.remove();
+        try {
+            const result = await window.electronAPI.exportPdf(html, window._selectedClassId, cls ? cls.name : '');
+            let msg = 'PDF gespeichert:\n' + result.filePath;
+            if (result.directory) msg += '\n\nOrdner: ' + result.directory;
+            alertModal(msg);
+        } catch (e) {
+            alertModal('Fehler beim PDF-Export: ' + (e.message || e));
+        }
+    });
+    overlay.querySelector('#export-all').addEventListener('click', async () => {
+        overlay.remove();
+        try {
+            let saved = 0;
+            let failed = 0;
+            let paths = [];
+            for (const c of allClasses) {
+                try {
+                    const h = buildPlanExportHTML(c.id);
+                    const r = await window.electronAPI.exportPdf(h, c.id, c.name);
+                    paths.push(r.filePath);
+                    saved++;
+                } catch (e) {
+                    failed++;
+                }
+            }
+            let msg = 'Export abgeschlossen: ' + saved + ' Datei(en) gespeichert.';
+            if (paths.length) msg += '\n\n' + paths.join('\n');
+            if (failed) msg += '\n\nFehler bei ' + failed + ' Datei(en).';
+            alertModal(msg);
+        } catch (e) {
+            alertModal('Fehler beim Batch-Export: ' + (e.message || e));
+        }
+    });
+    overlay.querySelector('#export-preview').addEventListener('click', () => {
+        overlay.remove();
+        const blob = new Blob([previewHtml], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, '_blank');
+        if (win) win.focus();
+    });
+    overlay.querySelector('#export-cancel').addEventListener('click', () => {
+        overlay.remove();
+    });
+};
 
 function openPlanModal(classId, id, date) {
     const plan = sortedPlan(classId);
@@ -3185,6 +3393,7 @@ function renderExamsView(classId) {
     const exams = DB.loadExams(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? escapeHtml(cls.name) : '';
+    const students = DB.getStudentsForClass(classId);
     let html = '<div class="view-header"><div><h2>Schularbeiten</h2></div>' +
         '<div class="grading-controls">' +
         (exams.length ? '<select id="exam-select" class="btn btn-secondary" onchange="setCurrentExam(this.value)">' + exams.map(e => '<option value="' + e.id + '"' + (currentExamId === e.id ? ' selected' : '') + '>' + escapeHtml(e.title) + '</option>').join('') + '</select>' : '') +
@@ -3192,6 +3401,7 @@ function renderExamsView(classId) {
         '<button class="btn btn-secondary" onclick="printExam()">🖨️ Drucken</button>' +
         '</div></div>';
     if (!exams.length) { html += '<p class="subtitle">Noch keine Schularbeit angelegt.</p>'; return html; }
+    html += renderStandardAllOverview(cls, students, false);
     if (!currentExamId || !exams.find(e => e.id === currentExamId)) currentExamId = exams[0].id;
     const exam = exams.find(e => e.id === currentExamId);
     html += '<div class="exam-header">' +
@@ -3471,7 +3681,8 @@ function openClassGrading(classId) {
     const select = document.getElementById('grade-class-select');
     if (select) {
         select.value = classId;
-        lastSelectedGradeClassId = classId;
+    lastSelectedGradeClassId = classId;
+    window._selectedClassId = classId;
         renderGrading();
     }
 }
@@ -3582,12 +3793,16 @@ function backupSchoolYear() {
     const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = 'planit-schuljahr-' + stamp + '.json';
+    a.download = 'planit-backup-' + stamp + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+window.backupSchoolYear = async function() {
+    backupSchoolYear();
+};
 
 window.restoreBackup = function() {
     const input = document.createElement('input');
@@ -3663,10 +3878,10 @@ function executeSchoolYearChange() {
         alertModal('Bitte mindestens eine Klasse auswählen.');
         return;
     }
-    safeConfirm('Wirklich das Schuljahr wechseln? Nicht ausgewählte Klassen werden gelöscht.').then(function(result) {
+    safeConfirm('Wirklich das Schuljahr wechseln? Nicht ausgewählte Klassen werden gelöscht.').then(async function(result) {
         if (!result) return;
         const archive = document.getElementById('archive-school-year') && document.getElementById('archive-school-year').checked;
-    const clearTimetable = document.getElementById('clear-timetable') && document.getElementById('clear-timetable').checked;
+        const clearTimetable = document.getElementById('clear-timetable') && document.getElementById('clear-timetable').checked;
     const clearGrades = document.getElementById('clear-grades') && document.getElementById('clear-grades').checked;
     if (archive) {
         backupSchoolYear();
@@ -3840,7 +4055,6 @@ window.openClassGrading = openClassGrading;
 window.addTimeSlot = addTimeSlot;
 window.saveTimeSettings = saveTimeSettings;
 window.exportData = exportData;
-window.backupSchoolYear = backupSchoolYear;
 window.openNewSchoolYearModal = openNewSchoolYearModal;
 window.executeSchoolYearChange = executeSchoolYearChange;
 window.importData = importData;
@@ -4679,6 +4893,7 @@ function renderGradesOverview() {
     let html = '<div class="view-header" style="display:block;"><div><p class="subtitle">Alle Noten aller Klassen und Schüler.</p></div>' +
         '<div class="grading-controls" style="margin-bottom:15px;">' +
         '<button class="btn no-print" onclick="window.exportGradesCSV()" style="margin-right:10px;">CSV Export</button>' +
+        '<button class="btn no-print" onclick="window.exportGradesPDF()" style="margin-right:10px;">📄 PDF Export</button>' +
         '<button class="btn ' + (isYear ? 'btn-secondary' : '') + '" onclick="setAllGradesOverviewScope(\'semester\')">1. Semester</button>' +
         '<button class="btn ' + (isYear ? '' : 'btn-secondary') + '" onclick="setAllGradesOverviewScope(\'year\')">Ganzes Jahr</button>' +
         '<button class="btn no-print" onclick="window.openGradesOverviewPrint()" style="margin-left:10px;">🖨️ Drucken</button>' +
@@ -4756,10 +4971,11 @@ function renderStandardAllOverview(cls, students, isYear) {
     const pruefung = DB.loadPruefung(classId);
     const project = DB.loadProjectGrades(classId);
     const recs = DB.loadExamRecords(classId);
+    const isDG = cls.type === 'dg';
     let html = '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
         '<th>Schüler</th><th>HÜ<br><small>Pkte / Note</small></th>';
     exams.forEach(e => html += '<th>SA ' + (e.nr || '') + '<br><small>Pkte / Note</small></th>');
-    html += '<th>Ø SA</th><th>Prüf.</th><th>Projekt</th><th>Berechnet</th>';
+    html += '<th>Ø SA</th><th>Prüf.</th>' + (isDG ? '<th>Projekt</th>' : '') + '<th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
     html += '<th>Note (ich)</th></tr></thead><tbody>';
     students.forEach(s => {
@@ -4796,7 +5012,7 @@ function renderStandardAllOverview(cls, students, isYear) {
             examCells +
             '<td>' + (examAvg != null ? '<span class="' + gradeClass(Math.round(examAvg)) + ' grade-cell">' + (Math.round(examAvg * 10) / 10) + '</span>' : '–') + '</td>' +
             '<td>' + (pruefGrade != null ? '<span class="' + gradeClass(pruefGrade) + ' grade-cell">' + pruefGrade + '</span>' : '–') + '</td>' +
-            '<td>' + (projGrade != null ? '<span class="' + gradeClass(projGrade) + ' grade-cell">' + projGrade + '</span>' : '–') + '</td>' +
+            (isDG ? '<td>' + (projGrade != null ? '<span class="' + gradeClass(projGrade) + ' grade-cell">' + projGrade + '</span>' : '–') + '</td>' : '') +
             '<td class="' + gradeClass(computed) + ' grade-cell">' + (computed != null ? computed : '–') + '</td>' +
             (isYear ? '<td class="' + gradeClass(semesterManualGrade) + ' grade-cell">' + (semesterManualGrade != null ? semesterManualGrade : '–') + '</td>' : '') +
             '<td>' + (activeManual != null ? '<span class="' + gradeClass(activeManual) + ' grade-cell">' + activeManual + '</span>' : '–') + '</td>' +
@@ -4849,6 +5065,7 @@ function renderGZAllOverview(cls, students) {
 
 window.renderGradesOverview = renderGradesOverview;
 window.exportGradesCSV = window.exportGradesCSV;
+window.exportGradesPDF = window.exportGradesPDF;
 
 document.addEventListener('DOMContentLoaded', async function() {
     const startupOverlay = document.createElement('div');
