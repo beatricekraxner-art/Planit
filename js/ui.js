@@ -2085,7 +2085,13 @@ window.toggleCollectionStudent = function(classId, collectionId, studentId) {
     collection.completed[studentId] = !collection.completed[studentId];
     DB.saveClasses(classes);
     var container = document.getElementById('grading-table-container');
-    if (container) container.innerHTML = renderCollections(classId);
+    if (container) {
+        var wrap = container.querySelector('.collection-wrap');
+        var scrollTop = wrap ? wrap.scrollTop : 0;
+        container.innerHTML = renderCollections(classId);
+        var newWrap = container.querySelector('.collection-wrap');
+        if (newWrap) newWrap.scrollTop = scrollTop;
+    }
 };
 
 window.deleteCollection = function(classId, collectionId) {
