@@ -2213,7 +2213,7 @@ function renderPlan(classId) {
             allDates.forEach(item => {
                 if (item.type === 'holiday') {
                     const isTodayHoliday = item.date === todayStr;
-                    html += '<tr class="holiday-row ' + (isTodayHoliday ? 'plan-today' : '') + '"><td colspan="4" style="text-align:center;padding:10px;">' + formatDateDE(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
+                    html += '<tr class="holiday-row ' + (isTodayHoliday ? 'plan-today' : '') + '"><td colspan="4" style="text-align:center;padding:10px;">' + planDateStr(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
                     return;
                 }
                 const date = item.date;
@@ -2233,7 +2233,7 @@ function renderPlan(classId) {
                      '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
                 const contentClass = nr ? 'pre plan-content-gz' : 'pre plan-content-gz plan-content-only';
                 html += '<tr class="' + rowClass.trim() + '">' +
-                    '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
+                    '<td>' + planDateStr(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td>' + (nr ? (nr + '<span style="margin-left:20px;">' + renderRichText(title) + '</span>') : '–') + '</td>' +
                     '<td class="' + contentClass + '">' + (entry ? renderRichText(entry.exerciseContent || '') : '') + '</td>' +
                     '<td class="row-actions">' + actions + '</td>' +
@@ -2244,7 +2244,7 @@ function renderPlan(classId) {
             allDates.forEach(item => {
                 if (item.type === 'holiday') {
                     const isToday = item.date === todayStr;
-                    html += '<tr class="holiday-row ' + (isToday ? 'plan-today' : '') + '"><td colspan="6" style="text-align:center;padding:10px;">' + formatDateDE(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
+                    html += '<tr class="holiday-row ' + (isToday ? 'plan-today' : '') + '"><td colspan="6" style="text-align:center;padding:10px;">' + planDateStr(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
                     return;
                 }
                 const date = item.date;
@@ -2262,7 +2262,7 @@ function renderPlan(classId) {
                  const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
                  const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 html += '<tr class="' + rowClass.trim() + '">' +
-                    '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
+                    '<td>' + planDateStr(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + renderRichText(entry ? (entry.exerciseContent || '') : '') + '</td>' +
                     '<td>' + hwDisplay + '</td>' +
                     '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>' +
@@ -2280,7 +2280,7 @@ function renderPlan(classId) {
             allDates.forEach(item => {
                 if (item.type === 'holiday') {
                     const isToday = item.date === todayStr;
-                    html += '<tr class="holiday-row ' + (isToday ? 'plan-today' : '') + '"><td colspan="6" style="text-align:center;padding:10px;">' + formatDateDE(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
+                    html += '<tr class="holiday-row ' + (isToday ? 'plan-today' : '') + '"><td colspan="6" style="text-align:center;padding:10px;">' + planDateStr(item.date) + '<br><small>' + escapeHtml(item.name) + '</small></td></tr>';
                     return;
                 }
                 const date = item.date;
@@ -2294,7 +2294,7 @@ function renderPlan(classId) {
                  const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                  const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                  const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
-                 let cells = '<td>' + formatDateDE(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
+                 let cells = '<td>' + planDateStr(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
                 if (showExerciseNr) cells += '<td>' + (entry ? (entry.exerciseNr || '–') : '–') + '</td>';
                 cells += '<td class="pre plan-content-other">' + renderRichText(entry ? (entry.exerciseContent || '') : '') + '</td>';
                  if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr || '–') : '–') + '</td>';
@@ -2323,7 +2323,7 @@ function renderPlan(classId) {
              const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
              const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
              html += '<tr class="' + rowClass.trim() + '">' +
-                '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
+                '<td>' + planDateStr(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td>' + (nr ? (nr + '<span style="margin-left:20px;">' + renderRichText(title) + '</span>') : '–') + '</td>' +
                 '<td class="pre">' + renderRichText(e.exerciseContent || '') + '</td>' +
                 '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
@@ -2343,8 +2343,8 @@ function renderPlan(classId) {
              const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + renderRichText(sheetsText) + '</small>') : hwNr;
              const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
              const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
-             html += '<tr class="' + rowClass.trim() + '">' +
-                '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
+                html += '<tr class="' + rowClass.trim() + '">' +
+                    '<td>' + planDateStr(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + renderRichText(e.exerciseContent || '') + '</td>' +
                     '<td>' + hwDisplay + '</td>' +
                 '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
@@ -2368,7 +2368,7 @@ function renderPlan(classId) {
               const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(holidayName || 'Ferien') + '</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
              const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
              const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
-             let cells = '<td>' + formatDateDE(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
+             let cells = '<td>' + planDateStr(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
             if (showExerciseNr) cells += '<td>' + (e.exerciseNr ? e.exerciseNr : '–') + '</td>';
              cells += '<td class="pre plan-content-other">' + renderRichText(e.exerciseContent || '') + '</td>';
              if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>';
@@ -3744,6 +3744,14 @@ function formatDateDE(iso) {
     const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!m) return iso;
     return m[3] + '.' + m[2] + '.' + m[1];
+}
+
+function planDateStr(dateStr) {
+    const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return escapeHtml(dateStr);
+    const dayOfWeek = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])).getDay();
+    const weekdays = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    return '<small>' + weekdays[dayOfWeek] + '</small> ' + formatDateDE(dateStr);
 }
 
 function renderHolidays() {
