@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plan-it</title>
     <link rel="icon" href="assets/icon.png">
-    <link rel="stylesheet" href="style.css?v=30">
+    <link rel="stylesheet" href="style.css?v=37">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -133,6 +133,8 @@
                             <p class="subtitle" style="margin-bottom:12px;">Sichern Sie zuerst das aktuelle Jahr. Danach werden Klassen, Schüler, Stundenplan und Noten entfernt. Einstellungen und Zeiten bleiben erhalten.</p>
                             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                                 <button class="btn btn-secondary" onclick="window.backupSchoolYear()">📁 Schuljahr sichern</button>
+                                <button class="btn btn-secondary" onclick="window.exportTimetablesPDF()">📄 Stundenplanungen sichern</button>
+                                <button class="btn btn-secondary" onclick="window.exportGradesPDF()">📄 Notenübersicht sichern</button>
                                 <button class="btn btn-secondary" onclick="window.restoreBackup()">📂 Backup einspielen</button>
                                 <button class="btn" onclick="window.openNewSchoolYearModal()">🆕 Neues Schuljahr starten</button>
                             </div>
