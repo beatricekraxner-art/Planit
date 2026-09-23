@@ -6,5 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getUserDataPath: () => ipcRenderer.invoke('get-user-data-path'),
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     selectFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
-    showNotification: (options) => ipcRenderer.invoke('show-notification', options)
+    selectDirectory: (options) => ipcRenderer.invoke('dialog:selectDirectory', options),
+    showNotification: (options) => ipcRenderer.invoke('show-notification', options),
+    exportPdf: (html, classId, name) => ipcRenderer.invoke('export-pdf', { html, classId, name })
 });

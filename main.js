@@ -175,7 +175,12 @@ app.on('window-all-closed', () => {
     }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
+    if (mainWindow) {
+        try {
+            await mainWindow.webContents.executeJavaScript('window.FilePersist && window.FilePersist.saveToFile ? FilePersist.saveToFile() : Promise.resolve()');
+        } catch (e) {}
+    }
     if (localServer) {
         try { localServer.close(); } catch (e) {}
     }
