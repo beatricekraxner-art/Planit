@@ -1405,6 +1405,49 @@ select.grade-input option {
     padding: 3px 4px;
 }
 
+#gz-project-table thead th {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    background: var(--bg-panel) !important;
+    z-index: 10;
+    white-space: nowrap;
+}
+#gz-project-table thead th.hw-sticky-left {
+    left: 0;
+    z-index: 11;
+}
+#gz-project-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 5;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
+#dg-project-table thead th {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    background: var(--bg-panel) !important;
+    z-index: 10;
+    white-space: nowrap;
+}
+#dg-project-table thead th.hw-sticky-left {
+    left: 0;
+    z-index: 11;
+}
+#dg-project-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 5;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
+
 #gz-grades-table select {
     width: 42px;
     padding: 3px 2px;
@@ -1856,6 +1899,12 @@ select.grade-input option {
     overflow-x: auto;
     overflow-y: auto;
     max-height: 500px;
+}
+.hw-grid-wrap thead {
+    position: sticky;
+    top: 0;
+    z-index: 11;
+    background: var(--bg-panel);
 }
 .overview-table-wrap {
     overflow-x: auto;
@@ -3007,7 +3056,7 @@ select.grade-input.invalid {
     outline: none;
 }
 
-.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; border-radius: 8px; }
+.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; border-radius: 8px; position: relative; }
 .collection-table { width: 100%; border-collapse: separate; border-spacing: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .collection-table th,
 .collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
@@ -3094,16 +3143,20 @@ select.grade-input.invalid {
         padding: 2px 3px;
     }
     .hw-grid-wrap,
-    .overview-table-wrap {
+    .overview-table-wrap,
+    .collection-wrap {
         -webkit-overflow-scrolling: touch;
         scroll-behavior: smooth;
     }
     .hw-grid-wrap::-webkit-scrollbar,
-    .overview-table-wrap::-webkit-scrollbar {
+    .overview-table-wrap::-webkit-scrollbar,
+    .collection-wrap::-webkit-scrollbar {
         height: 6px;
+        width: 6px;
     }
     .hw-grid-wrap::-webkit-scrollbar-thumb,
-    .overview-table-wrap::-webkit-scrollbar-thumb {
+    .overview-table-wrap::-webkit-scrollbar-thumb,
+    .collection-wrap::-webkit-scrollbar-thumb {
         background: var(--border-color);
         border-radius: 3px;
     }
@@ -3138,7 +3191,8 @@ select.grade-input.invalid {
         font-size: 14px;
     }
     .hw-grid-wrap,
-    .overview-table-wrap {
+    .overview-table-wrap,
+    .collection-wrap {
         -webkit-overflow-scrolling: touch;
         scroll-behavior: smooth;
         border-radius: 8px;
@@ -3194,6 +3248,10 @@ select.grade-input.invalid {
     }
     .hw-grid-wrap,
     .overview-table-wrap {
+        margin: 0 -16px;
+        padding: 0 16px;
+    }
+    .collection-wrap {
         margin: 0 -16px;
         padding: 0 16px;
     }

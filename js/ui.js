@@ -2545,7 +2545,7 @@ function openPlanModal(classId, id, date) {
     const exContentHtml = '<label>Inhalt</label><textarea id="plan-excontent" rows="4" placeholder="**Wichtiges** markieren..." style="white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea>';
     let wsHtml = '';
     if (isGZ) {
-        const wsNr = e ? (e.homeworkNr || '') : '';
+        const wsNr = e ? (e.homeworkNr || '') : nextHw;
         const wsTitle = e ? (e.homeworkContent || '') : '';
         wsHtml = '<label>Übungsblatt-Nummer</label><input type="number" id="plan-wsnr" value="' + (wsNr || '') + '">' +
             '<label>Übungsblatt-Titel</label><input type="text" id="plan-wstitle" value="' + escapeHtml(wsTitle) + '" placeholder="Titel des Übungsblattes">';
@@ -2723,13 +2723,13 @@ function computeHwGrade(classId, studentId, hws) {
     hws.forEach(h => {
         if (isDG) {
             const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
-            const cell = st[h.nr] || {};
+            const cell = st[h.sheets] || {};
             sheets.forEach(name => {
                 const val = cell.status && typeof cell.status === 'object' ? (cell.status[name] || '') : '';
                 if (val === 'k') return;
                 total += 4;
                 if (val === '4' || val === '3' || val === '2' || val === '1') points += parseInt(val, 10);
-                else if (val === '0' || val === '') { missing += 1; missingNrs.push(h.nr + '/' + name); }
+                else if (val === '0' || val === '') { missing += 1; missingNrs.push(h.sheets + '/' + name); }
             });
         } else {
             const cell = st[h.nr];
@@ -2757,9 +2757,11 @@ function renderHomework(classId) {
     const globalSettings = DB.loadGlobalSettings();
     const schoolYearStart = globalSettings.schoolYearStart || '';
     const schoolYearEnd = globalSettings.schoolYearEnd || '';
-    let hws = plan.filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
+    let hws;
     if (isDG) {
-        hws = plan.filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date, sheets: (e.homeworkSheets || '') }));
+        hws = plan.filter(e => e.homeworkSheets).map(e => ({ nr: '', date: e.date, sheets: (e.homeworkSheets || '') }));
+    } else {
+        hws = plan.filter(e => e.homeworkNr).map(e => ({ nr: e.homeworkNr, date: e.date }));
     }
     if (schoolYearStart && schoolYearEnd) {
         hws = hws.filter(h => h.date >= schoolYearStart && h.date <= schoolYearEnd);
@@ -2818,7 +2820,7 @@ function renderHomeworkDetailed(classId, students, hws) {
         hws.forEach(h => {
             const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
             sheets.forEach(name => {
-                columns.push({ hwNr: h.nr, sheet: name, date: h.date });
+                columns.push({ hwNr: h.sheets, sheet: name, date: h.date });
             });
         });
         columns.forEach(col => {
@@ -2841,7 +2843,7 @@ function renderHomeworkDetailed(classId, students, hws) {
             hws.forEach(h => {
                 const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
                 sheets.forEach(name => {
-                    columns.push({ hwNr: h.nr, sheet: name });
+                    columns.push({ hwNr: h.sheets, sheet: name });
                 });
             });
             columns.forEach(col => {
@@ -2898,13 +2900,13 @@ function showMissingHwModal(classId, studentId) {
     plan.forEach(h => {
         if (isDG) {
             const sheets = (h.homeworkSheets || '').split(',').map(s => s.trim()).filter(Boolean);
-            const cell = st[h.homeworkNr] || {};
+            const cell = st[h.homeworkSheets] || {};
             sheets.forEach(name => {
                 const val = cell.status && typeof cell.status === 'object' ? (cell.status[name] || '') : '';
-                if (val === 'k') sick.push(h.homeworkNr + '/' + name);
-                else if (val === 'improve') improve.push(h.homeworkNr + '/' + name);
+                if (val === 'k') sick.push(h.homeworkSheets + '/' + name);
+                else if (val === 'improve') improve.push(h.homeworkSheets + '/' + name);
                 else if (val === 'done' || val === 'improved' || val === 'collected') return;
-                else if (val === 'forgotten' || val === '0' || val === '') missing.push(h.homeworkNr + '/' + name);
+                else if (val === 'forgotten' || val === '0' || val === '') missing.push(h.homeworkSheets + '/' + name);
             });
         } else {
             const cell = st[h.homeworkNr];
@@ -2930,8 +2932,8 @@ function showMissingHwModal(classId, studentId) {
 }
 
 function showAllMissingHwModal(classId) {
-    const plan = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr));
     const isDG = isDGClass(classId);
+    const plan = filterPlanBySchoolYear(sortedPlan(classId).filter(e => isDG ? e.homeworkSheets : e.homeworkNr));
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
     const students = DB.getStudentsForClass(classId);
@@ -2954,13 +2956,13 @@ function showAllMissingHwModal(classId) {
         plan.forEach(h => {
             if (isDG) {
                 const sheets = (h.homeworkSheets || '').split(',').map(s => s.trim()).filter(Boolean);
-                const cell = st[h.homeworkNr] || {};
+                const cell = st[h.homeworkSheets] || {};
                 sheets.forEach(name => {
                     const val = cell.status && typeof cell.status === 'object' ? (cell.status[name] || '') : '';
-                    if (val === 'k') sick.push(h.homeworkNr + '/' + name);
-                    else if (val === 'improve') improve.push(homeworkNr + '/' + name);
+                    if (val === 'k') sick.push(h.homeworkSheets + '/' + name);
+                    else if (val === 'improve') improve.push(h.homeworkSheets + '/' + name);
                     else if (val === 'done' || val === 'improved' || val === 'collected') return;
-                    else if (val === 'forgotten' || val === '0' || val === '') missing.push(h.homeworkNr + '/' + name);
+                    else if (val === 'forgotten' || val === '0' || val === '') missing.push(h.homeworkSheets + '/' + name);
                 });
             } else {
                 const cell = st[h.homeworkNr];
@@ -3073,23 +3075,23 @@ function renderMissingHwOverview(classId) {
         }
         html += '</tr>';
     });
-    
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     return html;
 }
 
+
 function openHwListModal(classId) {
-    const hws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date, sheets: e.homeworkSheets || '' }));
-    const expired = DB.loadHwExpired(classId);
     const isDG = isDGClass(classId);
+    const hws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => isDG ? e.homeworkSheets : e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date, sheets: e.homeworkSheets || '' }));
+    const expired = DB.loadHwExpired(classId);
     let html = '<div class="modal-header"><h2>Hausübungs-Liste</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
     html += '<div class="hw-expired-list">';
     if (!hws.length) html += '<p>Keine Hausübungen vorhanden.</p>';
     hws.forEach(h => {
-        let label = 'HÜ ' + h.nr;
-        if (isDG && h.sheets) label += ' – ' + escapeHtml(h.sheets);
+        let label = isDG ? 'HÜ – ' + escapeHtml(h.sheets || '') : ('HÜ ' + h.nr);
         label += ' (' + formatDateDE(h.date) + ')';
-        html += '<label class="hw-expired-item"><input type="checkbox" ' + (expired[h.nr] ? 'checked' : '') + ' onchange="toggleHwExpired(\'' + classId + '\',' + h.nr + ',this.checked)"> ' + label + '</label>';
+        const hwKey = isDG ? h.sheets : h.nr;
+        html += '<label class="hw-expired-item"><input type="checkbox" ' + (expired[hwKey] ? 'checked' : '') + ' onchange="toggleHwExpired(\'' + classId + '\',\'' + hwKey + '\',this.checked)"> ' + label + '</label>';
     });
     html += '</div>';
     showModal(html);
@@ -3528,18 +3530,18 @@ function renderProjects(classId) {
     const students = DB.getStudentsForClass(classId);
     const data = DB.loadProjectGrades(classId);
     let html = '<div class="view-header"><div><h2>Projekt</h2></div></div>';
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="dg-project-table"><thead><tr><th class="hw-sticky-left">Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
         const ot = d.onTime || '';
-        const otLabel = ot === 'pos' ? '?' : (ot === 'neg' ? '?' : '');
+        const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelectDecimal(d.grade, "setProjectGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
-            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ?=ja, ?=nein" onclick="toggleProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
+            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     return html;
 }
 
@@ -4458,7 +4460,7 @@ function renderGZGrades(classId) {
     html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left">Schüler</th>';
     worksheets.forEach(w => {
         const co = w.isComputerOnly ? ' <small style="color:#16a34a;font-style:italic;">(nur Computer)</small>' : '';
-        const toggleBtn = '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? '? Nur Computer' : '? Ausgeteilt') + '</button>';
+        const toggleBtn = '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? 'Nur Computer' : 'Ausgeteilt') + '</button>';
         html += '<th colspan="4" class="gz-ws-sep">' + w.nr + toggleBtn + '<br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small>' + co + '</th>';
     });
     html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
@@ -4596,17 +4598,17 @@ function renderGZProject(classId) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
     }
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-project-table"><thead><tr><th class="hw-sticky-left">Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
     students.forEach(s => {
         const st = status[s.id] || {};
         const grade = st.project || '';
         const note = st.projectNote || '';
         const ot = st.projectOnTime || '';
-        const otLabel = ot === 'pos' ? '?' : (ot === 'neg' ? '?' : '');
+        const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' +
-            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ?=ja, ?=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
+            '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(note) + '" onchange="setGZProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
     html += '</tbody></table>';
@@ -5021,7 +5023,7 @@ function renderStandardAllOverview(cls, students, isYear) {
     const recs = DB.loadExamRecords(classId);
     const isDG = cls.type === 'dg';
     let html = '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
-        '<th>Schüler</th><th>HÜ<br><small>Pkte / Note</small></th>';
+        '<th class="hw-sticky-left">Schüler</th><th>HÜ<br><small>Pkte / Note</small></th>';
     exams.forEach(e => html += '<th>SA ' + (e.nr || '') + '<br><small>Pkte / Note</small></th>');
     html += '<th>Ø SA</th><th>Prüf.</th>' + (isDG ? '<th>Projekt</th>' : '') + '<th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
@@ -5080,7 +5082,7 @@ function renderGZAllOverview(cls, students) {
     const project = DB.loadProjectGrades(classId);
     const manual = DB.loadManualGrades(classId);
     let html = '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
-        '<th>Schüler</th><th>Ø ÜB</th><th>Mappe</th><th>Mitarbeit</th><th>Projekt</th><th>Berechnet</th><th>Note (ich)</th><th>Mat. vergessen</th><th>Laptop vergessen</th></tr></thead><tbody>';
+        '<th class="hw-sticky-left">Schüler</th><th>Ø ÜB</th><th>Mappe</th><th>Mitarbeit</th><th>Projekt</th><th>Berechnet</th><th>Note (ich)</th><th>Mat. vergessen</th><th>Laptop vergessen</th></tr></thead><tbody>';
     students.forEach(s => {
         const st = status[s.id] || {};
         let sum = 0, count = 0;
@@ -5121,6 +5123,8 @@ window.enableStickyPinning = function() {
     document.querySelectorAll(".grading-table, #gz-grades-table, .exam-table, .collection-table").forEach(function(table) {
         if (table.classList.contains("hw-detail-table")) return;
         if (table.classList.contains("exam-table")) return;
+        if (table.classList.contains("collection-table")) return;
+        if (table.closest('.hw-grid-wrap')) return;
         var thead = table.querySelector("thead");
         if (thead) {
             thead._stickyTarget = true;
@@ -5134,6 +5138,16 @@ window.enableStickyPinning = function() {
     });
     window._stickyTheads = stickyTheads;
     window._stickyCells = stickyCells;
+    document.querySelectorAll('.hw-grid-wrap, .overview-table-wrap, .collection-wrap').forEach(function(wrap) {
+        if (wrap.dataset.stickyScrollBound) return;
+        wrap.dataset.stickyScrollBound = '1';
+        wrap.addEventListener("scroll", function() {
+            requestAnimationFrame(function() {
+                if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
+                if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });
+            });
+        }, { passive: true });
+    });
     if (!document._stickyActive) {
         document._stickyActive = true;
         document.addEventListener("scroll", function() {
@@ -5144,8 +5158,14 @@ window.enableStickyPinning = function() {
         }, { passive: true });
         window.addEventListener("resize", function() {
             requestAnimationFrame(function() {
-                if (window._stickyTheads) window._stickyTheads.forEach(function(th) { clearStickyTh(th); });
-                if (window._stickyCells) window._stickyCells.forEach(function(c) { clearStickyCell(c); });
+                if (window._stickyTheads) {
+                    window._stickyTheads.forEach(function(th) { clearStickyTh(th); });
+                    window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
+                }
+                if (window._stickyCells) {
+                    window._stickyCells.forEach(function(c) { clearStickyCell(c); });
+                    window._stickyCells.forEach(function(c) { updateStickyCell(c); });
+                }
             });
         }, { passive: true });
     }
@@ -5166,6 +5186,16 @@ function updateStickyTh(thead) {
         thead.dataset.stickyFixed = "1";
         thead.dataset.stickyOrigLeft = theadRect.left;
         thead.dataset.stickyOrigWidth = theadRect.width;
+        var ths = thead.querySelectorAll("th");
+        var origWidths = [];
+        ths.forEach(function(th, i) {
+            origWidths[i] = th.offsetWidth;
+            th.dataset.stickyOrigWidth = th.offsetWidth + "px";
+            th.style.width = th.offsetWidth + "px";
+            th.style.minWidth = th.offsetWidth + "px";
+            th.style.maxWidth = th.offsetWidth + "px";
+        });
+        thead.dataset.stickyOrigThWidths = JSON.stringify(origWidths);
         var spacer = document.createElement("tr");
         spacer.className = "sticky-spacer";
         spacer.style.cssText = "height:" + thead.offsetHeight + "px;display:table-row;visibility:hidden;pointer-events:none;";
@@ -5194,12 +5224,19 @@ function clearStickyTh(thead) {
     thead.style.left = "";
     thead.style.width = "";
     thead.style.zIndex = "";
+    var ths = thead.querySelectorAll("th");
+    ths.forEach(function(th) {
+        th.style.width = "";
+        th.style.minWidth = "";
+        th.style.maxWidth = "";
+        delete th.dataset.stickyOrigWidth;
+    });
     var spacer = thead.parentNode ? thead.parentNode.querySelector(".sticky-spacer") : null;
     if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
 }
 
 function updateStickyCell(cell) {
-    var wrap = cell.closest(".hw-grid-wrap, .overview-table-wrap");
+    var wrap = cell.closest(".hw-grid-wrap, .overview-table-wrap, .collection-wrap");
     if (!wrap) return;
     var wrapRect = wrap.getBoundingClientRect();
     var cellRect = cell.getBoundingClientRect();
