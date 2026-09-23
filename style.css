@@ -1188,7 +1188,8 @@ select option:disabled {
    ============================================= */
 .grading-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     text-align: left;
     margin-top: 20px;
 }
@@ -1340,7 +1341,9 @@ select.grade-input option {
 #gz-grades-table th.hw-sticky-left,
 #gz-grades-table th.hw-sticky-right,
 #gz-grades-table th.hw-sticky-right-last {
+    position: -webkit-sticky;
     position: sticky;
+    top: 0;
     background: var(--bg-panel) !important;
     z-index: 2;
 }
@@ -1768,7 +1771,13 @@ select.grade-input option {
 }
 
 /* Homework grid */
-.hw-grid-wrap, .overview-table-wrap {
+.hw-grid-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 500px;
+    position: relative;
+}
+.overview-table-wrap {
     overflow-x: auto;
     position: relative;
 }
@@ -1843,7 +1852,12 @@ select.grade-input option {
 }
 
 /* Detailed homework matrix */
-.hw-grid-wrap, .overview-table-wrap {
+.hw-grid-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 500px;
+}
+.overview-table-wrap {
     overflow-x: auto;
 }
 
@@ -1852,8 +1866,19 @@ select.grade-input option {
     min-width: max-content;
     border-collapse: separate;
 }
+.grading-table thead th {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-panel);
+}
 
-.hw-detail-table th,
+.hw-detail-table th {
+    padding: 4px 6px !important;
+    text-align: center;
+    vertical-align: middle;
+}
 .hw-detail-table td {
     padding: 4px 6px !important;
     text-align: center;
@@ -1877,9 +1902,11 @@ select.grade-input option {
     width: 180px;
     min-width: 180px;
     max-width: 180px;
+    position: -webkit-sticky;
     position: sticky;
+    top: 0;
     left: 0;
-    z-index: 1;
+    z-index: 3;
     background: var(--bg-panel) !important;
     border-right: 1px solid var(--border-color);
     word-wrap: break-word;
@@ -1888,9 +1915,11 @@ select.grade-input option {
 
 .hw-detail-table .hw-sticky-right,
 .grading-table .hw-sticky-right {
+    position: -webkit-sticky;
     position: sticky;
+    top: 0;
     right: 70px;
-    z-index: 1;
+    z-index: 3;
     background: var(--bg-panel) !important;
     border-left: 1px solid var(--border-color);
     text-align: center;
@@ -1900,7 +1929,22 @@ select.grade-input option {
 
 .hw-detail-table .hw-sticky-right-last,
 .grading-table .hw-sticky-right-last {
+    position: -webkit-sticky;
     position: sticky;
+    top: 0;
+    right: 0;
+    z-index: 3;
+    background: var(--bg-panel) !important;
+    border-left: 1px solid var(--border-color);
+    text-align: center;
+    min-width: 70px;
+    width: 70px;
+}
+
+.hw-detail-table .hw-sticky-right-last {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
     right: 0;
     z-index: 2;
     background: var(--bg-panel) !important;
@@ -1910,15 +1954,10 @@ select.grade-input option {
     width: 70px;
 }
 
-.hw-detail-table .hw-sticky-right-last {
-    position: sticky;
-    right: 0;
-    z-index: 2;
-    background: var(--bg-panel) !important;
-    border-left: 1px solid var(--border-color);
-    text-align: center;
-    min-width: 70px;
-}
+/* HW detail body cells: horizontal sticking only, no vertical stacking */
+.hw-detail-table tbody td.hw-sticky-left { top: auto !important; }
+.hw-detail-table tbody td.hw-sticky-right,
+.hw-detail-table tbody td.hw-sticky-right-last { top: auto !important; }
 
 .missing-hw-table th,
 .missing-hw-table td {
@@ -1954,7 +1993,12 @@ select.grade-input option {
         width: 100%;
         border-collapse: collapse;
     }
-    .missing-hw-table th,
+/* Ensure header sticky cells overlay body cells */
+.grading-table thead th.hw-sticky-left { z-index: 5 !important; }
+.grading-table thead th.hw-sticky-right { z-index: 5 !important; }
+.grading-table thead th.hw-sticky-right-last { z-index: 6 !important; }
+
+.missing-hw-table th,
     .missing-hw-table td {
         border: 1px solid #ccc;
         padding: 4px 8px;
@@ -2413,7 +2457,8 @@ select.grade-input option {
 }
 
 .exam-table {
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
     width: auto;
     min-width: 100%;
@@ -2454,7 +2499,9 @@ select.grade-input option {
 }
 
 .exam-table .exam-sticky-left {
+    position: -webkit-sticky;
     position: sticky;
+    top: 0;
     left: 0;
     z-index: 1;
     width: 180px;
@@ -2474,7 +2521,9 @@ select.grade-input option {
 }
 
 .exam-table .exam-sticky-right {
+    position: -webkit-sticky;
     position: sticky;
+    top: 0;
     right: 0;
     z-index: 1;
     width: 50px;
@@ -2958,11 +3007,11 @@ select.grade-input.invalid {
     outline: none;
 }
 
-.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; }
-.collection-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; border-radius: 8px; }
+.collection-table { width: 100%; border-collapse: separate; border-spacing: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .collection-table th,
 .collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
-.collection-table thead th { background: linear-gradient(to bottom, var(--bg-panel), var(--bg-dark)); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: normal; overflow-wrap: break-word; position: sticky; top: 0; z-index: 2; }
+.collection-table thead th { background: linear-gradient(to bottom, var(--bg-panel), var(--bg-dark)); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: normal; overflow-wrap: break-word; position: sticky; top: 0; z-index: 10; }
 .collection-table thead th:first-child,
 .collection-table tbody td:first-child { text-align: left; font-weight: 500; width: auto; padding-right: 0; white-space: nowrap; }
 .collection-table thead th:nth-child(2),
@@ -2992,6 +3041,21 @@ select.grade-input.invalid {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     width: 100%;
+}
+.plan-search-input {
+    width: 180px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-dark);
+    color: var(--text-main);
+    font-size: 13px;
+}
+.plan-search-info {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 80px;
+    text-align: center;
 }
 
 .plan-table-wrap .grading-table thead {

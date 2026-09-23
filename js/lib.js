@@ -441,11 +441,16 @@ let FilePersist = {
     available: true,
     handle: null,
     _pending: false,
+    _saveTimeout: null,
     _interval: null,
     scheduleSave: function() {
-        if (this._pending) return;
+        if (this._saveTimeout) clearTimeout(this._saveTimeout);
         this._pending = true;
-        setTimeout(() => { this._pending = false; this.saveToFile(); }, 1000);
+        this._saveTimeout = setTimeout(() => { this._pending = false; this._saveTimeout = null; this.saveToFile(); }, 100);
+    },
+    flush: function() {
+        if (this._saveTimeout) { clearTimeout(this._saveTimeout); this._saveTimeout = null; this._pending = false; }
+        this.saveToFile();
     },
     startAutoSave: function() {
         if (this._interval) return;
@@ -455,7 +460,7 @@ let FilePersist = {
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
     },
     chooseFile: async function() {
-        alertModal('Automatische Speicherung ist aktiv. Die Datei planit-daten.json im Hauptordner wird alle 30 Sekunden automatisch gespeichert und von OneDrive synchronisiert.');
+        alertModal('Automatische Speicherung ist aktiv. Die Datei planit-daten.json im Ordner "Plan-it" (OneDrive-Ordner oder Anwendungsordner) wird automatisch gespeichert und zwischen Geräten synchronisiert.');
         return true;
     },
     bootstrap: async function() {

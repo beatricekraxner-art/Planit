@@ -404,7 +404,9 @@ function openClassManager(classId) {
     if (!classId) {
         showModal(getClassForm());
         return;
-    }
+}
+
+function buildPlanExportHTML(classId) {
     const cls = DB.loadClasses().find(c => c.id === classId);
     const students = DB.getStudentsForClass(classId);
     showModal(getClassManagerContent(cls, students));
@@ -1819,6 +1821,7 @@ function renderGrading() {
     window._selectedClassId = classId;
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
+    const savedScrollTop = prevWrap ? prevWrap.scrollTop : 0;
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
     const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
     switcher.style.display = 'flex';
@@ -1907,6 +1910,12 @@ function renderGrading() {
             const wrapNow = document.querySelector('.hw-grid-wrap');
             if (wrapNow) wrapNow.scrollLeft = savedScrollLeft;
         }
+        if (currentGradeTab === 'hw' && savedScrollTop) {
+            setTimeout(function() {
+                const wrapNow = document.querySelector('.hw-grid-wrap');
+                if (wrapNow) wrapNow.scrollTop = savedScrollTop;
+            }, 50);
+        }
         if (!hwScrollRestored) {
             setTimeout(() => {
                 const wrap = document.querySelector('.hw-grid-wrap');
@@ -1938,6 +1947,7 @@ function renderGrading() {
         }
     }
     attachGradeValidation(container);
+    setTimeout(function() { try { enableStickyPinning(); } catch (e) {} }, 50);
 }
 
 function attachGradeValidation(container) {
@@ -2103,7 +2113,13 @@ window.deleteCollection = function(classId, collectionId) {
         cls.collections = cls.collections.filter(function(c) { return c.id !== collectionId; });
         DB.saveClasses(classes);
         var container = document.getElementById('grading-table-container');
-        if (container) container.innerHTML = renderCollections(classId);
+        if (container) {
+            var wrap = container.querySelector('.collection-wrap');
+            var scrollTop = wrap ? wrap.scrollTop : 0;
+            container.innerHTML = renderCollections(classId);
+            var newWrap = container.querySelector('.collection-wrap');
+            if (newWrap) newWrap.scrollTop = scrollTop;
+        }
     });
 };
 
@@ -2189,7 +2205,7 @@ function renderPlan(classId) {
     const isDG = planMode === 'dg';
     const lessonDays = cls && cls.lessonDays && cls.lessonDays.length ? cls.lessonDays : (isGZ ? ['Montag'] : (isDG ? ['Dienstag'] : []));
     const hasAutoSchedule = lessonDays.length > 0;
-    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen. <span style="font-size:11px;color:var(--text-muted);">Tipp: Wichtiges mit **Text** hervorheben</span></p></div><button class="btn" onclick="window.exportPlan()">🖨️ Exportieren</button></div>';
+    let html = '<div class="view-header"><div><h2>Stundenplanung</h2><p class="subtitle">Datum &amp; Nummern werden automatisch aus dem Stundenplan vorgeschlagen. Zeilenumbruch in den Inhalten wird übernommen. <span style="font-size:11px;color:var(--text-muted);">Tipp: Wichtiges mit **Text** hervorheben</span></p></div><div style="display:flex;gap:8px;align-items:center;"><input type="text" id="plan-search" class="plan-search-input" placeholder="Suchen (Strg+F)..." onkeyup="filterPlanTable(this.value)" onkeydown="if(event.key===\'Enter\')filterPlanTable(this.value)"><span id="plan-search-info" class="plan-search-info"></span><button class="btn" onclick="window.exportPlan()">🖨️ Exportieren</button></div></div>';
     if (hasAutoSchedule) {
         const firstLessonDate = cls && cls.firstLessonDate ? cls.firstLessonDate : null;
         const globalSettings = DB.loadGlobalSettings();
@@ -2223,8 +2239,8 @@ function renderPlan(classId) {
                 const entry = isSupplier ?
                     supplierEntries.find(e => e.date === date) :
                     plan.find(e => e.date === date && !e.supplier);
-                 const nr = entry ? entry.homeworkNr : '';
-                const title = entry ? (entry.homeworkContent || '') : '';
+                 const nr = entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '') : '';
+                 const title = entry ? (entry.homeworkContent || '') : '';
                 const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
@@ -2255,7 +2271,7 @@ function renderPlan(classId) {
                 const entry = isSupplier ?
                     supplierEntries.find(e => e.date === date) :
                     plan.find(e => e.date === date && !e.supplier);
-                const hwNr = entry ? (entry.homeworkNr || '') : '';
+                const hwNr = entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '') : '';
                 const sheetsText = (entry ? (entry.homeworkSheets || '') : '').trim();
                  const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + renderRichText(sheetsText) + '</small>') : (hwNr || '–');
                  const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
@@ -2295,9 +2311,9 @@ function renderPlan(classId) {
                  const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                  const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
                  let cells = '<td>' + planDateStr(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
-                if (showExerciseNr) cells += '<td>' + (entry ? (entry.exerciseNr || '–') : '–') + '</td>';
+                if (showExerciseNr) cells += '<td>' + (entry ? (entry.exerciseNr ? entry.exerciseNr + '.' : '–') : '–') + '</td>';
                 cells += '<td class="pre plan-content-other">' + renderRichText(entry ? (entry.exerciseContent || '') : '') + '</td>';
-                 if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr || '–') : '–') + '</td>';
+                 if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '–') : '–') + '</td>';
                  cells += '<td class="pre plan-hw-content-other" style="border-left:none;">' + renderRichText(entry ? (entry.homeworkContent || '') : '') + '</td>';
                 cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
                 html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
@@ -2318,7 +2334,7 @@ function renderPlan(classId) {
             const holiday = isHoliday(e.date);
               const holidayName = getHolidayName(e.date);
               const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(holidayName || 'Ferien') + '</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
-             const nr = e.homeworkNr ? e.homeworkNr : '';
+             const nr = e.homeworkNr ? e.homeworkNr + '.' : '';
              const title = e.homeworkContent || '';
              const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
              const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
@@ -2338,7 +2354,7 @@ function renderPlan(classId) {
             const holiday = isHoliday(e.date);
               const holidayName = getHolidayName(e.date);
               const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(holidayName || 'Ferien') + '</span>' : (e.supplier ? '<span class="supplier-marker">Supplierung</span>' : '');
-            const hwNr = e.homeworkNr ? e.homeworkNr : '–';
+            const hwNr = e.homeworkNr ? e.homeworkNr + '.' : '–';
             const sheetsText = (e.homeworkSheets || '').trim();
              const hwDisplay = sheetsText ? (hwNr + '<small style="margin-left:20px;">' + renderRichText(sheetsText) + '</small>') : hwNr;
              const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
@@ -2369,19 +2385,37 @@ function renderPlan(classId) {
              const rowColorClass = e && e.rowColor ? ' plan-row-' + e.rowColor : '';
              const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + (isFuture ? ' plan-future' : '') + rowColorClass;
              let cells = '<td>' + planDateStr(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
-            if (showExerciseNr) cells += '<td>' + (e.exerciseNr ? e.exerciseNr : '–') + '</td>';
+            if (showExerciseNr) cells += '<td>' + (e.exerciseNr ? e.exerciseNr + '.' : '–') + '</td>';
              cells += '<td class="pre plan-content-other">' + renderRichText(e.exerciseContent || '') + '</td>';
-             if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr : '–') + '</td>';
+             if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr + '.' : '–') + '</td>';
              cells += '<td class="pre plan-hw-content-other">' + renderRichText(e.homeworkContent || '') + '</td>';
             cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
             html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
         });
-        html += '</tbody></table>';
+    html += '</tbody></table></div>';
     }
     return html;
 }
 
-function buildPlanExportHTML(classId) {
+function filterPlanTable(term) {
+    var wrap = document.querySelector('.plan-table-wrap');
+    if (!wrap) return;
+    var table = wrap.querySelector('table');
+    if (!table) return;
+    var rows = table.querySelectorAll('tbody tr');
+    var lower = (term || '').toLowerCase().trim();
+    var visible = 0;
+    rows.forEach(function(row) {
+        var txt = row.textContent.toLowerCase();
+        var match = !lower || txt.indexOf(lower) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+    var info = document.getElementById('plan-search-info');
+    if (info) {
+        info.textContent = visible + ' von ' + rows.length + ' Einträge';
+    }
+}
     const cls = DB.loadClasses().find(c => c.id === classId);
     const planHtml = renderPlan(classId);
     const title = cls ? cls.name : 'Stundenplan';
@@ -2415,6 +2449,7 @@ function getSchoolYearLabel() {
     return start.substring(0, 4) + '_' + end.substring(0, 4);
 }
 
+window.filterPlanTable = filterPlanTable;
 window.exportPlan = function() {
     const cls = DB.loadClasses().find(c => c.id === window._selectedClassId);
     const allClasses = DB.loadClasses();
@@ -2491,8 +2526,8 @@ function openPlanModal(classId, id, date) {
     let e = null;
     if (id) e = DB.loadTeachingPlan(classId).find(p => p.id === id);
     const cls = DB.loadClasses().find(c => c.id === classId);
-    const nextEx = plan.filter(x => x.exerciseNr).length + 1;
-    const nextHw = plan.filter(x => x.homeworkNr).length + 1;
+    const nextEx = Math.max(0, ...plan.map(x => parseInt(x.exerciseNr) || 0)) + 1;
+    const nextHw = Math.max(0, ...plan.map(x => parseInt(x.homeworkNr) || 0)) + 1;
     const lastDate = plan.length ? plan[plan.length - 1].date : null;
     const defDate = e ? e.date : (date || (DB.nextLessonDate(classId, lastDate) || ''));
     const exNr = e ? e.exerciseNr : nextEx;
@@ -3129,7 +3164,7 @@ function setExamReturned(classId, studentId, examId, returned, inputEl) {
             const studentRec = (rec[studentId] && rec[studentId][examId]) ? rec[studentId][examId] : { examplePoints: {}, returned: false };
             const returnCell = row.querySelector('.exam-return-cell');
             if (returnCell) {
-                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '?' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (studentRec.absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
+                returnCell.innerHTML = '<input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (studentRec.absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
             }
             const statsEl = document.getElementById('exam-stats-' + examId);
             if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
@@ -3162,7 +3197,7 @@ function setExamAbsent(classId, studentId, examId, absent, inputEl) {
                 sumCell.innerHTML = '<strong>' + (absent ? '–' : (exam.maxPoints > 0 ? sumPointsForRec(studentRec, exam) : '–')) + '</strong>';
             }
             if (returnCell) {
-                returnCell.innerHTML = '<span class="print-pts">' + (studentRec.returned ? '?' : '–') + '</span><input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
+                returnCell.innerHTML = '<input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
             }
             const statsEl = document.getElementById('exam-stats-' + examId);
             if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
@@ -3407,7 +3442,6 @@ function renderExamsView(classId) {
         '<button class="btn btn-secondary" onclick="printExam()">🖨️ Drucken</button>' +
         '</div></div>';
     if (!exams.length) { html += '<p class="subtitle">Noch keine Schularbeit angelegt.</p>'; return html; }
-    html += renderStandardAllOverview(cls, students, false);
     if (!currentExamId || !exams.find(e => e.id === currentExamId)) currentExamId = exams[0].id;
     const exam = exams.find(e => e.id === currentExamId);
     html += '<div class="exam-header">' +
@@ -3416,7 +3450,7 @@ function renderExamsView(classId) {
         '</div>';
     html += renderExamTable(classId, exam);
     html += renderExamStats(classId, exam, 'exam-stats-' + exam.id);
-    html += '<div class="no-print" style="margin-top:15px;"><button class="btn btn-secondary" onclick="openExamModal(\'' + classId + '\',\'' + exam.id + '\')">? Bearbeiten</button> <button class="btn btn-secondary" onclick="deleteExamConfirm(\'' + classId + '\',\'' + exam.id + '\')">Schularbeit löschen</button></div>';
+    html += '<div class="no-print" style="margin-top:15px;"><button class="btn btn-secondary" onclick="openExamModal(\'' + classId + '\',\'' + exam.id + '\')">✎ Bearbeiten</button> <button class="btn btn-secondary" onclick="deleteExamConfirm(\'' + classId + '\',\'' + exam.id + '\')">Schularbeit löschen</button></div>';
     return html;
 }
 
@@ -3427,7 +3461,7 @@ function renderPruefungen(classId) {
     const students = DB.getStudentsForClass(classId);
     const data = DB.loadPruefung(classId);
     let html = '<div class="view-header"><div><h2>Prüfungen</h2><p class="subtitle">Pro Schüler eine mündliche Prüfung mit Datum und Note.</p></div></div>';
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Note</th><th>Notiz</th></tr></thead><tbody>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Note</th><th>Notiz</th></tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
@@ -3435,7 +3469,7 @@ function renderPruefungen(classId) {
             '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)", classId) + '</td>' +
             '<td><textarea class="grade-input" style="width:auto;min-width:160px;height:auto;min-height:32px;text-align:left;white-space:normal;resize:vertical;overflow:auto;" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td></tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     return html;
 }
 
@@ -3455,7 +3489,7 @@ function renderMitarbeit(classId) {
     const status = DB.loadWorksheetStatus(classId);
     const mitTitle = isGZClass(classId) ? 'Mitarbeit und Mappe' : 'Mitarbeit';
     let html = '<div class="view-header"><div><h2>' + mitTitle + '</h2><p class="subtitle">Mappe (1. Semester und 2. Semester), Verhalten.</p></div></div>';
-    html += '<table class="grading-table" id="mitarbeit-table"><thead><tr><th>Schüler</th><th>Mappe 1. Semester</th><th>Bemerkung 1. Sem.</th><th>Mappe 2. Semester</th><th>Bemerkung 2. Sem.</th><th>Verhalten (positiv/negativ)</th>' +
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="mitarbeit-table"><thead><tr><th>Schüler</th><th>Mappe 1. Semester</th><th>Bemerkung 1. Sem.</th><th>Mappe 2. Semester</th><th>Bemerkung 2. Sem.</th><th>Verhalten (positiv/negativ)</th>' +
         (isGZClass(classId) ? '<th>Mitarbeit</th>' : '') + '</tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
@@ -3469,7 +3503,7 @@ function renderMitarbeit(classId) {
             (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' : '') +
             '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     return html;
 }
 
@@ -4180,7 +4214,7 @@ async function linkDataFile() {
 function updateDataFileUI() {
     const el = document.getElementById('datafile-status');
     if (!el) return;
-    el.textContent = '💾 Automatische Speicherung aktiv – planit-daten.json wird alle 30 Sekunden gespeichert und von OneDrive synchronisiert.';
+    el.textContent = '💾 Automatische Speicherung aktiv – planit-daten.json im Plan-it-Ordner wird gespeichert und synchronisiert.';
 }
 
 function updateProviderBadge() {
@@ -4361,7 +4395,7 @@ function renderGZWorksheets(classId) {
         const isComputer = computerOnly.indexOf(w.nr) !== -1;
         const rowStyle = isComputer ? 'style="color:#16a34a;font-style:italic;"' : '';
         const toggleLabel = isComputer ? 'Als Mappe markieren' : 'Als Nur-Computer markieren';
-        html += '<tr ' + rowStyle + '><td>' + w.nr + '</td><td>' + escapeHtml(w.title || '') + '</td><td>' + formatDateDE(w.date || '') + '</td>' +
+        html += '<tr ' + rowStyle + '><td>' + (w.nr ? w.nr + '.' : '') + '</td><td>' + escapeHtml(w.title || '') + '</td><td>' + formatDateDE(w.date || '') + '</td>' +
             '<td style="text-align:center;"><button class="btn btn-secondary" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + toggleLabel + '</button></td></tr>';
     });
     html += '</tbody></table>';
@@ -5081,6 +5115,134 @@ window.renderGradesOverview = renderGradesOverview;
 window.exportGradesCSV = window.exportGradesCSV;
 window.exportGradesPDF = window.exportGradesPDF;
 
+window.enableStickyPinning = function() {
+    var stickyCells = [];
+    var stickyTheads = [];
+    document.querySelectorAll(".grading-table, #gz-grades-table, .exam-table, .collection-table").forEach(function(table) {
+        if (table.classList.contains("hw-detail-table")) return;
+        if (table.classList.contains("exam-table")) return;
+        var thead = table.querySelector("thead");
+        if (thead) {
+            thead._stickyTarget = true;
+            stickyTheads.push(thead);
+        }
+        var cells = table.querySelectorAll("tbody .hw-sticky-left, tbody .hw-sticky-right, tbody .hw-sticky-right-last, tbody .exam-sticky-left, tbody .exam-sticky-right, tbody .exam-grade-col.exam-sticky-right, tbody .exam-grade-cell.exam-sticky-right, tbody .exam-sum-cell.exam-sticky-right");
+        Array.prototype.forEach.call(cells, function(cell) {
+            cell._stickyTarget = true;
+            stickyCells.push(cell);
+        });
+    });
+    window._stickyTheads = stickyTheads;
+    window._stickyCells = stickyCells;
+    if (!document._stickyActive) {
+        document._stickyActive = true;
+        document.addEventListener("scroll", function() {
+            requestAnimationFrame(function() {
+                if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
+                if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });
+            });
+        }, { passive: true });
+        window.addEventListener("resize", function() {
+            requestAnimationFrame(function() {
+                if (window._stickyTheads) window._stickyTheads.forEach(function(th) { clearStickyTh(th); });
+                if (window._stickyCells) window._stickyCells.forEach(function(c) { clearStickyCell(c); });
+            });
+        }, { passive: true });
+    }
+    setTimeout(function() {
+        if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
+        if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });
+    }, 100);
+};
+
+function updateStickyTh(thead) {
+    if (!thead.parentNode || thead.dataset.stickyFixed) return;
+    var table = thead.parentElement;
+    var wrap = thead.closest(".hw-grid-wrap, #view-container, .overview-table-wrap, .collection-wrap");
+    if (!wrap) return;
+    var wrapRect = wrap.getBoundingClientRect();
+    var theadRect = thead.getBoundingClientRect();
+    if (theadRect.top < wrapRect.top - 1) {
+        thead.dataset.stickyFixed = "1";
+        thead.dataset.stickyOrigLeft = theadRect.left;
+        thead.dataset.stickyOrigWidth = theadRect.width;
+        var spacer = document.createElement("tr");
+        spacer.className = "sticky-spacer";
+        spacer.style.cssText = "height:" + thead.offsetHeight + "px;display:table-row;visibility:hidden;pointer-events:none;";
+        var td = document.createElement("td");
+        td.setAttribute("colspan", "1000");
+        td.style.cssText = "padding:0;border:none;";
+        spacer.appendChild(td);
+        var tbody = table.tBodies[0];
+        if (!tbody) { tbody = document.createElement("tbody"); table.appendChild(tbody); }
+        if (tbody.firstChild) { tbody.insertBefore(spacer, tbody.firstChild); } else { tbody.appendChild(spacer); }
+        thead.style.position = "fixed";
+        thead.style.top = wrapRect.top + "px";
+        thead.style.left = Math.max(theadRect.left, wrapRect.left) + "px";
+        thead.style.width = theadRect.width + "px";
+        thead.style.zIndex = "10";
+    } else if (thead.dataset.stickyFixed) {
+        clearStickyTh(thead);
+    }
+}
+
+function clearStickyTh(thead) {
+    if (!thead.dataset.stickyFixed) return;
+    delete thead.dataset.stickyFixed;
+    thead.style.position = "";
+    thead.style.top = "";
+    thead.style.left = "";
+    thead.style.width = "";
+    thead.style.zIndex = "";
+    var spacer = thead.parentNode ? thead.parentNode.querySelector(".sticky-spacer") : null;
+    if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
+}
+
+function updateStickyCell(cell) {
+    var wrap = cell.closest(".hw-grid-wrap, .overview-table-wrap");
+    if (!wrap) return;
+    var wrapRect = wrap.getBoundingClientRect();
+    var cellRect = cell.getBoundingClientRect();
+    var isLeft = cell.classList.contains("hw-sticky-left") || cell.classList.contains("exam-sticky-left");
+    var isRight = cell.classList.contains("hw-sticky-right") || cell.classList.contains("hw-sticky-right-last") || cell.classList.contains("exam-sticky-right") || cell.classList.contains("exam-grade-col.exam-sticky-right") || cell.classList.contains("exam-grade-cell.exam-sticky-right") || cell.classList.contains("exam-sum-cell.exam-sticky-right");
+    if (isLeft && cellRect.left > wrapRect.left + 2) {
+        cell.dataset.stuck = "left";
+        cell.style.position = "fixed";
+        cell.style.left = wrapRect.left + "px";
+        cell.style.zIndex = "3";
+        cell.style.top = (cellRect.top - wrapRect.top + wrap.scrollTop) + "px";
+    } else if (isLeft && cell.dataset.stuck === "left" && cellRect.left <= wrapRect.left + 2) {
+        cell.dataset.stuck = "";
+        cell.style.position = "";
+        cell.style.left = "";
+        cell.style.zIndex = "";
+        cell.style.top = "";
+    }
+    if (isRight && cellRect.right < wrapRect.right - 2) {
+        cell.dataset.stuck = "right";
+        cell.style.position = "fixed";
+        cell.style.right = (wrapRect.right - cellRect.right) + "px";
+        cell.style.zIndex = "3";
+        cell.style.top = (cellRect.top - wrapRect.top + wrap.scrollTop) + "px";
+    } else if (isRight && cell.dataset.stuck === "right" && cellRect.right >= wrapRect.right - 2) {
+        cell.dataset.stuck = "";
+        cell.style.position = "";
+        cell.style.right = "";
+        cell.style.zIndex = "";
+        cell.style.top = "";
+    }
+}
+
+function clearStickyCell(cell) {
+    if (!cell.dataset.stuck) return;
+    cell.dataset.stuck = "";
+    cell.style.position = "";
+    cell.style.left = "";
+    cell.style.right = "";
+    cell.style.zIndex = "";
+    cell.style.top = "";
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
     const startupOverlay = document.createElement('div');
     startupOverlay.id = 'startup-overlay';
@@ -5290,6 +5452,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('App init failed, rendering fallback UI:', e);
         tryRenderStartup();
     }
+    try { enableStickyPinning(); } catch (e) {}
 });
 
 function renderTodos() {
@@ -5410,3 +5573,9 @@ DB.saveTodoText = function(id, text) {
         applyTheme(saved);
     } catch (e) {}
 })();
+
+window.addEventListener('beforeunload', function() {
+    if (window.FilePersist && typeof window.FilePersist.saveToFile === 'function') {
+        window.FilePersist.saveToFile();
+    }
+});

@@ -417,8 +417,8 @@
         async pull() {},
         async sync() {}
     };
-    window.FilePersist = FilePersist;
-    window.LocalPersist = FilePersist;
+    if (!window.LocalPersist) window.LocalPersist = FilePersist;
+    window.FilePersist = window.LocalPersist || FilePersist;
 
     if (typeof window.ODConnect !== 'undefined') window.ODConnect = window.OD.connect;
     if (typeof window.ODDisconnect !== 'undefined') window.ODDisconnect = window.OD.disconnect;
