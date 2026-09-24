@@ -5,7 +5,7 @@ const url = require('url');
 
 const PORT = 9014;
 const appDir = path.join(__dirname);
-const dataDir = path.join(process.env.ONEDRIVE || appDir, 'Plan-it');
+const dataDir = appDir;
 
 // Migrate existing data file from old locations if needed
 const oldLocations = [

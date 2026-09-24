@@ -25,6 +25,14 @@ function isValidGrade(val) {
     return !isNaN(n) && n >= 1 && n <= 5;
 }
 
+// Farbcodierung der Note (1=grün … 5=rot), analog zu den GZ-Selects.
+function gradeColorClass(val) {
+    if (val === '' || val === null || val === undefined) return '';
+    const n = parseInt(val, 10);
+    if (isNaN(n) || n < 1 || n > 5) return ' grade-input-invalid';
+    return ' grade-' + n;
+}
+
 function markInvalidGradeInputs(container) {
     if (!container) return;
     container.querySelectorAll('.grade-input').forEach(inp => {
@@ -1732,37 +1740,39 @@ function pointsToGrade(points, maxPoints, gradeScale) {
 
 function gradeClass(g) {
     if (g == 'A') return 'grade-absent';
-    if (g == 5) return 'grade-5';
-    if (g == 4) return 'grade-4';
-    if (g == 1) return 'grade-1';
-    return '';
+    if (g == null || g === '') return '';
+    const n = parseInt(g, 10);
+    if (isNaN(n) || n < 1 || n > 5) return 'grade-input-invalid';
+    return 'grade-' + n;
 }
 
-function gradeSelect(value, onChange, classId) {
+function gradeSelect(value, onChange, classId, extraClass) {
     const cls = classId ? DB.loadClasses().find(c => c.id === classId) : null;
     const useHalf = cls ? !!cls.useHalfGrades : false;
+    const ec = extraClass ? ' ' + extraClass : '';
     if (useHalf) {
         const opts = ['<option value="">–</option>'];
-        [1, 1.5, 2, 2.5, 3, 3.5, 4, 5].forEach(g => {
+        [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].forEach(g => {
             const label = g % 1 === 0 ? g.toString() : g.toFixed(1);
             opts.push('<option value="' + g + '"' + (parseFloat(value) === g ? ' selected' : '') + '>' + label + '</option>');
         });
-        return '<select class="grade-input" onchange="' + onChange + '">' + opts.join('') + '</select>';
+        return '<select class="grade-input' + ec + '" onchange="' + onChange + '">' + opts.join('') + '</select>';
     }
     const opts = ['<option value="">–</option>'];
     [1,2,3,4,5].forEach(g => {
         opts.push('<option value="' + g + '"' + (value == g ? ' selected' : '') + '>' + g + '</option>');
     });
-    return '<select class="grade-input" onchange="' + onChange + '">' + opts.join('') + '</select>';
+    return '<select class="grade-input' + ec + '" onchange="' + onChange + '">' + opts.join('') + '</select>';
 }
 
-function gradeSelectDecimal(value, onChange) {
+function gradeSelectDecimal(value, onChange, extraClass) {
+    const ec = extraClass ? ' ' + extraClass : '';
     const opts = ['<option value="">–</option>'];
     for (let v = 1.00; v <= 5.00; v += 0.05) {
         const label = v.toFixed(2);
         opts.push('<option value="' + v + '"' + (parseFloat(value) == v ? ' selected' : '') + '>' + label + '</option>');
     }
-    return '<select class="grade-input" onchange="' + onChange + '">' + opts.join('') + '</select>';
+    return '<select class="grade-input' + ec + '" onchange="' + onChange + '">' + opts.join('') + '</select>';
 }
 
 function classSubjectAbbr(cls) {
@@ -1822,6 +1832,8 @@ function renderGrading() {
     const savedScrollTop = prevWrap ? prevWrap.scrollTop : 0;
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
     const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
+    const viewContainer = document.getElementById('view-container');
+    const savedViewScrollTop = viewContainer ? viewContainer.scrollTop : 0;
     switcher.style.display = 'flex';
     const cls = DB.loadClasses().find(c => c.id === classId);
     const planMode = cls ? (cls.planMode || (cls.type === 'gz' ? 'gz' : (cls.type === 'dg' ? 'dg' : 'mathe'))) : 'mathe';
@@ -1856,12 +1868,31 @@ function renderGrading() {
         tabs = gzTabs;
     }
     switcher.innerHTML = tabs.map(t => '<button class="btn grade-tab ' + (currentGradeTab === t[0] ? 'active' : '') + '" onclick="setGradeTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('') + (currentGradeTab === 'plan' ? '<button class="btn grade-tab plan-new-btn" onclick="openPlanModal(\'' + classId + '\')">+ Neue Stunde</button>' : '');
-    container.style.opacity = '0';
+    // Save focused element position for restoration after re-render
+    let savedFocus = null;
+    if (container) {
+        const activeEl = document.activeElement;
+        const activeRow = activeEl && activeEl.closest && activeEl.closest('tbody tr');
+        if (activeRow && container.contains(activeRow)) {
+            const rows = container.querySelectorAll('tbody tr');
+            const rowIdx = Array.from(rows).indexOf(activeRow);
+            if (rowIdx >= 0) {
+                const rowInputs = Array.from(activeRow.querySelectorAll('input, select, textarea'));
+                const inputIdx = rowInputs.indexOf(activeEl);
+                console.log('FOCUS SAVE:', { rowIdx, inputIdx, inputCount: rowInputs.length, tagName: activeEl.tagName, className: activeEl.className });
+                if (inputIdx >= 0) {
+                    savedFocus = { rowIdx: rowIdx, inputIdx: inputIdx };
+                }
+            }
+        }
+    }
+    // Render the new content directly (no opacity flip, which caused a visible flicker)
     container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
+    // Restore scroll position for the plan tab (auto-scroll to today on class switch)
     if (currentGradeTab === 'plan') {
         const shouldScrollToToday = classId !== lastRenderedPlanClassId;
         if (shouldScrollToToday) lastRenderedPlanClassId = classId;
-        function applyScroll() {
+        function applyPlanScroll() {
             const wrap = document.querySelector('.plan-table-wrap');
             if (!wrap) return false;
             if (shouldScrollToToday) {
@@ -1876,73 +1907,77 @@ function renderGrading() {
             }
             return false;
         }
-        setTimeout(function() {
-            if (applyScroll()) {
-                container.style.opacity = '1';
-                return;
-            }
-            setTimeout(function() {
-                if (applyScroll()) {
-                    container.style.opacity = '1';
-                    return;
-                }
-                setTimeout(function() {
-                    if (applyScroll()) {
-                        container.style.opacity = '1';
-                        return;
-                    }
-                    setTimeout(function() {
-                        applyScroll();
-                        container.style.opacity = '1';
-                    }, 150);
-                }, 100);
-            }, 100);
-        }, 100);
-    } else {
-        requestAnimationFrame(function() {
-            container.style.opacity = '1';
-        });
+        let attempts = 0;
+        const tryPlanScroll = function() {
+            if (applyPlanScroll()) return;
+            if (attempts++ < 10) setTimeout(tryPlanScroll, 20);
+        };
+        setTimeout(tryPlanScroll, 10);
     }
-    if (currentGradeTab === 'gz-grades' || currentGradeTab === 'hw') {
-        if (hwScrollRestored && savedScrollLeft) {
-            const wrapNow = document.querySelector('.hw-grid-wrap');
-            if (wrapNow) wrapNow.scrollLeft = savedScrollLeft;
-        }
-        if (currentGradeTab === 'hw' && savedScrollTop) {
-            setTimeout(function() {
-                const wrapNow = document.querySelector('.hw-grid-wrap');
-                if (wrapNow) wrapNow.scrollTop = savedScrollTop;
-            }, 50);
-        }
-        if (!hwScrollRestored) {
-            setTimeout(() => {
-                const wrap = document.querySelector('.hw-grid-wrap');
-                const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : (wrap ? wrap.querySelector('table') : null);
-                if (wrap && table) {
-                    const firstDataRow = table.querySelector('tbody tr');
-                    if (firstDataRow) {
-                        const cells = firstDataRow.querySelectorAll('td');
-                        if (currentGradeTab === 'gz-grades') {
-                            const students = DB.getStudentsForClass(classId);
-                            const worksheets = getGZPlannedWorksheets(classId);
-                            if (students.length && worksheets.length) {
-                                const targetCol = 1 + (worksheets.length - 1) * 4;
-                                const targetCell = cells[targetCol];
-                                if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
-                            }
-                        } else {
-                            const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
-                            if (hws.length) {
-                                const targetCol = 1 + (hws.length - 1);
-                                const targetCell = cells[targetCol];
-                                if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
-                            }
-                        }
-                        hwScrollRestored = true;
-                    }
+    // Restore #view-container scroll (outer scrollable parent)
+    if (viewContainer) viewContainer.scrollTop = savedViewScrollTop;
+    // Restore scroll position for all tabs (prevents jumping back to the first row).
+    // A single requestAnimationFrame fires before the freshly rendered HTML is
+    // measured, so the scroll would be reset to 0 and the table would jump back
+    // to the top. One fallback setTimeout covers the case where the wrap is not
+    // ready in the first frame.
+    function restoreWrapScroll() {
+        const newWrap = document.querySelector('.hw-grid-wrap');
+        if (!newWrap) return false;
+        if (newWrap.scrollWidth <= 0 && newWrap.scrollHeight <= 0) return false;
+        if (savedScrollLeft) newWrap.scrollLeft = savedScrollLeft;
+        if (savedScrollTop) newWrap.scrollTop = savedScrollTop;
+        return true;
+    }
+    if (hwScrollRestored) {
+        if (!restoreWrapScroll()) setTimeout(restoreWrapScroll, 50);
+    } else if (currentGradeTab === 'hw' || currentGradeTab === 'gz-grades') {
+        // Auto-scroll to last column on first render of hw/gz-grades tabs
+        setTimeout(() => {
+            const wrap = document.querySelector('.hw-grid-wrap');
+            if (!wrap) return;
+            const table = currentGradeTab === 'gz-grades' ? document.getElementById('gz-grades-table') : wrap.querySelector('table');
+            if (!table) return;
+            const firstDataRow = table.querySelector('tbody tr');
+            if (!firstDataRow) return;
+            const cells = firstDataRow.querySelectorAll('td');
+            if (currentGradeTab === 'gz-grades') {
+                const students = DB.getStudentsForClass(classId);
+                const worksheets = getGZPlannedWorksheets(classId);
+                if (students.length && worksheets.length) {
+                    const targetCol = 1 + (worksheets.length - 1) * 4;
+                    const targetCell = cells[targetCol];
+                    if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                    hwScrollRestored = true;
                 }
-            }, 50);
-        }
+            } else {
+                const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
+                if (hws.length) {
+                    const targetCol = 1 + (hws.length - 1);
+                    const targetCell = cells[targetCol];
+                    if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
+                    hwScrollRestored = true;
+                }
+            }
+        }, 50);
+    } else {
+        // First render of other tabs — mark as restored so subsequent re-renders preserve scroll
+        hwScrollRestored = true;
+    }
+    // Restore focus to the same input after re-render
+    if (savedFocus) {
+        requestAnimationFrame(() => {
+            const newRows = container.querySelectorAll('tbody tr');
+            console.log('FOCUS RESTORE:', { rowIdx: savedFocus.rowIdx, rowCount: newRows.length, inputIdx: savedFocus.inputIdx });
+            if (savedFocus.rowIdx >= 0 && newRows[savedFocus.rowIdx]) {
+                const inputs = newRows[savedFocus.rowIdx].querySelectorAll('input, select, textarea');
+                console.log('FOCUS RESTORE inputs:', { inputCount: inputs.length, found: !!inputs[savedFocus.inputIdx] });
+                if (savedFocus.inputIdx >= 0 && inputs[savedFocus.inputIdx]) {
+                    inputs[savedFocus.inputIdx].focus();
+                    console.log('FOCUS RESTORE: focus set on', inputs[savedFocus.inputIdx].tagName, inputs[savedFocus.inputIdx].className);
+                }
+            }
+        });
     }
     attachGradeValidation(container);
     setTimeout(function() { try { enableStickyPinning(); } catch (e) {} }, 50);
@@ -3468,7 +3503,7 @@ function renderPruefungen(classId) {
         const d = data[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
             '<td><input type="date" class="grade-input" style="width:auto;" value="' + escapeHtml(d.date || '') + '" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'date\',this.value)"></td>' +
-            '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)", classId) + '</td>' +
+            '<td>' + gradeSelect(d.grade, "setPruefung('" + classId + "','" + s.id + "','grade',this.value)", classId, gradeColorClass(d.grade)) + '</td>' +
             '<td><textarea class="grade-input" style="width:auto;min-width:160px;height:auto;min-height:32px;text-align:left;white-space:normal;resize:vertical;overflow:auto;" onchange="setPruefung(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td></tr>';
     });
     html += '</tbody></table></div>';
@@ -3497,12 +3532,12 @@ function renderMitarbeit(classId) {
         const d = data[s.id] || {};
         const st = status[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)", classId) + '</td>' +
+            '<td>' + gradeSelect(d.folder1, "setMitarbeit('" + classId + "','" + s.id + "','folder1',this.value)", classId, gradeColorClass(d.folder1)) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote1\',this.value)">' + escapeHtml(d.folderNote1 || '') + '</textarea></td>' +
-            '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)", classId) + '</td>' +
+            '<td>' + gradeSelect(d.folder2, "setMitarbeit('" + classId + "','" + s.id + "','folder2',this.value)", classId, gradeColorClass(d.folder2)) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'folderNote2\',this.value)">' + escapeHtml(d.folderNote2 || '') + '</textarea></td>' +
             '<td><textarea class="grade-input remark-input" style="width:auto;min-width:220px;height:60px;text-align:left;white-space:normal;resize:vertical;" onchange="setMitarbeit(\'' + classId + '\',\'' + s.id + '\',\'note\',this.value)">' + escapeHtml(d.note || '') + '</textarea></td>' +
-            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' : '') +
+            (isGZClass(classId) ? '<td>' + gradeSelect(st.attendance || '', "setGZAttendanceGrade('" + classId + "','" + s.id + "',this.value)", classId, gradeColorClass(st.attendance)) + '</td>' : '') +
             '</tr>';
     });
     html += '</tbody></table></div>';
@@ -3537,7 +3572,7 @@ function renderProjects(classId) {
         const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelectDecimal(d.grade, "setProjectGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td>' + gradeSelect(d.grade, "setProjectGrade('" + classId + "','" + s.id + "',this.value)", classId, gradeColorClass(d.grade)) + '</td>' +
             '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(d.note || '') + '" onchange="setProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
@@ -3638,7 +3673,7 @@ function renderOverview(classId) {
             '<td>' + (projectGrade != null ? '<span class="' + gradeClass(projectGrade) + ' grade-cell">' + projectGrade + '</span>' : '–') + '</td>' +
             '<td class="' + gradeClass(computed) + ' grade-cell">' + (computed != null ? computed : '–') + '</td>' +
             (isYear ? '<td class="' + gradeClass(semesterManualGrade) + ' grade-cell">' + (semesterManualGrade != null ? semesterManualGrade : '–') + '</td>' : '') +
-            '<td>' + gradeSelect(activeManual, "setManualGrade('" + classId + "','" + s.id + "',this.value)") + '</td>' +
+            '<td>' + gradeSelect(activeManual, "setManualGrade('" + classId + "','" + s.id + "',this.value)", classId, gradeColorClass(activeManual)) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setOverviewNoteComment(\'' + classId + '\',\'' + s.id + '\',this.value)">' + escapeHtml(noteComment) + '</textarea></td>' +
             (isYear ? '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setSemesterOverviewNoteComment(\'' + classId + '\',\'' + s.id + '\',this.value)">' + escapeHtml(semesterNoteComment) + '</textarea></td>' : '') +
             '</tr>';
@@ -3816,10 +3851,12 @@ function renderHolidays() {
             '<td style="white-space:nowrap;">' +
                 '<button class="btn btn-secondary" onclick="window.editManualHoliday(' + realIndex + ')">Bearbeiten</button> ' +
                 '<button class="btn btn-secondary" onclick="window.deleteManualHoliday(' + realIndex + ')">Löschen</button>' +
-            '</td></tr>';
-    });
-    html += '</tbody></table>';
-    container.innerHTML = html;
+             '</td></tr>';
+     });
+     html += '</tbody></table>';
+     const savedScroll = window.scrollY || document.documentElement.scrollTop || 0;
+     container.innerHTML = html;
+     if (savedScroll > 0) requestAnimationFrame(() => window.scrollTo(0, savedScroll));
 }
 
 function exportData() {
@@ -4095,7 +4132,9 @@ function renderAppointmentsList() {
             '<td><button class="btn btn-secondary" onclick="editAppointment(\'' + a.id + '\')">Bearbeiten</button></td></tr>';
     });
     html += '</tbody></table>';
+    const savedScroll = window.scrollY || document.documentElement.scrollTop || 0;
     container.innerHTML = html;
+    if (savedScroll > 0) requestAnimationFrame(() => window.scrollTo(0, savedScroll));
 }
 window.openClassManager = openClassManager;
 window.editStudent = editStudent;
@@ -4607,7 +4646,7 @@ function renderGZProject(classId) {
         const otLabel = ot === 'pos' ? '✓' : (ot === 'neg' ? '✗' : '');
         const otClass = ot === 'pos' ? 'gz-recv-ng' : (ot === 'neg' ? 'gz-recv-x' : '');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)", classId) + '</td>' +
+            '<td>' + gradeSelect(grade, "setGZProjectGrade('" + classId + "','" + s.id + "',this.value)", classId, gradeColorClass(grade)) + '</td>' +
             '<td style="text-align:center;"><button class="gz-toggle ' + otClass + '" title="Rechtzeitig abgegeben: ✓=ja, ✗=nein" onclick="toggleGZProjectOnTime(\'' + classId + '\',\'' + s.id + '\')">' + otLabel + '</button></td>' +
             '<td><input type="text" class="grade-input" style="width:auto;min-width:200px;" value="' + escapeHtml(note) + '" onchange="setGZProjectGrade(\'' + classId + '\',\'' + s.id + '\',this.value,\'note\')"></td></tr>';
     });
@@ -4901,7 +4940,7 @@ function renderGZOverview(classId) {
             '<td style="text-align:center;">' + (forgot.material || 0) + '</td>' +
             '<td style="text-align:center;">' + (forgot.laptop || 0) + '</td>' +
             '<td>' + (calcSemester != null ? calcSemester.toFixed(2) : '–') + '</td>' +
-            '<td>' + (!isYear ? gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)") : (semesterManual != null ? semesterManual : '–')) + '</td>' +
+            '<td>' + (!isYear ? gradeSelect(semesterManual, "setSemesterManualGrade('" + classId + "','" + s.id + "',this.value)", classId, gradeColorClass(semesterManual)) : (semesterManual != null ? semesterManual : '–')) + '</td>' +
             '<td><textarea class="grade-input remark-input" style="height:auto;min-height:22px;padding:2px 4px;width:auto;min-width:120px;text-align:left;white-space:pre-wrap;resize:vertical;overflow:auto;" onchange="setSemesterRemark(\'' + classId + '\',\'' + s.id + '\',this.value)" placeholder="…">' + escapeHtml(noteComment) + '</textarea></td>' +
             (isYear ? '<td>' + (st.project != null ? st.project : '–') + '</td>' : '') +
             (isYear ? '<td>' + (manual != null ? manual : '–') + '</td>' : '') +
@@ -5571,10 +5610,12 @@ function renderTodos() {
                 '<button class="btn btn-secondary todo-del" onclick="DB.deleteTodo(\'' + t.id + '\'); renderTodos();">×</button>' +
                 '</li>';
         });
-        html += '</ul></div>';
-    });
-    container.innerHTML = html;
-}
+         html += '</ul></div>';
+     });
+     const savedScroll = window.scrollY || document.documentElement.scrollTop || 0;
+     container.innerHTML = html;
+     if (savedScroll > 0) requestAnimationFrame(() => window.scrollTo(0, savedScroll));
+ }
 
 window.addTodo = function() {
     const content = '<div style="display:flex;flex-direction:column;gap:12px;">' +
