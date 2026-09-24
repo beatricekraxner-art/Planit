@@ -404,9 +404,7 @@ function openClassManager(classId) {
     if (!classId) {
         showModal(getClassForm());
         return;
-}
-
-function buildPlanExportHTML(classId) {
+    }
     const cls = DB.loadClasses().find(c => c.id === classId);
     const students = DB.getStudentsForClass(classId);
     showModal(getClassManagerContent(cls, students));
@@ -2240,7 +2238,7 @@ function renderPlan(classId) {
                     supplierEntries.find(e => e.date === date) :
                     plan.find(e => e.date === date && !e.supplier);
                  const nr = entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '') : '';
-                 const title = entry ? (entry.homeworkContent || '') : '';
+                const title = entry ? (entry.homeworkContent || '') : '';
                 const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
@@ -2392,7 +2390,7 @@ function renderPlan(classId) {
             cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
             html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
         });
-    html += '</tbody></table></div>';
+         html += '</tbody></table></div>';
     }
     return html;
 }
@@ -2416,6 +2414,8 @@ function filterPlanTable(term) {
         info.textContent = visible + ' von ' + rows.length + ' Einträge';
     }
 }
+
+function buildPlanExportHTML(classId) {
     const cls = DB.loadClasses().find(c => c.id === classId);
     const planHtml = renderPlan(classId);
     const title = cls ? cls.name : 'Stundenplan';
@@ -2818,10 +2818,10 @@ function renderHomeworkDetailed(classId, students, hws) {
     if (isDG) {
         const columns = [];
         hws.forEach(h => {
-            const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
-            sheets.forEach(name => {
-                columns.push({ hwNr: h.sheets, sheet: name, date: h.date });
-            });
+        const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
+                sheets.forEach(name => {
+                    columns.push({ hwNr: h.sheets, sheet: name, date: h.date });
+                });
         });
         columns.forEach(col => {
             html += '<th class="hw-col">' + escapeHtml(col.sheet) + '<br><small>' + formatDateShortDE(col.date) + '</small></th>';
