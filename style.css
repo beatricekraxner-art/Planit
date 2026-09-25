@@ -84,15 +84,43 @@
         color: #7f1d1d !important;
     }
 
-    #gz-grades-table .gz-computer-only {
+#gz-grades-table .gz-computer-only {
         background: rgba(22, 163, 74, 0.18) !important;
         color: #065f46 !important;
-        border-left-color: #16a34a !important;
+    }
+#gz-grades-table th.gz-computer-only,
+#gz-grades-table th.gz-ws-sep.gz-computer-only,
+#gz-grades-table th.gz-ws-last.gz-computer-only,
+#gz-grades-table th[class*="gz-computer-only"],
+#gz-grades-table thead th.gz-computer-only,
+#gz-grades-table thead tr th.gz-computer-only {
+        background: rgba(22, 163, 74, 0.18) !important;
+        color: #065f46 !important;
     }
 
-    #gz-grades-table .gz-computer-only .gz-grade-select {
+#gz-grades-table .gz-computer-only .gz-grade-select {
         background: rgba(22, 163, 74, 0.22) !important;
         color: #065f46 !important;
+    }
+
+    /* Verstecke Trennlinien bei "nur Computer" Zellen */
+    #gz-grades-table .gz-computer-only,
+    #gz-grades-table td.gz-computer-only,
+    #gz-grades-table th.gz-computer-only {
+        border: none !important;
+        border-left: none !important;
+        border-right: none !important;
+        box-shadow: none !important;
+    }
+    /* Auch Nachbarzellen rechts davon keine linke Grenze */
+    #gz-grades-table .gz-computer-only + td,
+    #gz-grades-table .gz-computer-only + th {
+        border-left: none !important;
+    }
+    /* Sticky-left Spalte sauber halten bei Computer-only Spalten */
+    #gz-grades-table tr:has(.gz-computer-only) .hw-sticky-left {
+        border-right-color: var(--border-color) !important;
+        background: var(--bg-panel) !important;
     }
 
     .plan-today td {
@@ -1357,24 +1385,32 @@ select.grade-input option {
     table-layout: auto;
     min-width: max-content;
     border-collapse: separate;
+    border-spacing: 0;
+}
+
+#gz-grades-table th,
+#gz-grades-table td {
+    border: none !important;
+    text-align: center;
 }
 
 #gz-grades-table .hw-sticky-left,
-#gz-grades-table .hw-sticky-right,
-#gz-grades-table .hw-sticky-right-last,
-#gz-grades-table th.hw-sticky-left,
-#gz-grades-table th.hw-sticky-right,
-#gz-grades-table th.hw-sticky-right-last {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0;
-    background: var(--bg-panel) !important;
-    z-index: 2;
-}
+    #gz-grades-table .hw-sticky-right,
+    #gz-grades-table .hw-sticky-right-last,
+    #gz-grades-table th.hw-sticky-left,
+    #gz-grades-table th.hw-sticky-right,
+    #gz-grades-table th.hw-sticky-right-last {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0;
+        background: var(--bg-panel) !important;
+        z-index: 5;
+    }
 
-#gz-grades-table .hw-sticky-left {
-    left: 0;
-}
+    #gz-grades-table .hw-sticky-left {
+        left: 0;
+        z-index: 5;
+    }
 
 #gz-grades-table .hw-sticky-right {
     right: 70px;
@@ -1388,28 +1424,123 @@ select.grade-input option {
     width: 70px;
 }
 
-#gz-grades-table .gz-ws-sep,
-#gz-grades-table td:not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last) {
-    padding: 3px 2px !important;
-    min-width: 38px;
-    max-width: 50px;
+/* Note-Spalte (Select) */
+    #gz-grades-table td.gz-ws-sep {
+        padding: 0 3px !important;
+        min-width: 46px;
+        max-width: 52px;
+        text-align: center;
+    }
+    /* Header-Trennlinien zwischen Blättern bis ganz nach oben (beide Header-Zeilen) */
+    /* Erste Reihe: nach JEDEM colspan-Th (jedes Blatt) */
+    #gz-grades-table thead tr:first-child th.gz-ws-sep[colspan] {
+        border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    }
+    /* Zweite Reihe: nach gz-ws-last (Verg.) */
+    #gz-grades-table thead th.gz-ws-last {
+        border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    }
+    /* rowspan Zellen (Ø ÜB, Fehlend) */
+    #gz-grades-table thead th.gz-ws-sep[rowspan] {
+        border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    }
+    [data-theme="light"] #gz-grades-table thead tr:first-child th.gz-ws-sep[colspan],
+    [data-theme="light"] #gz-grades-table thead th.gz-ws-last,
+    [data-theme="light"] #gz-grades-table thead th.gz-ws-sep[rowspan] {
+        border-right: 3px solid rgba(0, 0, 0, 0.35) !important;
+    }
+
+    /* Zählanzeige im Header: Anzahl der Schüler, die das Blatt noch nicht abgegeben haben */
+.gz-not-received-badge {
+    background: #fff;
+    color: #ef4444;
+    border: 1px solid #ef4444;
+    border-radius: 10px;
+    padding: 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: auto;
+    vertical-align: middle;
 }
 
+    /* ÜB-Header: Nummer links, Button rechts */
+    .gz-ws-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+
+    .gz-ws-nr {
+        font-weight: 700;
+    }
+
+    .gz-ws-toggle-btn {
+        margin-left: auto;
+    }
+
+    #gz-grades-table td:not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last) {
+        padding-left: 4px;
+    }
+    /* Mehr Platz rechts für k/Abg/Verg Buttons */
+    #gz-grades-table td.gz-ws-last,
+    #gz-grades-table td:not(.gz-ws-sep):not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last) {
+        padding-right: 8px;
+    }
+
 #gz-grades-table .gz-ws-last {
-    border-right: 2px solid rgba(255,255,255,0.45);
+    border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+[data-theme="light"] #gz-grades-table .gz-ws-last {
+    border-right: 3px solid rgba(0, 0, 0, 0.35) !important;
 }
 
 #gz-grades-table .gz-computer-only {
-    background: rgba(22, 163, 74, 0.25) !important;
-    color: #4ade80 !important;
-    font-weight: 600;
-    border-left: 3px solid #16a34a !important;
-}
+        background: rgba(22, 163, 74, 0.25) !important;
+        color: #4ade80 !important;
+        font-weight: 600;
+    }
+#gz-grades-table th.gz-computer-only,
+#gz-grades-table th.gz-ws-sep.gz-computer-only,
+#gz-grades-table th.gz-ws-last.gz-computer-only,
+#gz-grades-table th[class*="gz-computer-only"],
+#gz-grades-table thead th.gz-computer-only,
+#gz-grades-table thead tr th.gz-computer-only {
+        background: rgba(22, 163, 74, 0.25) !important;
+        color: #4ade80 !important;
+        font-weight: 600;
+    }
 
 #gz-grades-table .gz-computer-only .gz-grade-select {
     background: rgba(22, 163, 74, 0.35) !important;
     color: #4ade80 !important;
     font-weight: 600;
+}
+
+/* Keine Trennlinie nach der Verg.-Spalte in einer "nur Computer"-Zeile */
+#gz-grades-table .gz-computer-only .gz-ws-last {
+    border-right: none !important;
+}
+
+/* Verstecke Trennlinien bei "nur Computer" Zellen */
+#gz-grades-table .gz-computer-only,
+#gz-grades-table td.gz-computer-only,
+#gz-grades-table th.gz-computer-only {
+    border: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    box-shadow: none !important;
+}
+/* Auch Nachbarzellen rechts davon keine linke Grenze */
+#gz-grades-table .gz-computer-only + td,
+#gz-grades-table .gz-computer-only + th {
+    border-left: none !important;
+}
+/* Sticky-left Spalte sauber halten bei Computer-only Spalten */
+#gz-grades-table tr:has(.gz-computer-only) .hw-sticky-left {
+    border-right-color: var(--border-color) !important;
+    background: var(--bg-panel) !important;
 }
 
 .gz-toggle {
@@ -1418,18 +1549,24 @@ select.grade-input option {
     padding: 4px 6px;
     border-radius: 6px;
     border: 1px solid var(--border-color);
-    /* Kontraststarker Default (unabhängig vom Theme), damit k/x/ab auch im hellen Modus gut lesbar sind */
-    background: #334155;
-    color: #f8fafc;
+    background: var(--bg-dark);
+    color: var(--text-main);
     cursor: pointer;
 }
 
 #gz-grades-table .gz-toggle {
     font-size: 12px;
-    min-width: 20px;
-    padding: 3px 4px;
-    background: #334155;
-    color: #f8fafc;
+    min-width: 28px;
+    min-height: 24px;
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    width: auto;
 }
 
 #gz-project-table thead th {
@@ -1552,8 +1689,8 @@ select.grade-input option {
 }
 
 #gz-grades-table .gz-grade-select {
-    width: 42px;
-    padding: 3px 2px;
+    width: 100%;
+    padding: 3px 18px 3px 2px;
     font-size: 14px;
     border-radius: 6px;
     border: 1px solid var(--border-color);
@@ -1562,6 +1699,11 @@ select.grade-input option {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
+    box-sizing: border-box;
+    text-align: center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%2394a3b8' d='M5 7L1 3h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
 }
 
 .gz-forgot-date {
@@ -1903,7 +2045,7 @@ select.grade-input:hover {
 .hw-grid-wrap {
     overflow-x: auto;
     overflow-y: auto;
-    max-height: 500px;
+    max-height: 70vh;
     position: relative;
 }
 .overview-table-wrap {
@@ -1912,14 +2054,7 @@ select.grade-input:hover {
 }
 
 .hw-grid-wrap::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.35));
-    pointer-events: none;
+    display: none;
 }
 
 .hw-table td, .hw-table th {
@@ -3219,16 +3354,20 @@ select.grade-input.invalid {
         padding: 6px;
         font-size: 13px;
     }
-    #gz-grades-table .gz-grade-select {
-        width: 36px;
-        padding: 2px;
-        font-size: 12px;
-    }
-    #gz-grades-table .gz-toggle {
-        font-size: 11px;
-        min-width: 18px;
-        padding: 2px 3px;
-    }
+#gz-grades-table .gz-grade-select {
+    width: 26px;
+    padding: 1px 2px;
+    font-size: 11px;
+}
+#gz-grades-table .gz-toggle {
+    font-size: 11px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px 4px;
+    width: auto;
+    background: var(--bg-dark);
+    color: var(--text-main);
+}
     .hw-grid-wrap,
     .overview-table-wrap,
     .collection-wrap {

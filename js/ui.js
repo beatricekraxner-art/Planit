@@ -4409,12 +4409,13 @@ function getGZPlannedWorksheets(classId) {
     const seen = new Set();
     const result = [];
     allDates.forEach(date => {
-        const entry = worksheetEntries.find(e => e.date === date);
-        if (entry && !seen.has(entry.homeworkNr)) {
-            seen.add(entry.homeworkNr);
-            const nr = parseInt(entry.homeworkNr, 10);
-            result.push({ nr: nr, title: entry.homeworkContent || '', date: entry.date, isComputerOnly: computerOnly.indexOf(nr) !== -1 });
-        }
+        // Eintrag für diesen Termin (mit oder ohne ÜB-Nummer)
+        const entry = plan.find(e => e.date === date);
+        if (!entry || seen.has(entry.date)) return;
+        seen.add(entry.date);
+        const hasHw = !!entry.homeworkNr;
+        const nr = hasHw ? parseInt(entry.homeworkNr, 10) : null;
+        result.push({ nr: nr, title: entry.homeworkContent || entry.exerciseContent || '', date: entry.date, isComputerOnly: hasHw && computerOnly.indexOf(nr) !== -1, noHw: !hasHw });
     });
     return result;
 }
@@ -4491,20 +4492,41 @@ function renderGZGrades(classId) {
     const worksheets = getGZPlannedWorksheets(classId);
     const status = DB.loadWorksheetStatus(classId);
     const weights = DB.loadGZGradeWeights(classId);
+    // Status-Schlüssel: für Stuten ohne ÜB-Nummer wird die Datum als Schlüssel verwendet
+    function wsKey(w) { return w.noHw ? ('nohw:' + w.date) : w.nr; }
     let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen.</p></div></div>';
     if (!students.length) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
     }
     html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left">Schüler</th>';
+    // Zähle pro Blatt, wie viele Schüler das Blatt noch nicht abgegeben haben (received === 'x')
+    const notReceivedCount = {};
+    worksheets.forEach(w => { notReceivedCount[w.nr || w.date] = 0; });
+    students.forEach(s => {
+        const st = status[s.id] || {};
+        worksheets.forEach(w => {
+            const cell = st[w.nr] || {};
+            if (cell.received === 'x') notReceivedCount[w.nr || w.date]++;
+        });
+    });
     worksheets.forEach(w => {
         const co = w.isComputerOnly ? ' <small style="color:#16a34a;font-style:italic;">(nur Computer)</small>' : '';
-        const toggleBtn = '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? 'Nur Computer' : 'Ausgeteilt') + '</button>';
-        html += '<th colspan="4" class="gz-ws-sep">' + w.nr + toggleBtn + '<br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small>' + co + '</th>';
+        const toggleBtn = w.noHw ? '' : '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? 'Nur Computer' : 'Ausgeteilt') + '</button>';
+        const colspan = w.noHw ? 2 : 4;
+        const notRcvd = notReceivedCount[w.nr || w.date];
+        const notRcvdBadge = notRcvd > 0 ? '<span class="gz-not-received-badge" style="margin-left:auto;" title="Noch nicht abgegeben">fehlend: ' + notRcvd + '</span>' : '';
+        const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
+        html += '<th colspan="' + colspan + '" class="gz-ws-sep' + computerClass + '"><div class="gz-ws-head"><span class="gz-ws-nr">' + (w.nr ? w.nr : '–') + '</span><span class="gz-ws-toggle-btn">' + toggleBtn + '</span>' + notRcvdBadge + '</div><br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small>' + co + '</th>';
     });
     html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
     worksheets.forEach(w => {
-        html += '<th class="gz-ws-sep">Note</th><th>k</th><th>Abg</th><th class="gz-ws-last">Verg.</th>';
+        const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
+        if (w.noHw) {
+            html += '<th class="gz-ws-sep' + computerClass + '">k</th><th class="gz-ws-last' + computerClass + '">Verg.</th>';
+        } else {
+            html += '<th class="gz-ws-sep' + computerClass + '">Note</th><th class="' + computerClass.trim() + '">k</th><th class="' + computerClass.trim() + '">Abg</th><th class="gz-ws-last' + computerClass + '">Verg.</th>';
+        }
     });
     html += '</tr></thead><tbody>';
     students.forEach(s => {
@@ -4512,16 +4534,19 @@ function renderGZGrades(classId) {
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>';
         let sum = 0, count = 0, missingCount = 0;
         const missingList = [];
-        worksheets.forEach(w => {
-            const cell = st[w.nr] || {};
+worksheets.forEach(w => {
+            const k = wsKey(w);
+            const cell = st[k] || {};
             const grade = cell.grade || '';
             const absent = !!cell.absent;
             const received = cell.received || '';
-            if (grade === '' || grade === 'missing') {
-                missingCount++;
-                missingList.push(w.nr);
+            if (!w.noHw) {
+                if (grade === '' || grade === 'missing') {
+                    missingCount++;
+                    missingList.push(w.nr);
+                }
+                if (grade && grade !== 'missing') { sum += parseFloat(grade); count++; }
             }
-            if (grade && grade !== 'missing') { sum += parseFloat(grade); count++; }
             const matOn = gzForgottenHas(classId, w.date, s.id, 'material');
             const lapOn = gzForgottenHas(classId, w.date, s.id, 'laptop');
             const recvLabel = received === 'x' ? 'x' : (received === 'ng' ? 'ng' : '');
@@ -4530,14 +4555,18 @@ function renderGZGrades(classId) {
             const forgotClass = (matOn || lapOn) ? 'gz-mat active' : '';
             const gradeSelectClass = grade ? ' gz-grade-' + grade : '';
             const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
-            const gradeOptions = cls.useHalfGrades ? [1,1.5,2,2.5,3,3.5,4,5] : [1,2,3,4,5];
-            html += '<td class="gz-ws-sep' + computerClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',this.value)">' +
-                '<option value="">–</option>' +
-                gradeOptions.map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
-                '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>ges</option>' +
-                '</select></td>';
-            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ',' + (!absent) + ')">k</button></td>';
-            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',' + w.nr + ')">' + recvLabel + '</button></td>';
+            if (!w.noHw) {
+                const gradeOptions = cls.useHalfGrades ? [1,1.5,2,2.5,3,3.5,4,5] : [1,2,3,4,5];
+                html += '<td class="gz-ws-sep' + computerClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',this.value)">' +
+                    '<option value="">–</option>' +
+                    gradeOptions.map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
+                    '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>ges</option>' +
+                    '</select></td>';
+            }
+            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">k</button></td>';
+            if (!w.noHw) {
+                html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
+            }
             html += '<td class="gz-ws-last ' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
         });
         const avg = count > 0 ? (sum / count).toFixed(2) : '–';
@@ -4799,7 +4828,6 @@ function renderGZForgotten(classId) {
     students.forEach(s => { studentMap[s.id] = s; });
     const studentEntries = {};
     Object.keys(data).forEach(date => {
-        if (!wsDates.has(date)) return;
         const d = data[date];
         (d.material || []).forEach(sid => {
             if (!studentMap[sid]) return;
@@ -4817,20 +4845,36 @@ function renderGZForgotten(classId) {
     });
     const sortedStudents = students.filter(s => studentEntries[s.id]).sort((a, b) => (getLastName(a.name) || '').localeCompare(getLastName(b.name) || ''));
     let html = '<div class="view-header"><div><h2>Vergessenes Material</h2>' +
-        '<p class="subtitle">Pro Schüler: welche Übungstage mit Material- oder Laptop-Vergessen.</p></div></div>';
+        '<p class="subtitle">Pro Schüler: welche Übungstage mit Material- oder Laptop-Vergessen.</p></div>' +
+        '<div class="grading-controls">' +
+        '<input type="date" id="gz-forgot-new-date" class="btn btn-secondary" style="width:auto;">' +
+        '<button class="btn" onclick="window.addGZForgottenEntry(\'' + classId + '\')">+ Eintrag hinzufügen</button>' +
+        '</div></div>';
     if (!sortedStudents.length) {
-        html += '<p class="subtitle">Keine Einträge vorhanden.</p>';
+        html += '<p class="subtitle">Noch keine Einträge. Wählen Sie ein Datum und einen Schüler, um Material- oder Laptop-Vergessen zu erfassen.</p>';
+        html += renderGZForgottenForm(classId, students);
         return html;
     }
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Vorkommnisse</th></tr></thead><tbody>';
+    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Vorkommnisse</th><th>Aktion</th></tr></thead><tbody>';
     sortedStudents.forEach(s => {
         const entries = studentEntries[s.id] || [];
         const parts = entries.length + 'x: ' + entries.map(e => '<span class="gz-forgot-date">' + formatDateDE(e.date) + '</span> ' + (e.kind === 'material' ? 'Mat' : 'Lap')).join(', ');
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
-            '<td>' + parts + '</td></tr>';
+            '<td>' + parts + '</td>' +
+            '<td><button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="window.openGZForgottenModal(\'' + classId + '\',\'' + s.id + '\')">+ Eintrag</button></td></tr>';
     });
     html += '</tbody></table>';
+    html += '<div style="margin-top:15px;"><button class="btn" onclick="window.openGZForgottenModal(\'' + classId + '\', null)">+ Neuer Eintrag</button></div>';
     return html;
+}
+
+function renderGZForgottenForm(classId, students) {
+    return '<table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Art</th><th></th></tr></thead><tbody>' +
+        students.map(s => '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
+        '<td><input type="date" id="gz-forgot-date-' + s.id + '" class="grade-input" style="width:auto;"></td>' +
+        '<td><select id="gz-forgot-kind-' + s.id + '" class="grade-input"><option value="material">Material</option><option value="laptop">Laptop</option></select></td>' +
+        '<td><button class="btn" onclick="window.addGZForgottenForStudent(\'' + classId + '\',\'' + s.id + '\')">+</button></td></tr>').join('') +
+        '</tbody></table>';
 }
 
 window.toggleGZForgotten = function(classId, date, studentId, kind, checked) {
@@ -4873,6 +4917,53 @@ window.cycleGZForgotten = function(classId, date, studentId) {
     data[date].material = mat;
     data[date].laptop = lap;
     DB.saveForgotMaterial(classId, data);
+    renderGrading();
+};
+
+window.addGZForgottenEntry = function(classId) {
+    const date = document.getElementById('gz-forgot-new-date').value;
+    if (!date) { alert('Bitte ein Datum wählen.'); return; }
+    const students = DB.getStudentsForClass(classId);
+    students.forEach(s => {
+        const d = document.getElementById('gz-forgot-date-' + s.id);
+        const k = document.getElementById('gz-forgot-kind-' + s.id);
+        const sd = d ? d.value : '';
+        if (!sd) return;
+        const kind = k ? k.value : 'material';
+        window.toggleGZForgotten(classId, sd, s.id, kind, true);
+    });
+    document.getElementById('gz-forgot-new-date').value = '';
+    renderGrading();
+};
+
+window.openGZForgottenModal = function(classId, studentId) {
+    const students = DB.getStudentsForClass(classId);
+    const target = studentId ? students.find(s => s.id === studentId) : null;
+    const html = '<div class="modal-overlay" onclick="this.remove()">' +
+        '<div class="modal" onclick="event.stopPropagation()">' +
+        '<div class="modal-header"><h3>Vergessenes Material</h3><button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">×</button></div>' +
+        '<div class="modal-body">' +
+        '<label>Datum: <input type="date" id="gz-forgot-modal-date" class="grade-input" style="width:auto;"></label>' +
+        '<label>Art: <select id="gz-forgot-modal-kind" class="grade-input"><option value="material">Material</option><option value="laptop">Laptop</option></select>' +
+        '<label>Schüler: <select id="gz-forgot-modal-student">' +
+        '<option value="">– Schüler wählen –</option>' +
+        students.map(s => '<option value="' + s.id + '"' + (target && s.id === target.id ? ' selected' : '') + '>' + escapeHtml(s.name) + '</option>').join('') +
+        '</select></label>' +
+        '</div>' +
+        '<div class="modal-footer">' +
+        '<button class="btn" onclick="window.addGZForgottenFromModal(\'' + classId + '\')">+ Eintrag hinzufügen</button>' +
+        '<button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">Abbrechen</button>' +
+        '</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.addGZForgottenFromModal = function(classId) {
+    const date = document.getElementById('gz-forgot-modal-date').value;
+    const kind = document.getElementById('gz-forgot-modal-kind').value;
+    const sid = document.getElementById('gz-forgot-modal-student').value;
+    if (!date || !sid) { alert('Bitte Datum und Schüler wählen.'); return; }
+    window.toggleGZForgotten(classId, date, sid, kind, true);
+    document.querySelector('.modal-overlay').remove();
     renderGrading();
 };
 
