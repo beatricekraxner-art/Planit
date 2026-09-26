@@ -596,11 +596,13 @@ select option:disabled {
 
 .subtitle {
     color: var(--text-muted);
-    margin-top: 8px;
+    margin-top: 0;
+    margin-bottom: 0;
+    font-size: 12px;
 }
 
 .dashboard-header, .view-header {
-    margin-bottom: 24px;
+    margin-bottom: 6px;
 }
 
 .view-header {
@@ -728,12 +730,12 @@ select option:disabled {
 
 .modal-content {
     background: var(--bg-panel);
-    padding: 35px;
+    padding: 24px 32px;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     min-width: 100px;
-    max-width: 80%;
-    max-height: 80vh;
+    max-width: 800px;
+    max-height: 70vh;
     overflow-y: auto;
 }
 
@@ -1238,12 +1240,12 @@ select option:disabled {
 /* =============================================
    GRADING TABLES
    ============================================= */
-.grading-table {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    text-align: left;
-    margin-top: 20px;
+.plan-table,
+.plan-table-gz,
+.plan-table-dg,
+.plan-table-mathe,
+.plan-table-other {
+    border-collapse: collapse;
 }
 
 #grade-switcher {
@@ -1255,7 +1257,7 @@ select option:disabled {
 
 .grade-course-title {
     position: sticky;
-    top: 50px;
+    top: 36px;
     z-index: 15;
     background: var(--bg-panel);
 }
@@ -1275,13 +1277,13 @@ select option:disabled {
 
 .grade-switcher {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     background: var(--bg-panel);
-    padding: 6px;
+    padding: 4px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     width: fit-content;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     align-items: center;
 }
 
@@ -1290,7 +1292,7 @@ select option:disabled {
 }
 
 .grade-switcher .btn {
-    padding: 8px 16px;
+    padding: 6px 12px;
     font-size: 13px;
     border: none;
     margin: 0;
@@ -1392,6 +1394,7 @@ select.grade-input option {
 #gz-grades-table td {
     border: none !important;
     text-align: center;
+    padding: 4px 6px;
 }
 
 #gz-grades-table .hw-sticky-left,
@@ -1399,17 +1402,27 @@ select.grade-input option {
     #gz-grades-table .hw-sticky-right-last,
     #gz-grades-table th.hw-sticky-left,
     #gz-grades-table th.hw-sticky-right,
-    #gz-grades-table th.hw-sticky-right-last {
+    #gz-grades-table th.hw-sticky-right-last,
+    #gz-grades-table thead th[rowspan] {
         position: -webkit-sticky;
         position: sticky;
         top: 0;
         background: var(--bg-panel) !important;
-        z-index: 5;
+        z-index: 10;
     }
 
     #gz-grades-table .hw-sticky-left {
         left: 0;
-        z-index: 5;
+        z-index: 10;
+    }
+
+    #gz-grades-table thead th[rowspan].hw-sticky-left {
+        left: 0;
+        z-index: 11;
+    }
+    #gz-grades-table thead th[rowspan].hw-sticky-right-last {
+        right: 0;
+        z-index: 11;
     }
 
 #gz-grades-table .hw-sticky-right {
@@ -1468,7 +1481,8 @@ select.grade-input option {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 6px;
+        gap: 4px;
+        margin-bottom: 2px;
     }
 
     .gz-ws-nr {
@@ -1479,6 +1493,20 @@ select.grade-input option {
         margin-left: auto;
     }
 
+    .gz-ws-meta {
+        font-size: 11px;
+        line-height: 1.15;
+        color: var(--text-muted);
+        margin-top: 1px;
+    }
+    .gz-ws-meta small {
+        display: inline-block;
+        margin-right: 6px;
+    }
+    .gz-ws-meta small:last-child {
+        margin-right: 0;
+    }
+
     #gz-grades-table td:not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last) {
         padding-left: 4px;
     }
@@ -1486,6 +1514,11 @@ select.grade-input option {
     #gz-grades-table td.gz-ws-last,
     #gz-grades-table td:not(.gz-ws-sep):not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last) {
         padding-right: 8px;
+    }
+    /* k/Abg Spalten etwas nach rechts */
+    #gz-grades-table thead th:not(.gz-ws-sep):not(.hw-sticky-left):not(.hw-sticky-right-last),
+    #gz-grades-table tbody td:not(.gz-ws-sep):not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last):not(.gz-ws-last) {
+        padding-left: 8px;
     }
 
 #gz-grades-table .gz-ws-last {
@@ -1556,9 +1589,9 @@ select.grade-input option {
 
 #gz-grades-table .gz-toggle {
     font-size: 12px;
-    min-width: 28px;
+    min-width: 22px;
     min-height: 24px;
-    padding: 4px 6px;
+    padding: 2px 4px;
     border: 1px solid var(--border-color);
     box-sizing: border-box;
     display: inline-flex;
@@ -1848,6 +1881,29 @@ select.grade-input:hover {
     border: 1px solid var(--border-color);
     background: var(--bg-dark);
     color: var(--text-main);
+}
+
+.exam-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.exam-form > div {
+    width: 100%;
+}
+.exam-form label {
+    width: 100% !important;
+}
+.exam-form input:not(.narrow-input), .exam-form select:not(.narrow-select), .exam-form textarea {
+    width: 100% !important;
+    flex: none !important;
+}
+.exam-form .narrow-input {
+    width: 80px !important;
+}
+.exam-form .narrow-select {
+    width: auto !important;
+    min-width: 50px !important;
 }
 
 .student-list {
@@ -2176,11 +2232,12 @@ select.grade-input:hover {
     position: sticky;
     top: 0;
     left: 0;
-    z-index: 3;
+    z-index: 10;
     background: var(--bg-panel) !important;
     border-right: 1px solid var(--border-color);
-    word-wrap: break-word;
-    overflow-wrap: break-word;
+}
+#gz-grades-table thead th.hw-sticky-left {
+    text-align: center;
 }
 
 .hw-detail-table .hw-sticky-right,
@@ -2189,7 +2246,7 @@ select.grade-input:hover {
     position: sticky;
     top: 0;
     right: 70px;
-    z-index: 3;
+    z-index: 10;
     background: var(--bg-panel) !important;
     border-left: 1px solid var(--border-color);
     text-align: center;
@@ -2203,7 +2260,7 @@ select.grade-input:hover {
     position: sticky;
     top: 0;
     right: 0;
-    z-index: 3;
+    z-index: 10;
     background: var(--bg-panel) !important;
     border-left: 1px solid var(--border-color);
     text-align: center;
@@ -2538,13 +2595,27 @@ select.grade-input:hover {
     vertical-align: middle;
     line-height: 1.4;
 }
+.plan-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-panel);
+    border-bottom: 2px solid var(--border-color);
+    box-shadow: 0 2px 0 0 var(--border-color);
+}
+.plan-table thead th {
+    background: var(--bg-panel);
+    position: sticky;
+    top: 0;
+    z-index: 11;
+}
 
 .plan-table .row-actions,
 .plan-table-gz .row-actions,
 .plan-table-dg .row-actions,
 .plan-table-other .row-actions,
 .plan-table-mathe .row-actions {
-    text-align: right;
+    text-align: center;
 }
 
 .plan-table th:nth-child(1),
@@ -2592,18 +2663,13 @@ select.grade-input:hover {
 .plan-table-mathe td:nth-child(2) {
     width: 50px;
     text-align: center;
-}
-
-.plan-table th:nth-child(3),
-.plan-table td:nth-child(3),
-.plan-table-mathe th:nth-child(3),
-.plan-table-mathe td:nth-child(3) {
-    width: 45%;
     border-right: 2px solid var(--border-color);
 }
 
-.plan-table-mathe td:nth-child(3),
-.plan-table-mathe td:nth-child(5) {
+.plan-table-mathe th:nth-child(3),
+.plan-table-mathe td:nth-child(3) {
+    width: 45%;
+    border-right: 2px solid var(--border-color) !important;
     text-align: left;
     padding-left: 20px;
 }
@@ -2612,6 +2678,7 @@ select.grade-input:hover {
 .plan-table-dg td:nth-child(3) {
     width: 250px;
     text-align: left;
+    border-right: 2px solid var(--border-color);
 }
 
 .plan-table-gz th:nth-child(3),
@@ -2624,6 +2691,8 @@ select.grade-input:hover {
 .plan-table-mathe th:nth-child(4),
 .plan-table-mathe td:nth-child(4) {
     width: 70px;
+    border-right: 2px solid var(--border-color) !important;
+    border-left: 2px solid var(--border-color) !important;
 }
 
 .plan-table th:nth-child(5),
@@ -2631,6 +2700,9 @@ select.grade-input:hover {
 .plan-table-mathe th:nth-child(5),
 .plan-table-mathe td:nth-child(5) {
     width: auto;
+    border-left: 2px solid var(--border-color) !important;
+    border-right: 2px solid var(--border-color) !important;
+    text-align: left;
 }
 
 .plan-table th:nth-child(6),
@@ -2645,21 +2717,23 @@ select.grade-input:hover {
 
 .plan-table-gz th:nth-child(2),
 .plan-table-gz td:nth-child(2) {
-    width: 200px;
+    width: 400px;
     text-align: left;
+    border-right: 2px solid var(--border-color);
 }
 
 .plan-table-gz th:nth-child(3),
 .plan-table-gz td:nth-child(3) {
-    width: 150px;
+    width: 300px;
     text-align: left;
+    border-right: 2px solid var(--border-color);
 }
 
 .plan-table-gz th:nth-child(4),
 .plan-table-gz td:nth-child(4) {
-    width: 50px;
-    text-align: right;
-    padding-right: 0;
+    width: 70px;
+    text-align: center;
+    padding-right: 8px;
 }
 
 .plan-table-dg th:nth-child(2),
@@ -3335,9 +3409,12 @@ select.grade-input.invalid {
     z-index: 10;
     background: var(--bg-panel);
 }
-
-.plan-table-wrap .grading-table th {
+.plan-table-wrap .grading-table thead th {
     background: var(--bg-panel);
+    border-bottom: 2px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 11;
 }
 
 @media (max-width: 1024px) {

@@ -226,11 +226,12 @@ function subjectAbbr(subject) {
     return subject;
 }
 
-function showModal(content) {
+function showModal(content, minWidth) {
     const modal = document.getElementById('modal-overlay');
     const modalContent = document.getElementById('modal-content');
     if (!modal || !modalContent) return;
     modalContent.innerHTML = content;
+    modalContent.style.minWidth = minWidth || '';
     modal.style.display = 'flex';
     const firstInput = modalContent.querySelector('input:not([type="hidden"]), select, textarea');
     if (firstInput) {
@@ -1783,7 +1784,13 @@ function classSubjectAbbr(cls) {
 }
 
 function getClassesSortedByName() {
+    const subjectOrder = { 'GZ': 1, 'DG': 3, 'Mathe': 2 };
     return DB.loadClasses().slice().sort(function(a, b) {
+        const subjectA = classSubjectAbbr(a);
+        const subjectB = classSubjectAbbr(b);
+        const orderA = subjectOrder[subjectA] !== undefined ? subjectOrder[subjectA] : 0;
+        const orderB = subjectOrder[subjectB] !== undefined ? subjectOrder[subjectB] : 0;
+        if (orderA !== orderB) return orderA - orderB;
         const an = (a.name || '').toLowerCase();
         const bn = (b.name || '').toLowerCase();
         return an < bn ? -1 : (an > bn ? 1 : 0);
@@ -1807,6 +1814,7 @@ let currentGradeTab = 'plan';
 let hwScrollRestored = false;
 let gradeOverviewScope = 'semester';
 let lastRenderedPlanClassId = null;
+let lastPlanScrollInitialized = false;
 let lastSelectedGradeClassId = null;
 let currentExamId = null;
 let examPointGrid = [];
@@ -1888,10 +1896,13 @@ function renderGrading() {
     }
     // Render the new content directly (no opacity flip, which caused a visible flicker)
     container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
-    // Restore scroll position for the plan tab (auto-scroll to today on class switch)
+    // Restore scroll position for the plan tab (auto-scroll to today on class switch or initial load)
     if (currentGradeTab === 'plan') {
-        const shouldScrollToToday = classId !== lastRenderedPlanClassId;
-        if (shouldScrollToToday) lastRenderedPlanClassId = classId;
+        const shouldScrollToToday = classId !== lastRenderedPlanClassId || !lastPlanScrollInitialized;
+        if (shouldScrollToToday) {
+            lastRenderedPlanClassId = classId;
+            lastPlanScrollInitialized = true;
+        }
         function applyPlanScroll() {
             const wrap = document.querySelector('.plan-table-wrap');
             if (!wrap) return false;
@@ -1899,6 +1910,26 @@ function renderGrading() {
                 const todayRow = document.querySelector('.plan-today');
                 if (todayRow) {
                     wrap.scrollTop = todayRow.offsetTop - wrap.offsetTop - 20;
+                    return true;
+                }
+                // No lesson today — find last lesson before today
+                const todayStr = new Date().toISOString().split('T')[0];
+                const rows = wrap.querySelectorAll('tbody tr:not(.holiday-row)');
+                let lastPastRow = null;
+                rows.forEach(row => {
+                    const dateCell = row.querySelector('td');
+                    if (dateCell) {
+                        const dateText = dateCell.textContent.trim().split('\n')[0];
+                        // Extract DD.MM.YYYY from "<small>Mo</small> DD.MM.YYYY" or just "DD.MM.YYYY"
+                        const match = dateText.match(/(\d{2}\.\d{2}\.\d{4})/);
+                        if (match) {
+                            const rowDate = match[1].split('.').reverse().join('-'); // DD.MM.YYYY -> YYYY-MM-DD
+                            if (rowDate < todayStr) lastPastRow = row;
+                        }
+                    }
+                });
+                if (lastPastRow) {
+                    wrap.scrollTop = lastPastRow.offsetTop - wrap.offsetTop - 20;
                     return true;
                 }
             } else {
@@ -2346,8 +2377,8 @@ function renderPlan(classId) {
                  let cells = '<td>' + planDateStr(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>';
                 if (showExerciseNr) cells += '<td>' + (entry ? (entry.exerciseNr ? entry.exerciseNr + '.' : '–') : '–') + '</td>';
                 cells += '<td class="pre plan-content-other">' + renderRichText(entry ? (entry.exerciseContent || '') : '') + '</td>';
-                 if (showHomework) cells += '<td class="plan-hw-other" style="border-left:2px solid var(--border-color);border-right:none;">' + (entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '–') : '–') + '</td>';
-                 cells += '<td class="pre plan-hw-content-other" style="border-left:none;">' + renderRichText(entry ? (entry.homeworkContent || '') : '') + '</td>';
+if (showHomework) cells += '<td class="plan-hw-other">' + (entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '–') : '–') + '</td>';
+                  cells += '<td class="pre plan-hw-content-other">' + renderRichText(entry ? (entry.homeworkContent || '') : '') + '</td>';
                 cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
                 html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
             });
@@ -2573,43 +2604,75 @@ function openPlanModal(classId, id, date) {
     const isGZ = isGZClass(classId);
     const showExerciseNr = cls ? cls.showExerciseNr !== false : true;
     const showHomework = cls ? cls.showHomework !== false : true;
+    
+    // GZ-specific variables (defined here for both blocks)
+    let wsNr = '';
+    let wsTitle = '';
+    if (isGZ) {
+        wsNr = e ? (e.homeworkNr || '') : nextHw;
+        wsTitle = e ? (e.homeworkContent || '') : '';
+    }
+    
     let exNrHtml = '';
     if (!isDG && !isGZ && showExerciseNr) {
-        exNrHtml = '<label>Nummer Schulübung</label><input type="number" id="plan-exnr" value="' + (exNr || '') + '">';
+        exNrHtml = '<div style="display:flex;flex-direction:column;gap:4px;"><label>Nummer Schulübung</label><input type="number" id="plan-exnr" class="narrow-input" value="' + (exNr || '') + '" style="width:80px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>';
     }
-    const exContentHtml = '<label>Inhalt</label><textarea id="plan-excontent" rows="4" placeholder="**Wichtiges** markieren..." style="white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea>';
+    const exContentHtml = '<div style="display:flex;flex-direction:column;gap:4px;width:100%;"><label>Inhalt</label><textarea id="plan-excontent" rows="3" placeholder="**Wichtiges** markieren..." style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea></div>';
     let wsHtml = '';
     if (isGZ) {
-        const wsNr = e ? (e.homeworkNr || '') : nextHw;
-        const wsTitle = e ? (e.homeworkContent || '') : '';
-        wsHtml = '<label>Übungsblatt-Nummer</label><input type="number" id="plan-wsnr" value="' + (wsNr || '') + '">' +
-            '<label>Übungsblatt-Titel</label><input type="text" id="plan-wstitle" value="' + escapeHtml(wsTitle) + '" placeholder="Titel des Übungsblattes">';
+        wsHtml = '<div style="display:flex;flex-direction:column;gap:4px;"><label>Übungsblatt-Nummer</label><input type="number" id="plan-wsnr" class="narrow-input" value="' + (wsNr || '') + '" style="width:80px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>' +
+            '<div style="display:flex;flex-direction:column;gap:4px;width:100%;"><label>Übungsblatt-Titel</label><input type="text" id="plan-wstitle" value="' + escapeHtml(wsTitle) + '" placeholder="Titel des Übungsblattes" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>';
     }
     let hwNrHtml = '';
     let hwContentHtml = '';
     if (isDG && showHomework) {
-        hwNrHtml = '<label>HÜ-Blätter (kommagetrennt, z.B. Blatt 1, Blatt 2)</label><input type="text" id="plan-hwsheets" value="' + escapeHtml(hwSheets) + '" placeholder="Blatt 1, Blatt 2">';
+        hwNrHtml = '<div style="display:flex;flex-direction:column;gap:4px;width:100%;"><label>HÜ-Blätter (kommagetrennt, z.B. Blatt 1, Blatt 2)</label><input type="text" id="plan-hwsheets" value="' + escapeHtml(hwSheets) + '" placeholder="Blatt 1, Blatt 2" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>';
     } else if (!isGZ && showHomework) {
-        hwNrHtml = '<label>Nummer Hausübung</label><input type="number" id="plan-hwnr" value="' + (hwNr || '') + '">';
-        hwContentHtml = '<label>Inhalt Hausübung</label><textarea id="plan-hwcontent" rows="4" placeholder="**Wichtiges** markieren..." style="white-space:pre-wrap;">' + escapeHtml(e ? e.homeworkContent : '') + '</textarea>';
+        hwNrHtml = '<div style="display:flex;flex-direction:column;gap:4px;"><label>Nummer Hausübung</label><input type="number" id="plan-hwnr" class="narrow-input" value="' + (hwNr || '') + '" style="width:80px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>';
+        hwContentHtml = '<div style="display:flex;flex-direction:column;gap:4px;width:100%;"><label>Inhalt Hausübung</label><textarea id="plan-hwcontent" rows="3" placeholder="**Wichtiges** markieren..." style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);white-space:pre-wrap;">' + escapeHtml(e ? e.homeworkContent : '') + '</textarea></div>';
     }
-    const supplierHtml = '<button type="button" id="plan-supplier" class="btn" data-supplier="0" onclick="window.toggleSupplier(this)" style="width:100%;margin-top:4px;">Supplierstunde</button>';
+    const supplierHtml = '<button type="button" id="plan-supplier" class="btn" data-supplier="0" onclick="window.toggleSupplier(this)" style="min-width:120px;padding:8px 12px;">Supplierstunde</button>';
     const rowColor = e ? (e.rowColor || '') : '';
-    const rowColorHtml = '<label>Zeilenfarbe</label><select id="plan-row-color" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"><option value="">Keine</option><option value="blue"' + (rowColor === 'blue' ? ' selected' : '') + '>Blau</option><option value="green"' + (rowColor === 'green' ? ' selected' : '') + '>Grün</option><option value="yellow"' + (rowColor === 'yellow' ? ' selected' : '') + '>Gelb</option><option value="red"' + (rowColor === 'red' ? ' selected' : '') + '>Rot</option><option value="purple"' + (rowColor === 'purple' ? ' selected' : '') + '>Lila</option><option value="orange"' + (rowColor === 'orange' ? ' selected' : '') + '>Orange</option></select>';
+    const rowColorHtml = '<label>Zeilenfarbe</label><select id="plan-row-color" class="narrow-select" style="min-width:120px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"><option value="">Keine</option><option value="blue"' + (rowColor === 'blue' ? ' selected' : '') + '>Blau</option><option value="green"' + (rowColor === 'green' ? ' selected' : '') + '>Grün</option><option value="yellow"' + (rowColor === 'yellow' ? ' selected' : '') + '>Gelb</option><option value="red"' + (rowColor === 'red' ? ' selected' : '') + '>Rot</option><option value="purple"' + (rowColor === 'purple' ? ' selected' : '') + '>Lila</option><option value="orange"' + (rowColor === 'orange' ? ' selected' : '') + '>Orange</option></select>';
+    const saveBtnHtml = '<button class="btn" onclick="savePlanEntry(\'' + classId + '\',\'' + (id || '') + '\')">Speichern</button>';
+    
+    let gzFields = '';
+    if (isGZ) {
+        gzFields = 
+            '<div style="display:flex;flex-direction:column;gap:10px;">' +
+            '<div style="display:grid;grid-template-columns:150px 150px 1fr;gap:8px;align-items:end;">' +
+            '<div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:12px;">Datum</label><input type="date" id="plan-date" value="' + escapeHtml(defDate) + '" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:12px;">ÜB-Nr</label><input type="number" id="plan-wsnr" class="narrow-input" value="' + (wsNr || '') + '" style="width:80px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:12px;">Zeilenfarbe</label><select id="plan-row-color" class="narrow-select" style="min-width:120px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"><option value="">Keine</option><option value="blue"' + (rowColor === 'blue' ? ' selected' : '') + '>Blau</option><option value="green"' + (rowColor === 'green' ? ' selected' : '') + '>Grün</option><option value="yellow"' + (rowColor === 'yellow' ? ' selected' : '') + '>Gelb</option><option value="red"' + (rowColor === 'red' ? ' selected' : '') + '>Rot</option><option value="purple"' + (rowColor === 'purple' ? ' selected' : '') + '>Lila</option><option value="orange"' + (rowColor === 'orange' ? ' selected' : '') + '>Orange</option></select></div>' +
+            '</div>' +
+            '<div style="margin-bottom:8px;display:flex;flex-direction:column;gap:4px;width:100%;">' +
+            '<label>Übungsblatt-Titel</label><input type="text" id="plan-wstitle" value="' + escapeHtml(wsTitle) + '" placeholder="Titel des Übungsblattes" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);">' +
+            '</div>' +
+            '<div style="margin-bottom:8px;display:flex;flex-direction:column;gap:4px;width:100%;">' +
+            '<label>Inhalt</label><textarea id="plan-excontent" rows="3" placeholder="**Wichtiges** markieren..." style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea>' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;margin-top:12px;">' + supplierHtml + saveBtnHtml + '</div>' +
+            '</div>';
+    } else {
+        // Math (non-DG, non-GZ)
+        gzFields = 
+            '<div style="display:flex;flex-direction:column;gap:10px;">' +
+            '<div style="display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:end;">' +
+            '<div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:12px;">Datum der Stunde</label><input type="date" id="plan-date" value="' + escapeHtml(defDate) + '" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:12px;">Zeilenfarbe</label><select id="plan-row-color" class="narrow-select" style="min-width:120px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"><option value="">Keine</option><option value="blue"' + (rowColor === 'blue' ? ' selected' : '') + '>Blau</option><option value="green"' + (rowColor === 'green' ? ' selected' : '') + '>Grün</option><option value="yellow"' + (rowColor === 'yellow' ? ' selected' : '') + '>Gelb</option><option value="red"' + (rowColor === 'red' ? ' selected' : '') + '>Rot</option><option value="purple"' + (rowColor === 'purple' ? ' selected' : '') + '>Lila</option><option value="orange"' + (rowColor === 'orange' ? ' selected' : '') + '>Orange</option></select></div>' +
+            '</div>' +
+            '<div style="margin-bottom:8px;">' + exNrHtml + '</div>' +
+            '<div style="margin-bottom:8px;">' + exContentHtml + '</div>' +
+            '<div style="margin-bottom:8px;">' + hwNrHtml + '</div>' +
+            '<div style="margin-bottom:8px;">' + hwContentHtml + '</div>' +
+            '<div style="display:flex;gap:8px;margin-top:12px;">' + supplierHtml + saveBtnHtml + '</div>' +
+            '</div>';
+    }
+    
     showModal(
         '<div class="modal-header"><h2>' + (id ? 'Stunde bearbeiten' : 'Neue Stunde') + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
-        '<div class="form-group exam-form">' +
-        '<label>Datum der Stunde</label><input type="date" id="plan-date" value="' + escapeHtml(defDate) + '">' +
-        exNrHtml +
-        wsHtml +
-        (isGZ ? exContentHtml : '') +
-        (!isGZ ? exContentHtml : '') +
-        hwNrHtml +
-        hwContentHtml +
-        supplierHtml +
-        rowColorHtml +
-        '<button class="btn" onclick="savePlanEntry(\'' + classId + '\',\'' + (id || '') + '\')">Speichern</button>' +
-        '</div>'
+        '<div class="form-group exam-form" style="width:100%;min-width:' + (isGZ ? 'auto' : '500px') + ';">' + gzFields + '</div>',
+        isGZ ? null : '500px'
     );
 }
 
@@ -4517,9 +4580,9 @@ function renderGZGrades(classId) {
         const notRcvd = notReceivedCount[w.nr || w.date];
         const notRcvdBadge = notRcvd > 0 ? '<span class="gz-not-received-badge" style="margin-left:auto;" title="Noch nicht abgegeben">fehlend: ' + notRcvd + '</span>' : '';
         const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
-        html += '<th colspan="' + colspan + '" class="gz-ws-sep' + computerClass + '"><div class="gz-ws-head"><span class="gz-ws-nr">' + (w.nr ? w.nr : '–') + '</span><span class="gz-ws-toggle-btn">' + toggleBtn + '</span>' + notRcvdBadge + '</div><br><small>' + escapeHtml(w.title || '') + '</small><br><small>' + formatDateDE(w.date || '') + '</small>' + co + '</th>';
+        html += '<th colspan="' + colspan + '" class="gz-ws-sep' + computerClass + '"><div class="gz-ws-head"><span class="gz-ws-nr">' + (w.nr ? w.nr : '–') + '</span><span class="gz-ws-toggle-btn">' + toggleBtn + '</span>' + notRcvdBadge + '</div><div class="gz-ws-meta"><small>' + escapeHtml(w.title || '') + '</small><small>' + formatDateDE(w.date || '') + '</small></div>' + co + '</th>';
     });
-    html += '<th rowspan="2" class="gz-ws-sep">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
+    html += '<th rowspan="2" class="gz-ws-sep hw-sticky-left">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
     worksheets.forEach(w => {
         const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
         if (w.noHw) {

@@ -5,7 +5,66 @@ const fs = require('fs');
 let mainWindow = null;
 let tray = null;
 let localServer = null;
+let backupTimer = null;
 const PORT = 9014;
+const BACKUP_DIR = path.join(app.getPath('userData'), 'backups');
+const BACKUP_INTERVAL = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+
+function ensureBackupDir() {
+    if (!fs.existsSync(BACKUP_DIR)) {
+        fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    }
+}
+
+function createBackup() {
+    if (!mainWindow) return;
+    mainWindow.webContents.executeJavaScript('DB.exportAll()').then(json => {
+        try {
+            ensureBackupDir();
+            const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const fileName = `planit-auto-backup-${stamp}.json`;
+            const filePath = path.join(BACKUP_DIR, fileName);
+            fs.writeFileSync(filePath, json, 'utf8');
+            console.log('Auto backup created:', filePath);
+            // Keep only last 10 backups
+            const files = fs.readdirSync(BACKUP_DIR)
+                .filter(f => f.startsWith('planit-auto-backup-') && f.endsWith('.json'))
+                .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtimeMs }))
+                .sort((a, b) => b.time - a.time);
+            if (files.length > 10) {
+                files.slice(10).forEach(f => fs.unlinkSync(path.join(BACKUP_DIR, f.name)));
+            }
+        } catch (e) {
+            console.error('Auto backup failed:', e);
+        }
+    }).catch(e => console.error('Auto backup export failed:', e));
+}
+
+function scheduleWeeklyBackup() {
+    if (backupTimer) clearTimeout(backupTimer);
+    // Check on startup if backup is needed
+    try {
+        ensureBackupDir();
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.startsWith('planit-auto-backup-') && f.endsWith('.json'));
+        let needsBackup = files.length === 0;
+        if (!needsBackup) {
+            const latest = files
+                .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtimeMs }))
+                .sort((a, b) => b.time - a.time)[0];
+            needsBackup = (Date.now() - latest.time) > BACKUP_INTERVAL;
+        }
+        if (needsBackup) {
+            setTimeout(createBackup, 5000); // Wait 5s after startup
+        }
+    } catch (e) {
+        console.error('Backup check failed:', e);
+    }
+    // Schedule next check
+    backupTimer = setInterval(() => {
+        createBackup();
+    }, BACKUP_INTERVAL);
+}
 
 async function ensureServer() {
     if (localServer) return;
@@ -158,6 +217,7 @@ app.whenReady().then(async () => {
     createWindow();
     buildMenu();
     createTray();
+    scheduleWeeklyBackup();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
