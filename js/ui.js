@@ -1238,7 +1238,7 @@ function renderDashboard() {
                     if (isPatrol) {
                         html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="Aufsicht bearbeiten"><small>' + escapeHtml(entry.room || '') + '</small></div>';
                     } else if (isSprechstunde || isBibliothek) {
-                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="' + escapeHtml(entry.subject) + ' bearbeiten"><div><strong>' + (entry.subject === 'Sprechstunde' ? '<span style="display:block;">Sprech-</span><span style="display:block;">stunde</span>' : 'Bibliothek') + '</strong></div><small>' + entry.room + '</small></div>';
+                        html += '<div class="' + entryClass + '" onclick="editTimetableEntry(\'' + entry.id + '\')" title="' + escapeHtml(entry.subject) + ' bearbeiten"><strong>' + (entry.subject === 'Sprechstunde' ? 'Spr.stde' : 'Bibliothek') + '</strong><br><small>' + entry.room + '</small></div>';
                     } else {
                         const color = cls ? cls.color : null;
                         const dayClassEvents = (dayEventMap[key] || []).filter(e => e.classId === entry.classId);
@@ -1255,7 +1255,11 @@ function renderDashboard() {
                             const classLabel = className ? '<strong>' + className + '</strong>' + (subjectHtml ? ' · ' : '') : '';
                             html += '<div class="' + entryClass + '"' + styleAttr + ' onclick="openClassGrading(\'' + entry.classId + '\')" title="Notenverwaltung öffnen">' +
                                 (timetableEditMode ? '<button class="tt-edit-btn" title="Stundenplan-Eintrag bearbeiten" onclick="event.stopPropagation();editTimetableEntry(\'' + entry.id + '\')">✎</button>' : '') +
-                                '<div>' + classLabel + subjectHtml + '</div><small>' + (entry.room || '') + '</small></div>';
+                                '<div class="tt-cell-stack">' +
+                                    '<div class="tt-cell-row"><strong>' + className + '</strong></div>' +
+                                    '<div class="tt-cell-row"><strong>' + (abbr || entry.subject) + '</strong></div>' +
+                                    '<div class="tt-cell-row tt-cell-room"><small>' + (entry.room || '') + '</small></div>' +
+                                '</div></div>';
                         }
                     }
                 } else {
