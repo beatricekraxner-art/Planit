@@ -9,6 +9,8 @@ let backupTimer = null;
 const PORT = 9014;
 const BACKUP_DIR = path.join(app.getPath('userData'), 'backups');
 const BACKUP_INTERVAL = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+const PDF_BACKUP_INTERVAL = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
+let pdfBackupTimer = null;
 
 function ensureBackupDir() {
     if (!fs.existsSync(BACKUP_DIR)) {
@@ -64,6 +66,182 @@ function scheduleWeeklyBackup() {
     backupTimer = setInterval(() => {
         createBackup();
     }, BACKUP_INTERVAL);
+}
+
+function createPdfBackup() {
+    if (!mainWindow) return;
+    mainWindow.webContents.executeJavaScript('generateFullPdfHtml ? generateFullPdfHtml() : (window.DB && DB.exportAll ? DB.exportAll() : "{}")').then(result => {
+        try {
+            ensureBackupDir();
+            const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const fileName = `planit-auto-backup-${stamp}.pdf`;
+            const filePath = path.join(BACKUP_DIR, fileName);
+            
+            // If result is JSON string (fallback), create HTML from it
+            let html = result;
+            if (typeof result === 'string' && result.startsWith('{')) {
+                try {
+                    const data = JSON.parse(result);
+                    html = generatePdfHtmlFromData(data);
+                } catch (e) {
+                    html = '<html><body><pre>' + result + '</pre></body></html>';
+                }
+            }
+            
+            generateAndSavePdf(html, filePath).then(() => {
+                console.log('Auto PDF backup created:', filePath);
+                // Keep only last 5 PDF backups
+                const files = fs.readdirSync(BACKUP_DIR)
+                    .filter(f => f.startsWith('planit-auto-backup-') && f.endsWith('.pdf'))
+                    .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtimeMs }))
+                    .sort((a, b) => b.time - a.time);
+                if (files.length > 5) {
+                    files.slice(5).forEach(f => fs.unlinkSync(path.join(BACKUP_DIR, f.name)));
+                }
+            }).catch(e => console.error('Auto PDF backup failed:', e));
+        } catch (e) {
+            console.error('Auto PDF backup prepare failed:', e);
+        }
+    }).catch(e => console.error('Auto PDF backup export failed:', e));
+}
+
+function generatePdfHtmlFromData(data) {
+    const now = new Date().toLocaleString('de-DE');
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Plan-it Backup ${now}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; color: #111; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
+        h3 { color: #2c3e50; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 11px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        th { background: #f8f9fa; font-weight: 600; }
+        tr:nth-child(even) { background: #fafafa; }
+        .section { page-break-inside: avoid; margin-bottom: 30px; }
+        .meta { color: #7f8c8d; font-size: 12px; margin-bottom: 20px; }
+    </style></head><body>`;
+    html += `<h1>Plan-it Vollständiges Backup</h1>`;
+    html += `<div class="meta">Erstellt: ${now} | App-Version: ${app.getVersion()}</div>`;
+    
+    // Classes
+    if (data.classes && data.classes.length) {
+        html += `<div class="section"><h2>Klassen (${data.classes.length})</h2><table><thead><tr><th>ID</th><th>Name</th><th>Fach</th><th>Typ</th><th>PlanMode</th><th>Farbe</th></tr></thead><tbody>`;
+        data.classes.forEach(c => {
+            html += `<tr><td>${c.id}</td><td>${escapeHtml(c.name || '')}</td><td>${escapeHtml(c.subject || '')}</td><td>${escapeHtml(c.type || '')}</td><td>${escapeHtml(c.planMode || '')}</td><td>${escapeHtml(c.color || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Timetable
+    if (data.timetable && data.timetable.length) {
+        html += `<div class="section"><h2>Stundenplan (${data.timetable.length} Einträge)</h2><table><thead><tr><th>ID</th><th>Klasse</th><th>Fach</th><th>Tag</th><th>Start</th><th>Ende</th><th>Raum</th></tr></thead><tbody>`;
+        data.timetable.forEach(t => {
+            html += `<tr><td>${t.id}</td><td>${escapeHtml(t.classId || '')}</td><td>${escapeHtml(t.subject || '')}</td><td>${escapeHtml(t.day || '')}</td><td>${escapeHtml(t.start || '')}</td><td>${escapeHtml(t.end || '')}</td><td>${escapeHtml(t.room || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Grades overview - iterate through each class's grades
+    if (data.grades) {
+        html += `<div class="section"><h2>Noten</h2>`;
+        Object.keys(data.grades).forEach(classId => {
+            const grades = data.grades[classId];
+            if (grades && grades.length) {
+                html += `<h3>Klasse ${escapeHtml(classId)} (${grades.length} Einträge)</h3><table><thead><tr><th>Schüler</th><th>Typ</th><th>Note</th><th>Datum</th><th>Gewichtung</th><th>Thema</th></tr></thead><tbody>`;
+                grades.forEach(g => {
+                    html += `<tr><td>${escapeHtml(g.studentName || g.studentId || '')}</td><td>${escapeHtml(g.type || '')}</td><td>${escapeHtml(g.grade || '')}</td><td>${escapeHtml(g.date || '')}</td><td>${escapeHtml(g.weight || '')}</td><td>${escapeHtml(g.topic || '')}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+        });
+        html += `</div>`;
+    }
+    
+    // Homework
+    if (data.homework) {
+        html += `<div class="section"><h2>Hausübungen</h2>`;
+        Object.keys(data.homework).forEach(classId => {
+            const hw = data.homework[classId];
+            if (hw && hw.length) {
+                html += `<h3>Klasse ${escapeHtml(classId)} (${hw.length} Einträge)</h3><table><thead><tr><th>Nr</th><th>Datum</th><th>Titel</th><th>Inhalt</th></tr></thead><tbody>`;
+                hw.forEach(h => {
+                    html += `<tr><td>${escapeHtml(h.nr || '')}</td><td>${escapeHtml(h.date || '')}</td><td>${escapeHtml(h.title || '')}</td><td>${escapeHtml(h.content || '')}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+        });
+        html += `</div>`;
+    }
+    
+    // Todos
+    if (data.todos && data.todos.length) {
+        html += `<div class="section"><h2>To-Dos (${data.todos.length})</h2><table><thead><tr><th>ID</th><th>Titel</th><th>Erledigt</th><th>Priorität</th><th>Fällig</th></tr></thead><tbody>`;
+        data.todos.forEach(t => {
+            html += `<tr><td>${t.id}</td><td>${escapeHtml(t.title || '')}</td><td>${t.done ? 'Ja' : 'Nein'}</td><td>${escapeHtml(t.priority || '')}</td><td>${escapeHtml(t.due || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Events
+    if (data.events && data.events.length) {
+        html += `<div class="section"><h2>Termine (${data.events.length})</h2><table><thead><tr><th>ID</th><th>Titel</th><th>Von</th><th>Bis</th><th>Klasse</th></tr></thead><tbody>`;
+        data.events.forEach(e => {
+            html += `<tr><td>${e.id}</td><td>${escapeHtml(e.title || '')}</td><td>${escapeHtml(e.from || '')}</td><td>${escapeHtml(e.to || '')}</td><td>${escapeHtml(e.classId || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Sprechstunden
+    if (data.sprechstunden && data.sprechstunden.length) {
+        html += `<div class="section"><h2>Sprechstunden (${data.sprechstunden.length})</h2><table><thead><tr><th>ID</th><th>Tag</th><th>Zeit</th><th>Raum</th><th>Lehrer</th></tr></thead><tbody>`;
+        data.sprechstunden.forEach(s => {
+            html += `<tr><td>${s.id}</td><td>${escapeHtml(s.day || '')}</td><td>${escapeHtml(s.time || '')}</td><td>${escapeHtml(s.room || '')}</td><td>${escapeHtml(s.teacher || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Holidays
+    if (data.holidays && data.holidays.length) {
+        html += `<div class="section"><h2>Ferien (${data.holidays.length})</h2><table><thead><tr><th>Datum</th><th>Name</th></tr></thead><tbody>`;
+        data.holidays.forEach(h => {
+            html += `<tr><td>${escapeHtml(h.date || '')}</td><td>${escapeHtml(h.name || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    html += `</body></html>`;
+    return html;
+    
+function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, '&apos;');
+    }
+}
+
+function schedulePdfBackup() {
+    if (pdfBackupTimer) clearTimeout(pdfBackupTimer);
+    // Check on startup if PDF backup is needed
+    try {
+        ensureBackupDir();
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.startsWith('planit-auto-backup-') && f.endsWith('.pdf'));
+        let needsBackup = files.length === 0;
+        if (!needsBackup) {
+            const latest = files
+                .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtimeMs }))
+                .sort((a, b) => b.time - a.time)[0];
+            needsBackup = (Date.now() - latest.time) > PDF_BACKUP_INTERVAL;
+        }
+        if (needsBackup) {
+            setTimeout(createPdfBackup, 10000); // Wait 10s after startup
+        }
+    } catch (e) {
+        console.error('PDF backup check failed:', e);
+    }
+    // Schedule next check
+    pdfBackupTimer = setInterval(() => {
+        createPdfBackup();
+    }, PDF_BACKUP_INTERVAL);
 }
 
 async function ensureServer() {
@@ -218,6 +396,7 @@ app.whenReady().then(async () => {
     buildMenu();
     createTray();
     scheduleWeeklyBackup();
+    schedulePdfBackup();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -345,3 +524,5 @@ ipcMain.handle('show-notification', async (event, options) => {
     }
     return false;
 });
+
+

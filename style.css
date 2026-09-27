@@ -698,6 +698,7 @@ select option:disabled {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 10px;
+    padding-bottom: 150px;
     color: var(--text-muted);
     font-size: 13px;
 }
@@ -761,6 +762,7 @@ select option:disabled {
     height: 220px;
     overflow-y: auto;
     overflow-x: hidden;
+    padding-bottom: 220px;
 }
 
 .class-manager-footer {
@@ -807,6 +809,7 @@ select option:disabled {
     max-height: 200px;
     overflow-y: auto;
     padding: 8px;
+    padding-bottom: 200px;
 }
 
 .class-events-ul {
@@ -1881,12 +1884,19 @@ select.grade-input:hover {
     gap: 10px;
     margin-bottom: 15px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .form-group label {
     width: 100%;
     font-size: 13px;
     color: var(--text-muted);
+}
+
+.form-group > button,
+.form-group > .btn {
+    width: auto !important;
+    flex: none !important;
 }
 
 .lesson-day-label {
@@ -1904,18 +1914,26 @@ select.grade-input:hover {
 
 .exam-form {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 10px;
+    align-items: center;
 }
 .exam-form > div {
     width: 100%;
 }
+.exam-form > button,
+.exam-form > .btn {
+    width: auto !important;
+    flex: none !important;
+}
 .exam-form label {
     width: 100% !important;
 }
-.exam-form input:not(.narrow-input), .exam-form select:not(.narrow-select), .exam-form textarea {
-    width: 100% !important;
-    flex: none !important;
+.form-group.exam-form input:not(.narrow-input):not(.narrow-date),
+.form-group.exam-form select:not(.narrow-select),
+.form-group.exam-form textarea {
+    flex: 1 !important;
+    width: auto !important;
 }
 .exam-form .narrow-input {
     width: 80px !important;
@@ -1923,6 +1941,15 @@ select.grade-input:hover {
 .exam-form .narrow-select {
     width: auto !important;
     min-width: 50px !important;
+}
+.exam-form .narrow-date {
+    width: 140px !important;
+    flex: none !important;
+}
+.exam-form > div > button,
+.form-group > button {
+    width: auto !important;
+    flex: none !important;
 }
 
 .student-list {
@@ -2122,6 +2149,7 @@ select.grade-input:hover {
     overflow-y: auto;
     max-height: calc(100vh - 140px);
     position: relative;
+    padding-bottom: calc(100vh - 140px);
 }
 .overview-table-wrap {
     overflow-x: auto;
@@ -2195,6 +2223,7 @@ select.grade-input:hover {
     overflow-x: auto;
     overflow-y: auto;
     max-height: calc(100vh - 140px);
+    padding-bottom: calc(100vh - 140px);
 }
 .hw-grid-wrap thead {
     position: sticky;
@@ -3371,7 +3400,7 @@ select.grade-input.invalid {
     outline: none;
 }
 
-.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; border-radius: 8px; position: relative; }
+.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: 500px; margin-top: 4px; border-radius: 8px; position: relative; padding-bottom: 500px; }
 .collection-table { width: 100%; border-collapse: separate; border-spacing: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .collection-table th,
 .collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
