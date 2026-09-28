@@ -2181,6 +2181,12 @@ select.grade-input:hover {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
+    text-align: center;
+}
+.hw-status option {
+    background: var(--bg-panel);
+    color: var(--text-main);
+    text-align: center;
 }
 
 .hw-status option {
@@ -2424,6 +2430,23 @@ select.grade-input:hover {
     background-color: rgba(234, 179, 8, 0.25);
 }
 
+/* HÜ Zählfunktionen in Summenzeile */
+.hw-count-x {
+    color: #ef4444;
+    font-weight: 600;
+    font-size: 13px;
+}
+.hw-count-k {
+    color: #eab308;
+    font-weight: 600;
+    font-size: 13px;
+}
+.hw-count-ab {
+    color: #22c55e;
+    font-weight: 600;
+    font-size: 13px;
+}
+
 .hw-expired-col {
     background-color: rgba(239, 68, 68, 0.15) !important;
 }
@@ -2642,6 +2665,7 @@ select.grade-input:hover {
     text-align: center;
     vertical-align: middle;
     line-height: 1.4;
+    border-color: var(--border-color);
 }
 .plan-table thead {
     position: sticky;
@@ -2656,6 +2680,78 @@ select.grade-input:hover {
     position: sticky;
     top: 0;
     z-index: 11;
+}
+
+/* Dark mode (default): stärkere Trennlinien in Stundenplanung */
+:root:not([data-theme="light"]) .plan-table th,
+:root:not([data-theme="light"]) .plan-table td,
+:root:not([data-theme="light"]) .plan-table-gz th,
+:root:not([data-theme="light"]) .plan-table-gz td,
+:root:not([data-theme="light"]) .plan-table-dg th,
+:root:not([data-theme="light"]) .plan-table-dg td,
+:root:not([data-theme="light"]) .plan-table-other th,
+:root:not([data-theme="light"]) .plan-table-other td,
+:root:not([data-theme="light"]) .plan-table-mathe th,
+:root:not([data-theme="light"]) .plan-table-mathe td {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+:root:not([data-theme="light"]) .plan-table thead {
+    border-bottom-color: rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 2px 0 0 rgba(255, 255, 255, 0.2) !important;
+}
+:root:not([data-theme="light"]) .plan-table th:nth-child(1),
+:root:not([data-theme="light"]) .plan-table td:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-gz th:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-gz td:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-dg th:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-dg td:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-other th:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-other td:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-mathe th:nth-child(1),
+:root:not([data-theme="light"]) .plan-table-mathe td:nth-child(1) {
+    border-right-color: rgba(255, 255, 255, 0.4) !important;
+}
+:root:not([data-theme="light"]) .plan-today td {
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+:root:not([data-theme="light"]) .plan-today {
+    background: rgba(147, 197, 253, 0.25) !important;
+}
+
+/* Light mode: normale Trennlinien */
+[data-theme="light"] .plan-table th,
+[data-theme="light"] .plan-table td,
+[data-theme="light"] .plan-table-gz th,
+[data-theme="light"] .plan-table-gz td,
+[data-theme="light"] .plan-table-dg th,
+[data-theme="light"] .plan-table-dg td,
+[data-theme="light"] .plan-table-other th,
+[data-theme="light"] .plan-table-other td,
+[data-theme="light"] .plan-table-mathe th,
+[data-theme="light"] .plan-table-mathe td {
+    border-color: var(--border-color) !important;
+}
+[data-theme="light"] .plan-table thead {
+    border-bottom-color: var(--border-color) !important;
+    box-shadow: 0 2px 0 0 var(--border-color) !important;
+}
+[data-theme="light"] .plan-table th:nth-child(1),
+[data-theme="light"] .plan-table td:nth-child(1),
+[data-theme="light"] .plan-table-gz th:nth-child(1),
+[data-theme="light"] .plan-table-gz td:nth-child(1),
+[data-theme="light"] .plan-table-dg th:nth-child(1),
+[data-theme="light"] .plan-table-dg td:nth-child(1),
+[data-theme="light"] .plan-table-other th:nth-child(1),
+[data-theme="light"] .plan-table-other td:nth-child(1),
+[data-theme="light"] .plan-table-mathe th:nth-child(1),
+[data-theme="light"] .plan-table-mathe td:nth-child(1) {
+    border-right-color: var(--border-color) !important;
+}
+[data-theme="light"] .plan-today td {
+    border-color: var(--border-color) !important;
+}
+[data-theme="light"] .plan-today {
+    background: rgba(147, 197, 253, 0.2) !important;
 }
 
 .plan-table .row-actions,

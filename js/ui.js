@@ -2312,9 +2312,9 @@ function renderPlan(classId) {
                 const typeLabel = holiday ? '<span class="holiday-marker">' + escapeHtml(getHolidayName(date) || 'Ferien') + '</span>' : (isSupplier ? '<span class="supplier-marker">Supplierung</span>' : '');
                 const rowColorClass = entry && entry.rowColor ? ' plan-row-' + entry.rowColor : '';
                 const rowClass = (holiday ? 'holiday-row ' : '') + (isToday ? 'plan-today' : '') + rowColorClass;
-                 const actions = entry ?
-                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' :
-                     '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
+const actions = entry ?
+                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + entry.id + '\')">✎</button>' :
+                    '<button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\', null, \'' + date + '\')">+</button>';
                 const contentClass = nr ? 'pre plan-content-gz' : 'pre plan-content-gz plan-content-only';
                 html += '<tr class="' + rowClass.trim() + '">' +
                     '<td>' + planDateStr(date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
@@ -2383,7 +2383,7 @@ function renderPlan(classId) {
                 cells += '<td class="pre plan-content-other">' + renderRichText(entry ? (entry.exerciseContent || '') : '') + '</td>';
 if (showHomework) cells += '<td class="plan-hw-other">' + (entry ? (entry.homeworkNr ? entry.homeworkNr + '.' : '–') : '–') + '</td>';
                   cells += '<td class="pre plan-hw-content-other">' + renderRichText(entry ? (entry.homeworkContent || '') : '') + '</td>';
-                cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button> ' + (entry ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + entry.id + '\')">×</button>' : '') + '</td>';
+                cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + (entry ? entry.id : '') + '\', \'' + date + '\')">✎</button></td>';
                 html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
             });
         }
@@ -2410,7 +2410,7 @@ if (showHomework) cells += '<td class="plan-hw-other">' + (entry ? (entry.homewo
                 '<td>' + planDateStr(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                 '<td>' + (nr ? (nr + '<span style="margin-left:20px;">' + renderRichText(title) + '</span>') : '–') + '</td>' +
                 '<td class="pre">' + renderRichText(e.exerciseContent || '') + '</td>' +
-                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -2431,7 +2431,7 @@ if (showHomework) cells += '<td class="plan-hw-other">' + (entry ? (entry.homewo
                     '<td>' + planDateStr(e.date) + (typeLabel ? '<br><small>' + typeLabel + '</small>' : '') + '</td>' +
                     '<td class="pre">' + renderRichText(e.exerciseContent || '') + '</td>' +
                     '<td>' + hwDisplay + '</td>' +
-                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>' +
+                '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -2457,7 +2457,7 @@ if (showHomework) cells += '<td class="plan-hw-other">' + (entry ? (entry.homewo
              cells += '<td class="pre plan-content-other">' + renderRichText(e.exerciseContent || '') + '</td>';
              if (showHomework) cells += '<td class="plan-hw-other plan-hw-border">' + (e.homeworkNr ? e.homeworkNr + '.' : '–') + '</td>';
              cells += '<td class="pre plan-hw-content-other">' + renderRichText(e.homeworkContent || '') + '</td>';
-            cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button> <button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + e.id + '\')">×</button></td>';
+            cells += '<td class="row-actions"><button class="btn btn-secondary" onclick="openPlanModal(\'' + classId + '\',\'' + e.id + '\')">✎</button></td>';
             html += '<tr class="' + rowClass.trim() + '">' + cells + '</tr>';
         });
          html += '</tbody></table></div>';
@@ -2639,6 +2639,7 @@ function openPlanModal(classId, id, date) {
     const rowColor = e ? (e.rowColor || '') : '';
     const rowColorHtml = '<label>Zeilenfarbe</label><select id="plan-row-color" class="narrow-select" style="min-width:120px;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"><option value="">Keine</option><option value="blue"' + (rowColor === 'blue' ? ' selected' : '') + '>Blau</option><option value="green"' + (rowColor === 'green' ? ' selected' : '') + '>Grün</option><option value="yellow"' + (rowColor === 'yellow' ? ' selected' : '') + '>Gelb</option><option value="red"' + (rowColor === 'red' ? ' selected' : '') + '>Rot</option><option value="purple"' + (rowColor === 'purple' ? ' selected' : '') + '>Lila</option><option value="orange"' + (rowColor === 'orange' ? ' selected' : '') + '>Orange</option></select>';
     const saveBtnHtml = '<button class="btn" onclick="savePlanEntry(\'' + classId + '\',\'' + (id || '') + '\')">Speichern</button>';
+    const deleteBtnHtml = id ? '<button class="btn btn-secondary" onclick="deletePlanEntry(\'' + classId + '\',\'' + id + '\')">Löschen</button>' : '';
     
     let gzFields = '';
     if (isGZ) {
@@ -2655,7 +2656,7 @@ function openPlanModal(classId, id, date) {
             '<div style="margin-bottom:8px;display:flex;flex-direction:column;gap:4px;width:100%;">' +
             '<label>Inhalt</label><textarea id="plan-excontent" rows="3" placeholder="**Wichtiges** markieren..." style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);white-space:pre-wrap;">' + escapeHtml(e ? e.exerciseContent : '') + '</textarea>' +
             '</div>' +
-            '<div style="display:flex;gap:8px;margin-top:12px;">' + supplierHtml + saveBtnHtml + '</div>' +
+            '<div style="display:flex;gap:8px;margin-top:12px;">' + supplierHtml + saveBtnHtml + deleteBtnHtml + '</div>' +
             '</div>';
     } else {
         // Math (non-DG, non-GZ)
@@ -2669,7 +2670,7 @@ function openPlanModal(classId, id, date) {
             '<div style="margin-bottom:8px;">' + exContentHtml + '</div>' +
             '<div style="margin-bottom:8px;">' + hwNrHtml + '</div>' +
             '<div style="margin-bottom:8px;">' + hwContentHtml + '</div>' +
-            '<div style="display:flex;gap:8px;margin-top:12px;">' + supplierHtml + saveBtnHtml + '</div>' +
+            '<div style="display:flex;gap:8px;margin-top:12px;">' + supplierHtml + saveBtnHtml + deleteBtnHtml + '</div>' +
             '</div>';
     }
     
@@ -2734,6 +2735,7 @@ function deletePlanEntry(classId, id) {
         if (!result) return;
         captureUndo();
         DB.deleteTeachingPlanEntry(classId, id);
+        hideModal();
         renderGrading();
     });
 }
@@ -2836,14 +2838,19 @@ function computeHwGrade(classId, studentId, hws) {
         } else {
             const cell = st[h.nr];
             const s = cell ? cell.status : '';
+            const isCorrected = corrected && corrected[h.nr] === true;
             if (s === 'sick') return;
-            total += 1;
+            const relevant = isCorrected || s !== '';
+            if (relevant) total += 1;
             if (s === 'done' || s === 'improved' || s === 'collected') points += 1;
             else if (s === 'improve') points += 0.5;
+            else if (s === 'forgotten') {
+                if (isCorrected) { missing += 1; missingNrs.push(h.nr); }
+            }
             else if (s === '') {
-                if (corrected[h.nr]) points += 1;
-                else { missing += 1; missingNrs.push(h.nr); }
-            } else if (s === 'forgotten') { missing += 1; missingNrs.push(h.nr); }
+                if (isCorrected) points += 1; // corrected & empty = collected/done
+                // not corrected & empty = ignore (not yet collected)
+            }
         }
     });
     if (total === 0) return { grade: null, missing: 0, points: 0, total: 0, missingNrs: [] };
@@ -2970,6 +2977,44 @@ function renderHomeworkDetailed(classId, students, hws) {
         html += '<td class="hw-sticky-right-last ' + gradeClass(calc.grade) + ' grade-cell">' + (calc.grade != null ? calc.grade : '–') + '</td>';
         html += '</tr>';
     });
+    // Summary row with counts
+    html += '<tfoot><tr><td class="hw-sticky-left"><strong>Summe</strong></td>';
+    if (isDG) {
+        const columns = [];
+        hws.forEach(h => {
+            const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
+            sheets.forEach(name => {
+                columns.push({ hwNr: h.sheets, sheet: name });
+            });
+        });
+        columns.forEach(col => {
+            let countX = 0, countK = 0;
+            students.forEach(s => {
+                const cell = status[s.id] && status[s.id][col.hwNr] ? status[s.id][col.hwNr] : {};
+                const val = getDGHwSheetValue(cell, col.sheet);
+                if (val === '0' || val === 'forgotten') countX++;
+                else if (val === 'k') countK++;
+            });
+            html += '<td class="hw-cell"><small><span class="hw-count-x">x: ' + countX + '</span><br><span class="hw-count-k">k: ' + countK + '</span></small></td>';
+        });
+    } else {
+        hws.forEach(h => {
+            let countX = 0, countK = 0, countAb = 0;
+            const hwKey = String(h.nr);
+            const correctedVal = corrected ? corrected[hwKey] : undefined;
+            const isCorrected = correctedVal === true;
+            console.log('HÜ Count Debug:', { hNr: h.nr, hwKey, correctedVal, isCorrected, correctedKeys: corrected ? Object.keys(corrected).map(k => ({key: k, type: typeof k, val: corrected[k]})) : null });
+            students.forEach(s => {
+                const cell = status[s.id] && status[s.id][h.nr] ? status[s.id][h.nr] : {};
+                const val = cell ? cell.status : '';
+                if (isCorrected && val === 'forgotten') countX++;
+                else if (val === 'sick') countK++;
+                else if (val === 'collected') countAb++;
+            });
+            html += '<td class="hw-cell"><small><span class="hw-count-x">x: ' + countX + '</span><br><span class="hw-count-k">k: ' + countK + '</span><br><span class="hw-count-ab">ab: ' + countAb + '</span></small></td>';
+        });
+    }
+    html += '<td class="hw-sticky-right"></td><td class="hw-sticky-right-last"></td></tr></tfoot>';
     html += '</tbody></table></div>';
     return html;
 }
@@ -3013,11 +3058,12 @@ function showMissingHwModal(classId, studentId) {
         } else {
             const cell = st[h.homeworkNr];
             const s = cell ? cell.status : '';
+            const isCorrected = corrected && corrected[h.homeworkNr] === true;
             if (s === 'sick') sick.push(h.homeworkNr);
             else if (s === 'improve') improve.push(h.homeworkNr);
             else if (s === 'done' || s === 'improved' || s === 'collected') return;
-            else if (s === 'forgotten') missing.push(h.homeworkNr);
-            else if (!corrected[h.homeworkNr]) missing.push(h.homeworkNr);
+            else if (s === 'forgotten' && isCorrected) missing.push(h.homeworkNr);
+            // not corrected & empty/forgotten = ignore
         }
     });
     let html = '<div class="modal-header"><h2>Hausübungs-Status – ' + name + '</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>';
@@ -3069,11 +3115,12 @@ function showAllMissingHwModal(classId) {
             } else {
                 const cell = st[h.homeworkNr];
                 const s = cell ? cell.status : '';
+                const isCorrected = corrected && corrected[h.homeworkNr] === true;
                 if (s === 'sick') sick.push(h.homeworkNr);
                 else if (s === 'improve') improve.push(h.homeworkNr);
                 else if (s === 'done' || s === 'improved' || s === 'collected') return;
-                else if (s === 'forgotten') missing.push(h.homeworkNr);
-                else if (!corrected[h.homeworkNr]) missing.push(h.homeworkNr);
+                else if (s === 'forgotten' && isCorrected) missing.push(h.homeworkNr);
+                // not corrected & empty/forgotten = ignore
             }
         });
         
@@ -3082,13 +3129,13 @@ function showAllMissingHwModal(classId) {
             html += '<strong style="display:block;margin-bottom:4px;">' + escapeHtml(s.name) + '</strong>';
             html += '<ul style="margin:0;padding-left:18px;line-height:1.6;">';
             if (missing.length) {
-                html += '<li style="color:#fca5a5;"><strong>Fehlend:</strong> ' + missing.join(', ') + '</li>';
+                html += '<li style="color:#ef4444;"><strong>Fehlend:</strong> ' + missing.join(', ') + '</li>';
             }
             if (sick.length) {
-                html += '<li style="color:#fde047;"><strong>k:</strong> ' + sick.join(', ') + '</li>';
+                html += '<li style="color:#eab308;"><strong>k:</strong> ' + sick.join(', ') + '</li>';
             }
             if (improve.length) {
-                html += '<li style="color:#93c5fd;"><strong>V!:</strong> ' + improve.join(', ') + '</li>';
+                html += '<li style="color:#3b82f6;"><strong>V!:</strong> ' + improve.join(', ') + '</li>';
             }
             html += '</ul></div>';
         }
@@ -3940,6 +3987,129 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
+function generateFullPdfHtml() {
+    const raw = JSON.parse(DB.exportAll());
+    // localStorage values are JSON strings, need to parse each
+    const data = {};
+    Object.keys(raw).forEach(k => {
+        try { data[k] = JSON.parse(raw[k]); } catch (e) { data[k] = raw[k]; }
+    });
+    return generatePdfHtmlFromData(data);
+}
+
+function generatePdfHtmlFromData(data) {
+    const now = new Date().toLocaleString('de-DE');
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Plan-it Backup ${now}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; color: #111; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
+        h3 { color: #2c3e50; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 11px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        th { background: #f8f9fa; font-weight: 600; }
+        tr:nth-child(even) { background: #fafafa; }
+        .section { page-break-inside: avoid; margin-bottom: 30px; }
+        .meta { color: #7f8c8d; font-size: 12px; margin-bottom: 20px; }
+    </style></head><body>`;
+    html += `<h1>Plan-it Vollständiges Backup</h1>`;
+    html += `<div class="meta">Erstellt: ${now} | App-Version: ${typeof APP_VERSION !== 'undefined' ? APP_VERSION : '1.0.0'}</div>`;
+    
+    // Classes
+    if (data.classes && data.classes.length) {
+        html += `<div class="section"><h2>Klassen (${data.classes.length})</h2><table><thead><tr><th>ID</th><th>Name</th><th>Fach</th><th>Typ</th><th>PlanMode</th><th>Farbe</th></tr></thead><tbody>`;
+        data.classes.forEach(c => {
+            html += `<tr><td>${escapeHtml(c.id)}</td><td>${escapeHtml(c.name || '')}</td><td>${escapeHtml(c.subject || '')}</td><td>${escapeHtml(c.type || '')}</td><td>${escapeHtml(c.planMode || '')}</td><td>${escapeHtml(c.color || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Timetable
+    if (data.timetable && data.timetable.length) {
+        html += `<div class="section"><h2>Stundenplan (${data.timetable.length} Einträge)</h2><table><thead><tr><th>ID</th><th>Klasse</th><th>Fach</th><th>Tag</th><th>Start</th><th>Ende</th><th>Raum</th></tr></thead><tbody>`;
+        data.timetable.forEach(t => {
+            html += `<tr><td>${t.id}</td><td>${escapeHtml(t.classId || '')}</td><td>${escapeHtml(t.subject || '')}</td><td>${escapeHtml(t.day || '')}</td><td>${escapeHtml(t.start || '')}</td><td>${escapeHtml(t.end || '')}</td><td>${escapeHtml(t.room || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Grades
+    if (data.grades) {
+        html += `<div class="section"><h2>Noten</h2>`;
+        Object.keys(data.grades).forEach(classId => {
+            const grades = data.grades[classId];
+            if (grades && grades.length) {
+                html += `<h3>Klasse ${escapeHtml(classId)} (${grades.length} Einträge)</h3><table><thead><tr><th>Schüler</th><th>Typ</th><th>Note</th><th>Datum</th><th>Gewichtung</th><th>Thema</th></tr></thead><tbody>`;
+                grades.forEach(g => {
+                    html += `<tr><td>${escapeHtml(g.studentName || g.studentId || '')}</td><td>${escapeHtml(g.type || '')}</td><td>${escapeHtml(g.grade || '')}</td><td>${escapeHtml(g.date || '')}</td><td>${escapeHtml(g.weight || '')}</td><td>${escapeHtml(g.topic || '')}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+        });
+        html += `</div>`;
+    }
+    
+    // Homework
+    if (data.homework) {
+        html += `<div class="section"><h2>Hausübungen</h2>`;
+        Object.keys(data.homework).forEach(classId => {
+            const hw = data.homework[classId];
+            if (hw && hw.length) {
+                html += `<h3>Klasse ${escapeHtml(classId)} (${hw.length} Einträge)</h3><table><thead><tr><th>Nr</th><th>Datum</th><th>Titel</th><th>Inhalt</th></tr></thead><tbody>`;
+                hw.forEach(h => {
+                    html += `<tr><td>${escapeHtml(h.nr || '')}</td><td>${escapeHtml(h.date || '')}</td><td>${escapeHtml(h.title || '')}</td><td>${escapeHtml(h.content || '')}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+        });
+        html += `</div>`;
+    }
+    
+    // Todos
+    if (data.todos && data.todos.length) {
+        html += `<div class="section"><h2>To-Dos (${data.todos.length})</h2><table><thead><tr><th>ID</th><th>Titel</th><th>Erledigt</th><th>Priorität</th><th>Fällig</th></tr></thead><tbody>`;
+        data.todos.forEach(t => {
+            html += `<tr><td>${t.id}</td><td>${escapeHtml(t.title || '')}</td><td>${t.done ? 'Ja' : 'Nein'}</td><td>${escapeHtml(t.priority || '')}</td><td>${escapeHtml(t.due || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Events
+    if (data.events && data.events.length) {
+        html += `<div class="section"><h2>Termine (${data.events.length})</h2><table><thead><tr><th>ID</th><th>Titel</th><th>Von</th><th>Bis</th><th>Klasse</th></tr></thead><tbody>`;
+        data.events.forEach(e => {
+            html += `<tr><td>${e.id}</td><td>${escapeHtml(e.title || '')}</td><td>${escapeHtml(e.from || '')}</td><td>${escapeHtml(e.to || '')}</td><td>${escapeHtml(e.classId || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Sprechstunden
+    if (data.sprechstunden && data.sprechstunden.length) {
+        html += `<div class="section"><h2>Sprechstunden (${data.sprechstunden.length})</h2><table><thead><tr><th>ID</th><th>Tag</th><th>Zeit</th><th>Raum</th><th>Lehrer</th></tr></thead><tbody>`;
+        data.sprechstunden.forEach(s => {
+            html += `<tr><td>${s.id}</td><td>${escapeHtml(s.day || '')}</td><td>${escapeHtml(s.time || '')}</td><td>${escapeHtml(s.room || '')}</td><td>${escapeHtml(s.teacher || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    // Holidays
+    if (data.holidays && data.holidays.length) {
+        html += `<div class="section"><h2>Ferien (${data.holidays.length})</h2><table><thead><tr><th>Datum</th><th>Name</th></tr></thead><tbody>`;
+        data.holidays.forEach(h => {
+            html += `<tr><td>${escapeHtml(h.date || '')}</td><td>${escapeHtml(h.name || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    html += `</body></html>`;
+    return html;
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, '&apos;');
+    }
+}
+
 function backupSchoolYear() {
     const json = DB.exportSchoolDataOnly();
     const blob = new Blob([json], { type: 'application/json' });
@@ -4211,6 +4381,7 @@ window.openClassGrading = openClassGrading;
 window.addTimeSlot = addTimeSlot;
 window.saveTimeSettings = saveTimeSettings;
 window.exportData = exportData;
+window.generateFullPdfHtml = generateFullPdfHtml;
 window.openNewSchoolYearModal = openNewSchoolYearModal;
 window.executeSchoolYearChange = executeSchoolYearChange;
 window.importData = importData;
@@ -5687,6 +5858,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         tryRenderStartup();
     }
     try { enableStickyPinning(); } catch (e) {}
+    
+    // Ctrl+F for plan search
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            const searchInput = document.getElementById('plan-search');
+            if (searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+    });
 });
 
 function renderTodos() {
