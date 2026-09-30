@@ -4471,22 +4471,25 @@ window.syncNow = async function() {
     hideLoading();
 };
 
-window.manualSave = async function() {
-    // Immer den gerade aktiven Anbieter nutzen. Bei aktivem OneDrive
-    // schreibt der Knopf sonst in die lokale Datei statt in die Cloud.
+// Speichert ueber den gerade aktiven Anbieter (OneDrive oder lokale Datei).
+// Wird vom Speicher-Knopf und beim Schliessen der App benutzt.
+window.appSaveNow = async function() {
     const provider = (window.OD && window.OD.getProvider() === 'onedrive' && window.OneDrivePersist)
         ? window.OneDrivePersist : window.FilePersist;
-    if (provider && provider.saveToFile) {
-        if (!validateAllGrades()) {
-            alertModal('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
-            return;
-        }
-        showLoading('Speichert...');
-        setSyncStatus('speichert...');
-        await provider.saveToFile();
-        setSyncStatus('gespeichert');
-        hideLoading();
+    if (provider && provider.saveToFile) await provider.saveToFile();
+    return provider;
+};
+
+window.manualSave = async function() {
+    if (!validateAllGrades()) {
+        alertModal('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
+        return;
     }
+    showLoading('Speichert...');
+    setSyncStatus('speichert...');
+    await window.appSaveNow();
+    setSyncStatus('gespeichert');
+    hideLoading();
 };
 
 async function linkDataFile() {
@@ -6045,7 +6048,8 @@ DB.saveTodoText = function(id, text) {
 })();
 
 window.addEventListener('beforeunload', function() {
-    if (window.FilePersist && typeof window.FilePersist.saveToFile === 'function') {
+    if (window.appSaveNow) window.appSaveNow();
+    else if (window.FilePersist && typeof window.FilePersist.saveToFile === 'function') {
         window.FilePersist.saveToFile();
     }
 });
