@@ -4472,14 +4472,18 @@ window.syncNow = async function() {
 };
 
 window.manualSave = async function() {
-    if (FilePersist && FilePersist.saveToFile) {
+    // Immer den gerade aktiven Anbieter nutzen. Bei aktivem OneDrive
+    // schreibt der Knopf sonst in die lokale Datei statt in die Cloud.
+    const provider = (window.OD && window.OD.getProvider() === 'onedrive' && window.OneDrivePersist)
+        ? window.OneDrivePersist : window.FilePersist;
+    if (provider && provider.saveToFile) {
         if (!validateAllGrades()) {
             alertModal('Bitte korrigieren Sie die ungültigen Noten (rot markiert) vor dem Speichern.');
             return;
         }
         showLoading('Speichert...');
         setSyncStatus('speichert...');
-        await FilePersist.saveToFile();
+        await provider.saveToFile();
         setSyncStatus('gespeichert');
         hideLoading();
     }

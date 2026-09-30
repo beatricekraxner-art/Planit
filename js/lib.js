@@ -864,6 +864,9 @@ let FilePersist = {
                     (txt) => fetch('planit-lock.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: txt, cache: 'no-store' }),
                     () => fetch('planit-lock.json', { method: 'DELETE', cache: 'no-store' }).catch(() => null)
                 );
+                // Ohne diesen Abgleich bemerkt eine offene App nie, was ein
+                // anderes Geraet gespeichert hat.
+                this.startAutoSave();
                 return;
             } catch (e) {
                 lastError = e;
@@ -872,6 +875,8 @@ let FilePersist = {
             }
         }
         console.error('FilePersist.load endgültig fehlgeschlagen:', lastError);
+        // Auch bei Fehlern weiterlaufen: die App soll speichern können.
+        this.startAutoSave();
     },
     _saving: false,
     saveToFile: async function() {
@@ -883,6 +888,17 @@ let FilePersist = {
                 const resp = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
                 if (resp.ok) remoteText = await resp.text();
             } catch (e) { console.error('FilePersist: Vorschau nicht lesbar', e); }
+
+            // Ist die Datei bereits identisch, gibt es nichts zu schreiben.
+            // Das spart OneDrive einen Upload alle 30 Sekunden und verhindert
+            // Konflikte, die durch pausenloses Ueberschreiben entstehen.
+            if (remoteText && !SafetyNet.dataChanged(remoteText, DB.exportAll(SyncGuard._meta()))) {
+                let gleich = null;
+                try { gleich = JSON.parse(remoteText); } catch (e) { }
+                SyncGuard.setRemoteSnapshot(gleich);
+                console.log('FilePersist: Datei bereits aktuell, kein Schreiben nötig.');
+                return;
+            }
 
             const plan = SyncGuard.prepareSave(remoteText);
             // Was gerade ersetzt wird, wird vorher gesichert - aber nur wenn sich

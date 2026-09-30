@@ -239,6 +239,14 @@
                     return;
                 }
                 const remoteText = await this._download(token);
+                // Datei bereits identisch -> kein Upload noetig
+                if (window.SafetyNet && remoteText &&
+                    !SafetyNet.dataChanged(remoteText, DB.exportAll(SyncGuard._meta()))) {
+                    let gleich = null; try { gleich = JSON.parse(remoteText); } catch (e) { }
+                    SyncGuard.setRemoteSnapshot(gleich);
+                    if (window.setSyncStatus) setSyncStatus('bereit');
+                    return;
+                }
                 const plan = window.SyncGuard
                     ? SyncGuard.prepareSave(remoteText)
                     : { payload: DB.exportAll(), mode: 'plain', conflicts: [] };
