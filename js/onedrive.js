@@ -8,6 +8,9 @@
     const FILE_PATH = 'Antigravity_Versuch/planit-daten.json';
     const SCOPES = ['Files.ReadWrite'];
     const GRAPH = 'https://graph.microsoft.com/v1.0/me/drive/root:/' + FILE_PATH + ':/content';
+    const graphFor = function (name) {
+        return 'https://graph.microsoft.com/v1.0/me/drive/root:/Antigravity_Versuch/' + name + ':/content';
+    };
 
     let msal = null;
     let _loginPromise = null;
@@ -148,26 +151,13 @@
                         if (token) {
                             const text = await this._download(token);
                             if (text && text.trim() && text.trim() !== '{}') {
-                                let serverData = null;
-                                try { serverData = JSON.parse(text); } catch (e) {}
-                                if (serverData && serverData._lastModified) {
-                                    const localModified = localStorage.getItem('_lastModified');
-                                    if (!localModified || localModified !== serverData._lastModified) {
-                                        console.log('OneDrive bootstrap: lade aktuelle Daten vom Server (Versuch ' + attempt + ')...');
-                                        try {
-                                            DB.importAll(text);
-                                            localStorage.setItem('_lastModified', serverData._lastModified);
-                                        } catch (e) {
-                                            console.error('OneDrive bootstrap: Import fehlgeschlagen', e);
-                                            throw e;
-                                        }
-                                    } else {
-                                        console.log('OneDrive bootstrap: lokale Daten sind aktuell.');
-                                    }
+                                if (window.SyncGuard && SyncGuard.adoptRemote(text)) {
+                                    console.log('OneDrive bootstrap: aktuelle Daten vom Server übernommen (Versuch ' + attempt + ').');
                                 }
                             }
                         }
                     }
+                    await this._acquireLock();
                     this.startAutoSave();
                     return;
                 } catch (e) {
@@ -178,6 +168,46 @@
             }
             console.error('OneDrive bootstrap endgültig fehlgeschlagen:', lastError);
             this.startAutoSave();
+        },
+
+        _graphText: async function (name, token) {
+            try {
+                const r = await fetch(graphFor(name), { headers: { 'Authorization': 'Bearer ' + token } });
+                if (r.status === 404) return null;
+                if (!r.ok) return null;
+                return await r.text();
+            } catch (e) { return null; }
+        },
+
+        _graphPut: async function (name, text, token) {
+            const r = await fetch(graphFor(name), {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: text
+            });
+            if (!r.ok) throw new Error('Graph PUT failed: ' + r.status);
+        },
+
+        _graphDelete: async function (name, token) {
+            try {
+                await fetch(graphFor(name), {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+            } catch (e) { }
+        },
+
+        _acquireLock: async function () {
+            if (!window.SyncGuard) return;
+            try {
+                const token = await getTokenSilent();
+                if (!token) return;
+                await SyncGuard.acquireLock(
+                    () => this._graphText('planit-lock.json', token),
+                    (txt) => this._graphPut('planit-lock.json', txt, token),
+                    () => this._graphDelete('planit-lock.json', token)
+                );
+            } catch (e) { console.error('OD lock failed', e); }
         },
 
         scheduleSave() {
@@ -196,8 +226,9 @@
         },
 
         async saveToFile() {
+            if (this._saving) return;
+            this._saving = true;
             try {
-                console.log('[OD] saveToFile called, connected=', this.isConnected());
                 if (!this.isConnected()) {
                     console.error('OneDrive saveToFile: not connected');
                     return;
@@ -207,18 +238,23 @@
                     console.error('OneDrive saveToFile: no token');
                     return;
                 }
-                const data = DB.exportAll();
-                console.log('[OD] Uploading data, length=', data.length);
+                const remoteText = await this._download(token);
+                const plan = window.SyncGuard
+                    ? SyncGuard.prepareSave(remoteText)
+                    : { payload: DB.exportAll(), mode: 'plain', conflicts: [] };
+                console.log('[OD] Uploading data, length=', plan.payload.length, 'mode=', plan.mode);
+                if (window.SafetyNet && remoteText && SafetyNet.dataChanged(remoteText, plan.payload)) {
+                    SafetyNet.keep(remoteText, 'OneDrive-Inhalt vor dem Ueberschreiben');
+                }
                 const resp = await fetch(GRAPH, {
                     method: 'PUT',
                     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                    body: data
+                    body: plan.payload
                 });
                 console.log('[OD] Upload status:', resp.status, resp.statusText);
                 if (resp.ok) {
                     console.log('[OD] gespeichert.');
-                    const localData = JSON.parse(data);
-                    if (localData._lastModified) localStorage.setItem('_lastModified', localData._lastModified);
+                    if (window.SyncGuard) SyncGuard.afterSave(plan, remoteText);
                     saveSession(msal.getAllAccounts()[0], token);
                 }
                 else {
@@ -228,7 +264,7 @@
             } catch (e) {
                 console.error('[OD] saveToFile failed', e);
                 window.dispatchEvent(new CustomEvent('od-save-error', { detail: (e && e.message ? e.message : e) }));
-            }
+            } finally { this._saving = false; }
         },
 
         async loadFromFile() {
@@ -246,23 +282,8 @@
                     }
                     const text = await this._download(token);
                     if (text) {
-                        console.log('OneDrive: Daten geladen (Versuch ' + attempt + ').');
-                        let serverData = null;
-                        try { serverData = JSON.parse(text); } catch (e) {}
-                        if (serverData && serverData._lastModified) {
-                            const localModified = localStorage.getItem('_lastModified');
-                            if (!localModified || localModified !== serverData._lastModified) {
-                                console.log('OneDrive: neuere Daten gefunden, importiere...');
-                                try {
-                                    DB.importAll(text);
-                                    localStorage.setItem('_lastModified', serverData._lastModified);
-                                } catch (e) {
-                                    console.error('OneDrive loadFromFile: Import fehlgeschlagen', e);
-                                    throw e;
-                                }
-                            } else {
-                                console.log('OneDrive: lokale Daten sind aktuell.');
-                            }
+                        if (window.SyncGuard && SyncGuard.adoptRemote(text)) {
+                            console.log('OneDrive: Daten geladen (Versuch ' + attempt + ').');
                         }
                     }
                     return;
@@ -308,13 +329,9 @@
         if (!token) return;
         const text = await OneDrivePersist._download(token);
         if (!text) return;
-        let serverData = null;
-        try { serverData = JSON.parse(text); } catch (e) {}
-        if (!serverData || !serverData._lastModified) return;
-        const localModified = localStorage.getItem('_lastModified');
-        if (localModified && localModified === serverData._lastModified) return;
-        DB.importAll(text);
-        localStorage.setItem('_lastModified', serverData._lastModified);
+        // Niemals blind uebernehmen: adoptRemote prueft, ob die Datei wirklich
+        // neuer ist, und sichert den lokalen Stand, falls nicht.
+        if (window.SyncGuard && !SyncGuard.adoptRemote(text)) return;
         renderDashboard();
         renderClasses();
     }
@@ -403,6 +420,21 @@
     };
 
     window.OneDrivePersist = OneDrivePersist;
+
+    // Wiederherstellungsdateien zuerst über OneDrive, sonst lokal daneben ablegen,
+    // damit bei einem Konflikt in jedem Fall eine Sicherung entsteht.
+    if (window.SyncGuard) {
+        SyncGuard.setWriter(function (name, text) {
+            return getTokenSilent().then(function (token) {
+                if (!token) throw new Error('kein OneDrive-Token');
+                return OneDrivePersist._graphPut(name, text, token);
+            }).catch(function (e) {
+                console.warn('OneDrive-Wiederherstellung fehlgeschlagen, nutze lokalen Pfad:', e);
+                if (window.FilePersist && FilePersist.setWriter) return FilePersist.setWriter(name, text);
+                throw e;
+            });
+        });
+    }
 
     const FilePersist = {
         available: true,

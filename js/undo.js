@@ -24,6 +24,7 @@ const UndoManager = {
     apply(entry) {
         if (!entry || !entry.state) return;
         try {
+            if (window.SafetyNet) SafetyNet.keepLocal('Vor dem Rueckgaengig-Machen einer Aenderung');
             DB.importAll(JSON.stringify(entry.state));
             if (typeof renderDashboard === 'function') renderDashboard();
             if (typeof renderClasses === 'function') renderClasses();

@@ -1,3 +1,75 @@
+// --- Sicherheitsnetz ---------------------------------------------------
+// Bevor Daten verändert werden, wird der aktuelle Stand gesichert. Damit
+// kann kein Fehler in der Synchronisation Daten endgültig vernichten.
+const SafetyNet = {
+    snapshots: [],
+
+    // Vergleicht nur die eigentlichen Daten, ohne Zeitstempel und Revision.
+    // Sonst waere jeder 30-Sekunden-Speichervorgang eine "Aenderung".
+    dataChanged: function (aText, bText) {
+        if (!aText || !bText) return true;
+        try {
+            const strip = t => {
+                const o = JSON.parse(t);
+                Object.keys(o).forEach(k => { if (k.charAt(0) === '_') delete o[k]; });
+                return JSON.stringify(o);
+            };
+            return strip(aText) !== strip(bText);
+        } catch (e) { return aText !== bText; }
+    },
+
+    // Rohtext (z. B. der bisherige Dateiinhalt) sichern
+    keep: function (text, reason) {
+        if (!text || !text.trim() || text.trim() === '{}') return;
+        this.snapshots.push(text);
+        if (this.snapshots.length > 3) this.snapshots.shift();
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const name = 'planit-snap-' + stamp + '.json';
+        let body = text;
+        try {
+            const obj = JSON.parse(text);
+            if (obj && typeof obj === 'object') {
+                obj._safetyNote = (reason || 'Sicherung') + ' - ' + new Date().toISOString();
+                body = JSON.stringify(obj, null, 2);
+            }
+        } catch (e) { }
+        try {
+            fetch(name, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                body: body,
+                cache: 'no-store'
+            }).catch(function () { });
+        } catch (e) { }
+    },
+
+    // Lokalen Datenbestand sichern
+    keepLocal: function (reason) {
+        try { this.keep(DB.exportAll(), reason); } catch (e) { }
+    }
+};
+window.SafetyNet = SafetyNet;
+
+// --- Sitzungs-/Token-Schluessel gehoeren NICHT in die Daten- und Cloud-Datei ---
+// (MSAL-Token, OneDrive-Token, Telemetrie). Sie wuerden sonst mit synchronisiert
+// und bei jedem Geraetewechsel als Konflikt auftauchen.
+function isSessionKey(k) {
+    return !!k && (
+        k.charAt(0) === '_' ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(k) ||
+        k.indexOf('onedrive_session_token') === 0 ||
+        k.indexOf('server-telemetry-') === 0
+    );
+}
+
+// Zeitpunkt der letzten lokalen Aenderung (lebt nur lokal, nie in der Datei)
+function localChangeStamp() {
+    try { return localStorage.getItem('_lastLocalChange'); } catch (e) { return null; }
+}
+function touchLocalChange() {
+    try { localStorage.setItem('_lastLocalChange', new Date().toISOString()); } catch (e) { }
+}
+
 const daysOfWeek = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
 const DB = {
     load: function(key, defaultValue) {
@@ -12,6 +84,7 @@ const DB = {
     save: function(key, value) {
         try {
             localStorage.setItem(key, JSON.stringify(value));
+            touchLocalChange();
         } catch (e) {
             console.error('DB.save failed for key:', key, e);
             if (e.name === 'QuotaExceededError' || e.code === 22 || (e.message && e.message.indexOf('quota') !== -1)) {
@@ -382,20 +455,34 @@ const DB = {
     saveOverviewNoteComments: function(classId, m) { this.save('overview_note_comments_' + classId, m); },
     loadSemesterOverviewNoteComments: function(classId) { return this.load('semester_overview_note_comments_' + classId, {}); },
     saveSemesterOverviewNoteComments: function(classId, m) { this.save('semester_overview_note_comments_' + classId, m); },
-    exportAll: function() {
+    exportAll: function(meta) {
         const data = {};
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
-            if (k && k !== '_lastModified') data[k] = localStorage.getItem(k);
+            if (k && !isSessionKey(k)) data[k] = localStorage.getItem(k);
         }
         data._lastModified = new Date().toISOString();
+        if (meta && typeof meta === 'object') {
+            Object.keys(meta).forEach(k => { data[k] = meta[k]; });
+        }
         return JSON.stringify(data, null, 2);
     },
     importAll: function(json) {
         try {
             const data = JSON.parse(json);
-            Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+            Object.keys(data).forEach(k => {
+                if (isSessionKey(k)) return; // keine Token in localStorage importieren
+                localStorage.setItem(k, data[k]);
+            });
         } catch (e) { console.error('importAll failed', e); }
+    },
+    snapshot: function() {
+        const out = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && !isSessionKey(k)) out[k] = localStorage.getItem(k);
+        }
+        return out;
     },
     clearSchoolData: function() {
         const keep = new Set([
@@ -437,6 +524,304 @@ const DB = {
 window.db = DB;
 window.DB = DB;
 
+// ---------------------------------------------------------------------------
+// SyncGuard: schützt vor Überschreiben durch ein zweites, gleichzeitig
+// geöffnetes Gerät (Tablet/PC) und führt beim Speichern einen Merge durch,
+// damit Änderungen von beiden Geräten erhalten bleiben.
+// ---------------------------------------------------------------------------
+const SyncGuard = {
+    LOCK_NAME: 'planit-lock.json',
+    LOCK_STALE_MS: 120000,
+
+    deviceId: (function () {
+        let id = null;
+        try { id = localStorage.getItem('_syncDeviceId'); } catch (e) { }
+        if (!id) {
+            id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+            try { localStorage.setItem('_syncDeviceId', id); } catch (e) { }
+        }
+        return id;
+    })(),
+
+    deviceLabel: (function () {
+        try {
+            const p = navigator.platform || '';
+            return p ? p.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24) : 'Gerät';
+        } catch (e) { return 'Gerät'; }
+    })(),
+
+    _base: null,        // Stand, den wir zuletzt gelesen/geschrieben haben
+    _baseRev: null,
+    _otherDevice: null,
+    _lastWriteAt: 0,    // Zeitpunkt unseres letzten erfolgreichen Schreibens
+    _writeFile: null,   // von Provider gesetzt: (name, text) => Promise
+    _lockHeld: false,
+
+    _meta: function () {
+        return {
+            _rev: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+            _device: this.deviceLabel,
+            _deviceId: this.deviceId
+        };
+    },
+
+    notify: function (level, text) {
+        console.log('[SyncGuard]', level, text);
+        try {
+            if (typeof window.onSyncNotice === 'function') window.onSyncNotice({ level: level, text: text });
+            window.dispatchEvent(new CustomEvent('sync-notice', { detail: { level: level, text: text } }));
+        } catch (e) { }
+    },
+
+    // Stand aus der Datei übernehmen (nach jedem erfolgreichen Lesen)
+    setRemoteSnapshot: function (remoteObj) {
+        if (!remoteObj || typeof remoteObj !== 'object') return;
+        const snap = {};
+        Object.keys(remoteObj).forEach(k => { if (!isSessionKey(k)) snap[k] = remoteObj[k]; });
+        this._base = snap;
+        this._baseRev = remoteObj._rev || null;
+    },
+
+    // Übernimmt niemals Löschungen: der Merge entscheidet bereits, was gilt.
+    applySnapshot: function (snap) {
+        if (!snap) return;
+        Object.keys(snap).forEach(k => {
+            try { localStorage.setItem(k, snap[k]); } catch (e) { }
+        });
+    },
+
+    // Werte aus localStorage sind bei jedem Parsen neue Objekte.
+    // Referenzvergleich würde daher jede Änderung wie einen Konflikt aussehen
+    // lassen, deshalb inhaltlich vergleichen.
+    sameValue: function (a, b) {
+        if (a === b) return true;
+        if (a === null || b === null) return false;
+        if (typeof a !== 'object' || typeof b !== 'object') return false;
+        try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+    },
+
+    // 3-Wege-Merge über einzelne Schlüssel.
+    // Grundregel: lokale Daten werden NIE verworfen. Im Zweifel gewinnt die
+    // lokale Änderung, weil ein Verlust von Arbeitsständen nicht rückgängig
+    // zu machen ist, während der entfernte Stand in der Wiederherstellungs-
+    // datei landet.
+    merge: function (base, ours, theirs) {
+        const keys = {};
+        [base, ours, theirs].forEach(s => { if (s) Object.keys(s).forEach(k => { keys[k] = 1; }); });
+        const merged = {};
+        const conflicts = [];
+        const same = this.sameValue;
+        Object.keys(keys).forEach(k => {
+            const hasBase = base ? Object.prototype.hasOwnProperty.call(base, k) : false;
+            const hasOurs = Object.prototype.hasOwnProperty.call(ours, k);
+            const hasTheirs = Object.prototype.hasOwnProperty.call(theirs, k);
+            const b = base ? base[k] : undefined;
+            const o = ours[k];
+            const t = theirs[k];
+            if (same(o, t)) { if (o !== undefined) merged[k] = o; return; }
+
+            const oursChanged = hasBase ? !same(o, b) : hasOurs;
+            const theirsChanged = hasBase ? !same(t, b) : hasTheirs;
+
+            if (!oursChanged && hasTheirs) { merged[k] = t; return; }
+            if (!theirsChanged) { if (hasOurs) merged[k] = o; return; }
+
+            // Beide Seiten haben geändert -> Konflikt.
+            // Lokal behalten, entfernten Stand separat sichern.
+            conflicts.push(k);
+            if (hasOurs) merged[k] = o;
+        });
+        return { merged: merged, conflicts: conflicts, remote: theirs };
+    },
+
+    // Vor dem Speichern entscheiden: normal, blind oder gemergt
+    prepareSave: function (remoteText) {
+        const ours = DB.snapshot();
+        const meta = this._meta();
+        let remoteObj = null;
+        try { remoteObj = remoteText ? JSON.parse(remoteText) : null; } catch (e) { }
+
+        if (!remoteObj || typeof remoteObj !== 'object') {
+            return { payload: DB.exportAll(meta), mode: 'plain', conflicts: [] };
+        }
+        const remoteRev = remoteObj._rev || null;
+        if (this._baseRev && remoteRev === this._baseRev) {
+            return { payload: DB.exportAll(meta), mode: 'plain', conflicts: [] };
+        }
+        const remoteSnap = {};
+        Object.keys(remoteObj).forEach(k => { if (!isSessionKey(k)) remoteSnap[k] = remoteObj[k]; });
+
+        // Veraltungsschutz: ist die Datei juenger als unser letzter Schreibvorgang,
+        // darf sie uebernommen werden. Sonst gehoeren ihre Werte zu einer
+        // aelteren Sitzung und wuerden Stunden an Arbeit ueberschreiben.
+        const remoteTime = Date.parse(remoteObj._lastModified || '') || 0;
+        // Nach einem Neustart ist _lastWriteAt leer; dann gilt der Zeitpunkt
+        // der letzten lokalen Aenderung als Anker.
+        const reference = this._lastWriteAt || Date.parse(localChangeStamp() || '') || 0;
+        if (reference && remoteTime && reference > remoteTime) {
+            return {
+                payload: DB.exportAll(meta), mode: 'local-newer',
+                conflicts: [], localWins: true
+            };
+        }
+
+        const baseSnap = this._base || {};
+        const res = this.merge(baseSnap, ours, remoteSnap);
+
+        if (res.conflicts.length && this._writeFile) {
+            // Der entfernte Stand wird nicht angewendet -> separat sichern,
+            // damit auch die andere Geraeteseite nicht verloren geht.
+            // Format wie die Datendatei, damit die Datei direkt einsetzbar ist.
+            const name = 'planit-recovery-stand-vom-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+            try {
+                const rec = {};
+                Object.keys(res.remote).forEach(k => { rec[k] = res.remote[k]; });
+                rec._lastModified = remoteObj._lastModified || '';
+                rec._rev = remoteObj._rev || '';
+                rec._device = remoteObj._device || '';
+                rec._deviceId = remoteObj._deviceId || '';
+                rec._note = 'Widerspruechlicher Stand eines anderen Geraets vom ' +
+                    (remoteObj._lastModified || 'unbekannt') + '. Nicht angewendet, weil lokal neuere ' +
+                    'Daten vorlagen. Um ihn zu nutzen: Datei als planit-daten.json neben die App legen.';
+                rec._conflicts = res.conflicts;
+                Promise.resolve(this._writeFile(name, JSON.stringify(rec, null, 2)))
+                    .catch(function () { });
+            } catch (e) { }
+        }
+
+        const payloadObj = {};
+        Object.keys(res.merged).forEach(k => { payloadObj[k] = res.merged[k]; });
+        payloadObj._lastModified = new Date().toISOString();
+        payloadObj._rev = meta._rev;
+        payloadObj._device = meta._device;
+        payloadObj._deviceId = meta._deviceId;
+
+        return {
+            payload: JSON.stringify(payloadObj, null, 2),
+            mode: res.conflicts.length ? 'conflict' : 'merged',
+            conflicts: res.conflicts,
+            merged: res.merged,
+            otherDevice: !!(remoteObj._deviceId && remoteObj._deviceId !== this.deviceId)
+        };
+    },
+
+    afterSave: function (plan, remoteText) {
+        let remoteObj = null;
+        try { remoteObj = JSON.parse(plan.payload); } catch (e) { }
+        this._lastWriteAt = Date.parse((remoteObj && remoteObj._lastModified) || '') || Date.now();
+        if (plan.mode === 'plain' || plan.mode === 'local-newer') {
+            // Der eben hochgeladene Stand ist ab jetzt unser Ausgangsstand.
+            // Ohne das wüsste ein Gerät, das die Datei angelegt hat, seinen
+            // eigenen Stand nicht mehr und meldete später Scheinkonflikte.
+            this.setRemoteSnapshot(remoteObj);
+            return;
+        }
+        // lokalen Stand auf den gemergten Stand bringen
+        if (plan.mode !== 'plain') {
+            SafetyNet.keepLocal('Lokale Daten vor dem Zusammenfuehren mit einem anderen Geraet');
+        }
+        try { this.applySnapshot(plan.merged); } catch (e) { }
+        this.setRemoteSnapshot(remoteObj);
+        if (plan.mode === 'conflict') {
+            this.notify('warn', 'Ein anderes Gerät hatte eine abweichende Version gespeichert. ' +
+                'Deine neuesten Daten wurden behalten. Der fremde Stand liegt als ' +
+                '"planit-recovery-stand-vom-...json" im Plan-it-Ordner.');
+        } else if (plan.otherDevice) {
+            this.notify('info', 'Änderungen eines anderen Geräts wurden ergänzt. Deine Daten wurden behalten.');
+        }
+        try { window.dispatchEvent(new CustomEvent('sync-merged')); } catch (e) { }
+    },
+
+    setWriter: function (fn) { this._writeFile = fn; },
+
+    // Sicheres Uebernehmen einer gelesenen Datei beim Start.
+    // Ist der lokale Stand juenger als die Datei, wird NICHT importiert:
+    // sonst ueberschreibt eine aeltere Sicherung Stunden an Arbeit.
+    adoptRemote: function (remoteText) {
+        if (!remoteText || !remoteText.trim() || remoteText.trim() === '{}') return false;
+        let obj = null;
+        try { obj = JSON.parse(remoteText); } catch (e) { return false; }
+        if (!obj || typeof obj !== 'object') return false;
+
+        const remoteTime = Date.parse(obj._lastModified || '') || 0;
+        const localTime = Math.max(Date.parse(localChangeStamp() || '') || 0, this._lastWriteAt || 0);
+        if (localTime && remoteTime && localTime > remoteTime) {
+            this.notify('warn', 'Die gespeicherte Datei ist älter als deine letzten Änderungen. ' +
+                'Es wurde nichts überschrieben; deine Daten bleiben erhalten. ' +
+                'Die Datei liegt weiterhin im Plan-it-Ordner.');
+            if (this._writeFile) {
+                const name = 'planit-recovery-stand-vom-' +
+                    String(obj._lastModified || 'unbekannt').replace(/[:.]/g, '-') + '.json';
+                try { Promise.resolve(this._writeFile(name, remoteText)).catch(function () { }); } catch (e) { }
+            }
+            return false;
+        }
+        // Nur sichern, wenn die Datei den lokalen Stand tatsaechlich veraendert.
+        try {
+            const remoteData = {};
+            Object.keys(obj).forEach(k => { if (!isSessionKey(k)) remoteData[k] = obj[k]; });
+            const same = (function (a, b) {
+                if (a === b) return true;
+                try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+            });
+            const lokal = DB.snapshot();
+            const ka = Object.keys(remoteData), kb = Object.keys(lokal);
+            const unterschied = ka.length !== kb.length || ka.some(k => !same(remoteData[k], lokal[k]));
+            if (unterschied) SafetyNet.keepLocal('Lokale Daten vor dem Uebernahme einer Datei');
+        } catch (e) { }
+
+        DB.importAll(remoteText);
+        this.setRemoteSnapshot(obj);
+        return true;
+    },
+
+    // --- Gerät-Sperre (A) ---
+    acquireLock: async function (readLock, writeLock, delLock) {
+        this._readLock = readLock;
+        this._writeLock = writeLock;
+        this._delLock = delLock;
+        try {
+            const text = await readLock();
+            if (text) {
+                let ex = null;
+                try { ex = JSON.parse(text); } catch (e) { }
+                const now = Date.now();
+                if (ex && ex.deviceId && ex.deviceId !== this.deviceId && (now - (ex.lastSeen || 0)) < this.LOCK_STALE_MS) {
+                    this._otherDevice = ex;
+                    this.notify('warn', 'Plan-it ist gerade auf einem anderen Gerät geöffnet (' +
+                        (ex.device || 'unbekannt') + '). Änderungen hier können dort überschrieben werden.');
+                }
+            }
+        } catch (e) { }
+        await this.refreshLock();
+        if (this._lockTimer) clearInterval(this._lockTimer);
+        this._lockTimer = setInterval(() => { this.refreshLock(); }, 40000);
+        window.addEventListener('beforeunload', () => { this.releaseLock(); });
+    },
+
+    refreshLock: async function () {
+        if (!this._writeLock) return;
+        try {
+            const now = Date.now();
+            await this._writeLock(JSON.stringify({
+                deviceId: this.deviceId,
+                device: this.deviceLabel,
+                startedAt: this._lockStarted || (this._lockStarted = now),
+                lastSeen: now
+            }));
+            this._lockHeld = true;
+        } catch (e) { }
+    },
+
+    releaseLock: function () {
+        if (this._delLock) { try { Promise.resolve(this._delLock()).catch(function () { }); } catch (e) { } }
+        if (this._lockTimer) { clearInterval(this._lockTimer); this._lockTimer = null; }
+    },
+
+    hasOtherDevice: function () { return !!this._otherDevice; }
+};
+window.SyncGuard = SyncGuard;
+
 let FilePersist = {
     available: true,
     handle: null,
@@ -470,11 +855,15 @@ let FilePersist = {
                 const response = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
                 if (response.ok) {
                     const text = await response.text();
-                    if (text && text.trim() !== '' && text.trim() !== '{}') {
-                        DB.importAll(text);
+                    if (SyncGuard.adoptRemote(text)) {
                         console.log('FilePersist: Datei geladen (Versuch ' + attempt + ').');
                     }
                 }
+                await SyncGuard.acquireLock(
+                    () => fetch('planit-lock.json', { method: 'GET', cache: 'no-store' }).then(r => r.ok ? r.text() : null).catch(() => null),
+                    (txt) => fetch('planit-lock.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: txt, cache: 'no-store' }),
+                    () => fetch('planit-lock.json', { method: 'DELETE', cache: 'no-store' }).catch(() => null)
+                );
                 return;
             } catch (e) {
                 lastError = e;
@@ -484,35 +873,59 @@ let FilePersist = {
         }
         console.error('FilePersist.load endgültig fehlgeschlagen:', lastError);
     },
+    _saving: false,
     saveToFile: async function() {
+        if (this._saving) return;
+        this._saving = true;
         try {
-            const data = DB.exportAll();
+            let remoteText = null;
+            try {
+                const resp = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
+                if (resp.ok) remoteText = await resp.text();
+            } catch (e) { console.error('FilePersist: Vorschau nicht lesbar', e); }
+
+            const plan = SyncGuard.prepareSave(remoteText);
+            // Was gerade ersetzt wird, wird vorher gesichert - aber nur wenn sich
+            // wirklich Daten geaendert haben, sonst waere alle 30 Sekunden eine Kopie.
+            if (remoteText && SafetyNet.dataChanged(remoteText, plan.payload)) {
+                SafetyNet.keep(remoteText, 'Dateiinhalt vor dem Ueberschreiben');
+            }
             const response = await fetch('planit-daten.json', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                body: data,
+                body: plan.payload,
                 cache: 'no-store'
             });
             if (response.ok) {
-                console.log('FilePersist: Gespeichert.');
+                SyncGuard.afterSave(plan, remoteText);
+                console.log('FilePersist: Gespeichert (' + plan.mode + ').');
             } else {
                 console.error('FilePersist: Speichern fehlgeschlagen', response.status);
             }
         } catch (e) { console.error('FilePersist.saveToFile failed', e); }
+        finally { this._saving = false; }
     },
     loadFromFile: async function() {
         try {
             const response = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
             if (response.ok) {
                 const text = await response.text();
-                if (text && text.trim() !== '' && text.trim() !== '{}') {
-                    DB.importAll(text);
+                if (SyncGuard.adoptRemote(text)) {
                     console.log('FilePersist: Datei geladen.');
                 }
             }
         } catch (e) { console.error('FilePersist.loadFromFile failed', e); }
     }
 };
+FilePersist.setWriter = function (name, text) {
+    return fetch(name, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: text,
+        cache: 'no-store'
+    });
+};
+SyncGuard.setWriter(function (name, text) { return FilePersist.setWriter(name, text); });
 window.FilePersist = FilePersist;
 window.LocalPersist = FilePersist;
 

@@ -4140,6 +4140,7 @@ window.restoreBackup = function() {
             const data = JSON.parse(text);
             safeConfirm('Achtung: Dies überschreibt alle aktuellen Daten (Klassen, Schüler, Stundenplan, Noten). Fortfahren?').then(function(result) {
                 if (!result) return;
+                if (window.SafetyNet) SafetyNet.keepLocal('Vor dem Einspielen eines Backups');
                 DB.importAll(text);
                 alertModal('Backup erfolgreich eingespielt.');
                 renderDashboard();
@@ -4258,6 +4259,7 @@ function importData(input) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
+            if (window.SafetyNet) SafetyNet.keepLocal('Vor dem Import einer Datendatei');
             DB.importAll(e.target.result);
             hideModal();
             switchView('dashboard');
@@ -5869,6 +5871,51 @@ document.addEventListener('DOMContentLoaded', async function() {
                 searchInput.select();
             }
         }
+    });
+
+    // --- Hinweise zur Geräte-Synchronisation ---
+    function showSyncNotice(n) {
+        if (!n || !n.text) return;
+        let box = document.getElementById('sync-notice-box');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'sync-notice-box';
+            box.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99998;' +
+                'max-width:min(680px,92vw);display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+            document.body.appendChild(box);
+        }
+        const el = document.createElement('div');
+        const warn = n.level === 'warn';
+        el.style.cssText = 'pointer-events:auto;display:flex;gap:12px;align-items:flex-start;' +
+            'padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.5;' +
+            'box-shadow:0 8px 24px rgba(0,0,0,0.28);' +
+            'background:' + (warn ? '#7c2d12' : '#1e293b') + ';' +
+            'border-left:4px solid ' + (warn ? '#f97316' : '#38bdf8') + ';' +
+            'color:#f8fafc;';
+        const span = document.createElement('span');
+        span.style.cssText = 'flex:1;';
+        span.textContent = (warn ? '⚠️ ' : 'ℹ️ ') + n.text;
+        const close = document.createElement('button');
+        close.textContent = '✕';
+        close.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.7;';
+        close.onclick = function () { el.remove(); };
+        el.appendChild(span);
+        el.appendChild(close);
+        box.appendChild(el);
+        if (!warn) setTimeout(function () { el.remove(); }, 9000);
+    }
+    window.onSyncNotice = showSyncNotice;
+    window.addEventListener('sync-notice', function (e) { showSyncNotice(e.detail); });
+    // Bei zusammengeführten Daten Ansicht aktualisieren
+    window.addEventListener('sync-merged', function () {
+        try {
+            const v = document.querySelector('.view.active');
+            const name = v ? v.id.replace('-view', '') : '';
+            if (name === 'dashboard') renderDashboard();
+            else if (name === 'classes') renderClasses();
+            else if (name === 'grading') renderGrading();
+            else if (name === 'todos') renderTodos();
+        } catch (e) { }
     });
 });
 
