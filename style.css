@@ -3586,8 +3586,15 @@ select.grade-input.invalid {
     min-height: 24px;
     padding: 2px 4px;
     width: auto;
-    background: var(--bg-dark);
-    color: var(--text-main);
+}
+/* Bewusst KEIN background/color hier: diese Regel hat dieselbe Spezifitaet
+   wie die Farbregeln (z. B. #gz-grades-table .gz-recv-x) und steht weiter
+   hinten im Stylesheet. Mit background wuerde sie auf Tablets und Handys die
+   aktiven Farben ueberschreiben - der Rand bliebe dann farbig, die Flaeche
+   aber dunkel. */
+.gz-toggle, #gz-grades-table .gz-toggle {
+    -webkit-appearance: none;
+    appearance: none;
 }
     .hw-grid-wrap,
     .overview-table-wrap,

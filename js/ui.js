@@ -4810,7 +4810,8 @@ worksheets.forEach(w => {
                     '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>ges</option>' +
                     '</select></td>';
             }
-            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">k</button></td>';
+            // 'k' erscheint nur, wenn der Button aktiv ist (gelb) - wie beim 'x'.
+            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">' + (absent ? 'k' : '') + '</button></td>';
             if (!w.noHw) {
                 html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
             }
