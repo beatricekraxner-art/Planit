@@ -68,7 +68,7 @@ window.exportGradesCSV = function() {
         const project = DB.loadProjectGrades(classId);
         const semesterManual = DB.loadSemesterManualGrades(classId);
         const isYear = gradeOverviewScope === 'year';
-        const lines = ['Schüler;Ø ÜB;Mappe 1. Sem.;Fehlend;Laptop vergessen;Berechnet;Note (1. Sem.)'];
+        const lines = ['Name;Ø ÜB;Mappe 1. Sem.;Fehlend;Laptop vergessen;Berechnet;Note (1. Sem.)'];
         if (isYear) lines[0] += ';Projekt;Note (Jahr)';
         students.forEach(s => {
             const st = status[s.id] || {};
@@ -402,7 +402,7 @@ function renderClasses() {
         card.className = 'class-card';
         card.style.borderTopColor = cls.color || 'var(--primary)';
         card.innerHTML = '<h3>' + cls.name + '</h3><p>' + cls.subject + '</p>' +
-            '<p class="class-count">' + count + ' Schüler</p>';
+            '<p class="class-count">' + count + ' Schüler:innen</p>';
         card.onclick = () => openClassManager(cls.id);
         currentList.appendChild(card);
     });
@@ -467,7 +467,7 @@ function getClassManagerContent(cls, students) {
     const clsColor = cls.color || '#6366f1';
     const studentCount = students.length;
     return '<div class="modal-header">' +
-        '<h2>Kurs bearbeiten <span class="class-count" style="font-size:13px;margin-left:8px;">' + studentCount + ' Schüler</span></h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
+        '<h2>Kurs bearbeiten <span class="class-count" style="font-size:13px;margin-left:8px;">' +             studentCount + ' Schüler:innen</span></h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
         '<div class="class-manager-body">' +
         '<div class="form-group exam-form">' +
         '<input type="text" id="edit-class-name-input" value="' + escapeHtml(cls.name) + '" placeholder="Kursname">' +
@@ -494,7 +494,7 @@ function getClassManagerContent(cls, students) {
         '<button class="btn" onclick="saveClassDetails(\'' + cls.id + '\')">Speichern</button>' +
         '</div>' +
         '<div class="student-section">' +
-        '<h3>Schüler <span class="class-count" style="font-size:13px;margin-left:8px;">' + studentCount + ' Schüler</span></h3>' + studentList +
+            '<h3>Schüler <span class="class-count" style="font-size:13px;margin-left:8px;">' + studentCount + ' Schüler:innen</span></h3>' + studentList +
         '</div>' +
         '<div class="class-events-section">' +
         '<h3>Termine <button class="btn btn-secondary" onclick="window.openClassEventModal(\'' + cls.id + '\')" style="font-size:12px;padding:4px 10px;">+ Hinzufügen</button></h3>' +
@@ -656,6 +656,7 @@ function addStudentToClass(classId) {
         const parts = name.split(' ').filter(Boolean);
         const lastName = parts.length > 1 ? parts[0] : (parts[0] || name);
         DB.addStudent(classId, name, lastName);
+        updateGradeClassSelectCounts();
         const cls = DB.loadClasses().find(c => c.id === classId);
         const students = DB.getStudentsForClass(classId);
         const content = getClassManagerContent(cls, students);
@@ -835,6 +836,7 @@ function deleteStudent(id, classId) {
         captureUndo();
         DB.deleteStudent(id);
         hideModal();
+        updateGradeClassSelectCounts();
         const cls = DB.loadClasses().find(c => c.id === classId);
         const students = DB.getStudentsForClass(classId);
         showModal(getClassManagerContent(cls, students));
@@ -1801,17 +1803,39 @@ function getClassesSortedByName() {
     });
 }
 
+function classStudentCount(classId) {
+    return DB.getStudentsForClass(classId).length;
+}
+
+function classOptionLabel(cls) {
+    return cls.name + ' – ' + classSubjectAbbr(cls) + ' (' + classStudentCount(cls.id) + ')';
+}
+
 function populateGradeClassSelect() {
     const select = document.getElementById('grade-class-select');
     const classes = getClassesSortedByName();
+    const previous = select.value;
     select.innerHTML = '<option value="">Kurs auswählen...</option>';
     classes.forEach(cls => {
         const opt = document.createElement('option');
         opt.value = cls.id;
-        opt.textContent = cls.name + ' – ' + classSubjectAbbr(cls);
+        opt.textContent = classOptionLabel(cls);
         select.appendChild(opt);
     });
+    if (previous && classes.some(c => c.id === previous)) select.value = previous;
     select.onchange = renderGrading;
+}
+
+function updateGradeClassSelectCounts() {
+    const select = document.getElementById('grade-class-select');
+    if (!select) return;
+    const classes = DB.loadClasses();
+    for (let i = 0; i < select.options.length; i++) {
+        const opt = select.options[i];
+        if (!opt.value) continue;
+        const cls = classes.find(c => c.id === opt.value);
+        if (cls) opt.textContent = classOptionLabel(cls);
+    }
 }
 
 let currentGradeTab = 'plan';
@@ -1824,6 +1848,7 @@ let currentExamId = null;
 let examPointGrid = [];
 
 function renderGrading() {
+    updateGradeClassSelectCounts();
     let classId = document.getElementById('grade-class-select').value;
     if (!classId && lastSelectedGradeClassId) {
         classId = lastSelectedGradeClassId;
@@ -1899,7 +1924,7 @@ function renderGrading() {
         }
     }
     // Render the new content directly (no opacity flip, which caused a visible flicker)
-    container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + '</div>' + renderGradeContent(classId);
+    container.innerHTML = '<div class="grade-course-title">' + (cls ? escapeHtml(cls.name) : '') + (cls && cls.subject ? ' <span class="grade-course-subject">· ' + escapeHtml(cls.subject) + '</span>' : '') + (cls ?             ' <span class="grade-course-count">' + classStudentCount(cls.id) + ' Schüler:innen</span>' : '') + '</div>' + renderGradeContent(classId);
     // Restore scroll position for the plan tab (auto-scroll to today on class switch or initial load)
     if (currentGradeTab === 'plan') {
         const shouldScrollToToday = classId !== lastRenderedPlanClassId || !lastPlanScrollInitialized;
@@ -2895,7 +2920,7 @@ function renderHomework(classId) {
         return html;
     }
     if (hwViewMode === 'detailed') return html + renderHomeworkDetailed(classId, students, hws);
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Note</th><th>Fehlend</th><th>abgesammelt</th><th></th></tr></thead><tbody>';
+    html += '<table class="grading-table"><thead><tr><th class="name-th">Name</th><th>Note</th><th>Fehlend</th><th>abgesammelt</th><th></th></tr></thead><tbody>';
     students.forEach(s => {
         const calc = computeHwGrade(classId, s.id, hws);
         const collected = hws.filter(h => {
@@ -2923,7 +2948,7 @@ function renderHomeworkDetailed(classId, students, hws) {
     const status = DB.loadHwStatus(classId);
     const corrected = DB.loadHwCorrected(classId);
     const expired = DB.loadHwExpired(classId);
-    let html = '<div class="hw-grid-wrap"><table class="grading-table hw-detail-table"><thead><tr><th class="hw-sticky-left">Schüler</th>';
+    let html = '<div class="hw-grid-wrap"><table class="grading-table hw-detail-table"><thead><tr><th class="hw-sticky-left name-th">Name</th>';
     if (isDG) {
         const columns = [];
         hws.forEach(h => {
@@ -3163,7 +3188,7 @@ function renderMissingHwOverview(classId) {
         '<button class="btn" onclick="window.print()">🖨️ Drucken</button>' +
         '</div></div>';
     
-    html += '<table class="grading-table missing-hw-table"><thead><tr><th class="hw-sticky-left">Schüler</th>';
+    html += '<table class="grading-table missing-hw-table"><thead><tr><th class="hw-sticky-left name-th">Name</th>';
     
     if (isDG) {
         const columns = [];
@@ -3503,7 +3528,7 @@ function renderExamTable(classId, exam) {
     const records = DB.loadExamRecords(classId);
     const subs = (exam.subtotals || []).filter(p => p >= 1 && p < exam.examples.length);
     const subSet = new Set(subs);
-    let html = '<div class="hw-grid-wrap"><table class="grading-table exam-table" id="exam-print-area"><thead><tr><th class="exam-sticky-left">Schüler</th>';
+    let html = '<div class="hw-grid-wrap"><table class="grading-table exam-table" id="exam-print-area"><thead><tr><th class="exam-sticky-left name-th">Name</th>';
     let prevBoundary = 0;
     exam.examples.forEach((ex, i) => {
         html += '<th class="exam-ex-col">' + escapeHtml(ex.label || '') + '<br><small>' + ex.maxPoints + ' P</small></th>';
@@ -3612,7 +3637,7 @@ function renderPruefungen(classId) {
     const students = DB.getStudentsForClass(classId);
     const data = DB.loadPruefung(classId);
     let html = '<div class="view-header"><div><h2>Prüfungen</h2><p class="subtitle">Pro Schüler eine mündliche Prüfung mit Datum und Note.</p></div></div>';
-    html += '<div class="hw-grid-wrap"><table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Note</th><th>Notiz</th></tr></thead><tbody>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table"><thead><tr><th class="name-th">Name</th><th>Datum</th><th>Note</th><th>Notiz</th></tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
@@ -3640,7 +3665,7 @@ function renderMitarbeit(classId) {
     const status = DB.loadWorksheetStatus(classId);
     const mitTitle = isGZClass(classId) ? 'Mitarbeit und Mappe' : 'Mitarbeit';
     let html = '<div class="view-header"><div><h2>' + mitTitle + '</h2><p class="subtitle">Mappe (1. Semester und 2. Semester), Verhalten.</p></div></div>';
-    html += '<div class="hw-grid-wrap"><table class="grading-table" id="mitarbeit-table"><thead><tr><th>Schüler</th><th>Mappe 1. Semester</th><th>Bemerkung 1. Sem.</th><th>Mappe 2. Semester</th><th>Bemerkung 2. Sem.</th><th>Verhalten (positiv/negativ)</th>' +
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="mitarbeit-table"><thead><tr><th class="name-th">Name</th><th>Mappe 1. Semester</th><th>Bemerkung 1. Sem.</th><th>Mappe 2. Semester</th><th>Bemerkung 2. Sem.</th><th>Verhalten (positiv/negativ)</th>' +
         (isGZClass(classId) ? '<th>Mitarbeit</th>' : '') + '</tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
@@ -3679,7 +3704,7 @@ function renderProjects(classId) {
     const students = DB.getStudentsForClass(classId);
     const data = DB.loadProjectGrades(classId);
     let html = '<div class="view-header"><div><h2>Projekt</h2></div></div>';
-    html += '<div class="hw-grid-wrap"><table class="grading-table" id="dg-project-table"><thead><tr><th class="hw-sticky-left">Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="dg-project-table"><thead><tr><th class="hw-sticky-left name-th">Name</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
     students.forEach(s => {
         const d = data[s.id] || {};
         const ot = d.onTime || '';
@@ -3736,7 +3761,7 @@ function renderOverview(classId) {
         '</div></div>';
 
     html += '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
-        '<th>Schüler</th><th>HÜ<br><small>Pkte / Note</small></th>';
+        '<th class="name-th">Name</th><th>HÜ<br><small>Pkte / Note</small></th>';
     scopeData.exams.forEach(e => html += '<th>SA ' + e.nr + '<br><small>Pkte / Note</small></th>');
     html += '<th>Ø SA</th><th>Prüf.</th><th>Projekt</th><th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
@@ -4039,7 +4064,7 @@ function generatePdfHtmlFromData(data) {
         Object.keys(data.grades).forEach(classId => {
             const grades = data.grades[classId];
             if (grades && grades.length) {
-                html += `<h3>Klasse ${escapeHtml(classId)} (${grades.length} Einträge)</h3><table><thead><tr><th>Schüler</th><th>Typ</th><th>Note</th><th>Datum</th><th>Gewichtung</th><th>Thema</th></tr></thead><tbody>`;
+                html += `<h3>Klasse ${escapeHtml(classId)} (${grades.length} Einträge)</h3><table><thead><tr><th class="name-th">Name</th><th>Typ</th><th>Note</th><th>Datum</th><th>Gewichtung</th><th>Thema</th></tr></thead><tbody>`;
                 grades.forEach(g => {
                     html += `<tr><td>${escapeHtml(g.studentName || g.studentId || '')}</td><td>${escapeHtml(g.type || '')}</td><td>${escapeHtml(g.grade || '')}</td><td>${escapeHtml(g.date || '')}</td><td>${escapeHtml(g.weight || '')}</td><td>${escapeHtml(g.topic || '')}</td></tr>`;
                 });
@@ -4746,7 +4771,7 @@ function renderGZGrades(classId) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
     }
-    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left">Schüler</th>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left name-th">Name</th>';
     // Zähle pro Blatt, wie viele Schüler das Blatt noch nicht abgegeben haben (received === 'x')
     const notReceivedCount = {};
     worksheets.forEach(w => { notReceivedCount[w.nr || w.date] = 0; });
@@ -4914,7 +4939,7 @@ function renderGZProject(classId) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
     }
-    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-project-table"><thead><tr><th class="hw-sticky-left">Schüler</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
+    html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-project-table"><thead><tr><th class="hw-sticky-left name-th">Name</th><th>Note</th><th>Rechtzeitig abgegeben</th><th>Bemerkung</th></tr></thead><tbody>';
     students.forEach(s => {
         const st = status[s.id] || {};
         const grade = st.project || '';
@@ -5103,7 +5128,7 @@ function renderGZForgotten(classId) {
         html += renderGZForgottenForm(classId, students);
         return html;
     }
-    html += '<table class="grading-table"><thead><tr><th>Schüler</th><th>Vorkommnisse</th><th>Aktion</th></tr></thead><tbody>';
+    html += '<table class="grading-table"><thead><tr><th class="name-th">Name</th><th>Vorkommnisse</th><th>Aktion</th></tr></thead><tbody>';
     sortedStudents.forEach(s => {
         const entries = studentEntries[s.id] || [];
         const parts = entries.length + 'x: ' + entries.map(e => '<span class="gz-forgot-date">' + formatDateDE(e.date) + '</span> ' + (e.kind === 'material' ? 'Mat' : 'Lap')).join(', ');
@@ -5117,7 +5142,7 @@ function renderGZForgotten(classId) {
 }
 
 function renderGZForgottenForm(classId, students) {
-    return '<table class="grading-table"><thead><tr><th>Schüler</th><th>Datum</th><th>Art</th><th></th></tr></thead><tbody>' +
+    return '<table class="grading-table"><thead><tr><th class="name-th">Name</th><th>Datum</th><th>Art</th><th></th></tr></thead><tbody>' +
         students.map(s => '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>' +
         '<td><input type="date" id="gz-forgot-date-' + s.id + '" class="grade-input" style="width:auto;"></td>' +
         '<td><select id="gz-forgot-kind-' + s.id + '" class="grade-input"><option value="material">Material</option><option value="laptop">Laptop</option></select></td>' +
@@ -5242,7 +5267,7 @@ function renderGZOverview(classId) {
         return html;
     }
     html += '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
-        '<th>Schüler</th><th>Ø ÜB</th><th>Mappe 1. Sem.</th><th>Mat. vergessen</th><th>Laptop vergessen</th><th>Berechnet</th><th>Note (1. Sem.)</th>' +
+        '<th class="name-th">Name</th><th>Ø ÜB</th><th>Mappe 1. Sem.</th><th>Mat. vergessen</th><th>Laptop vergessen</th><th>Berechnet</th><th>Note (1. Sem.)</th>' +
         (isYear ? '<th>Projekt</th><th>Note (Jahr)</th>' : '') +
         '<th>Bemerkung</th>' +
         '</tr></thead><tbody>';
@@ -5401,7 +5426,7 @@ function renderStandardAllOverview(cls, students, isYear) {
     const recs = DB.loadExamRecords(classId);
     const isDG = cls.type === 'dg';
     let html = '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
-        '<th class="hw-sticky-left">Schüler</th><th>HÜ<br><small>Pkte / Note</small></th>';
+        '<th class="hw-sticky-left name-th">Name</th><th>HÜ<br><small>Pkte / Note</small></th>';
     exams.forEach(e => html += '<th>SA ' + (e.nr || '') + '<br><small>Pkte / Note</small></th>');
     html += '<th>Ø SA</th><th>Prüf.</th>' + (isDG ? '<th>Projekt</th>' : '') + '<th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
@@ -5460,7 +5485,7 @@ function renderGZAllOverview(cls, students) {
     const project = DB.loadProjectGrades(classId);
     const manual = DB.loadManualGrades(classId);
     let html = '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
-        '<th class="hw-sticky-left">Schüler</th><th>Ø ÜB</th><th>Mappe</th><th>Mitarbeit</th><th>Projekt</th><th>Berechnet</th><th>Note (ich)</th><th>Mat. vergessen</th><th>Laptop vergessen</th></tr></thead><tbody>';
+        '<th class="hw-sticky-left name-th">Name</th><th>Ø ÜB</th><th>Mappe</th><th>Mitarbeit</th><th>Projekt</th><th>Berechnet</th><th>Note (ich)</th><th>Mat. vergessen</th><th>Laptop vergessen</th></tr></thead><tbody>';
     students.forEach(s => {
         const st = status[s.id] || {};
         let sum = 0, count = 0;
