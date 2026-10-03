@@ -275,6 +275,8 @@ const DB = {
     saveWorksheets: function(classId, list) { this.save('gz_worksheets_' + classId, list); },
     loadWorksheetStatus: function(classId) { return this.load('gz_worksheet_status_' + classId, {}); },
     saveWorksheetStatus: function(classId, obj) { this.save('gz_worksheet_status_' + classId, obj); },
+    loadGZIssued: function(classId) { return this.load('gz_issued_' + classId, {}); },
+    saveGZIssued: function(classId, obj) { this.save('gz_issued_' + classId, obj); },
     loadAttendance: function(classId) { return this.load('gz_attendance_' + classId, []); },
     saveAttendance: function(classId, list) { this.save('gz_attendance_' + classId, list); },
     loadPortfolioGrades: function(classId) { return this.load('gz_portfolio_' + classId, {}); },
@@ -472,7 +474,19 @@ const DB = {
             const data = JSON.parse(json);
             Object.keys(data).forEach(k => {
                 if (isSessionKey(k)) return; // keine Token in localStorage importieren
-                localStorage.setItem(k, data[k]);
+                // exportAll legt je Schluessel den JSON-Text ab. Kommt stattdessen
+                // ein echter Wert aus einer handgeschriebenen Datei, muss er hier
+                // serialisiert werden - sonst bliebe "[object Object]" zurueck und
+                // DB.load wuerde beim naechsten Start den Schluessel verlieren.
+                const v = data[k];
+                let text;
+                if (typeof v === 'string') {
+                    // Nur JSON-Texte unveraendert lassen, reine Worte serialisieren.
+                    try { JSON.parse(v); text = v; } catch (e) { text = JSON.stringify(v); }
+                } else {
+                    text = JSON.stringify(v);
+                }
+                localStorage.setItem(k, text);
             });
         } catch (e) { console.error('importAll failed', e); }
     },
@@ -614,7 +628,7 @@ const SyncGuard = {
         Object.keys(keys).forEach(k => {
             const hasBase = base ? Object.prototype.hasOwnProperty.call(base, k) : false;
             const hasOurs = Object.prototype.hasOwnProperty.call(ours, k);
-            const hasTheirs = Object.prototype.hasOwnProperty.call(theirs, k);
+            const hasTheirs = Object.prototype.hasOwnProperty.call(theirs, k) && theirs[k] !== undefined;
             const b = base ? base[k] : undefined;
             const o = ours[k];
             const t = theirs[k];
@@ -623,13 +637,13 @@ const SyncGuard = {
             const oursChanged = hasBase ? !same(o, b) : hasOurs;
             const theirsChanged = hasBase ? !same(t, b) : hasTheirs;
 
-            if (!oursChanged && hasTheirs) { merged[k] = t; return; }
-            if (!theirsChanged) { if (hasOurs) merged[k] = o; return; }
+            if (!oursChanged && hasTheirs) { if (t !== undefined) merged[k] = t; return; }
+            if (!theirsChanged) { if (hasOurs && o !== undefined) merged[k] = o; return; }
 
             // Beide Seiten haben geändert -> Konflikt.
             // Lokal behalten, entfernten Stand separat sichern.
             conflicts.push(k);
-            if (hasOurs) merged[k] = o;
+            if (hasOurs && o !== undefined) merged[k] = o;
         });
         return { merged: merged, conflicts: conflicts, remote: theirs };
     },

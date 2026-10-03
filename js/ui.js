@@ -75,10 +75,11 @@ window.exportGradesCSV = function() {
             const m = mitarbeit[s.id] || {};
             let wsSum = 0, wsCount = 0, missingCount = 0, laptopCount = 0;
             worksheets.forEach(w => {
-                const cell = st[w.nr] || {};
+                if (!w.counts || w.noHw) return;
+                const cell = st[gzWorksheetKey(w)] || {};
                 const grade = cell.grade || '';
-                if (grade && grade !== 'missing') { wsSum += parseFloat(grade); wsCount++; }
-                else if (grade === '' || grade === 'missing') missingCount++;
+                if (grade && grade !== 'missing') { const gv = parseFloat(grade); if (!isNaN(gv)) { wsSum += gv; wsCount++; } }
+                else missingCount++;
             });
             const avg = wsCount > 0 ? (wsSum / wsCount).toFixed(2) : '';
             const folder = m.folder1 != null ? m.folder1 : '';
@@ -1916,7 +1917,6 @@ function renderGrading() {
             if (rowIdx >= 0) {
                 const rowInputs = Array.from(activeRow.querySelectorAll('input, select, textarea'));
                 const inputIdx = rowInputs.indexOf(activeEl);
-                console.log('FOCUS SAVE:', { rowIdx, inputIdx, inputCount: rowInputs.length, tagName: activeEl.tagName, className: activeEl.className });
                 if (inputIdx >= 0) {
                     savedFocus = { rowIdx: rowIdx, inputIdx: inputIdx };
                 }
@@ -2004,12 +2004,17 @@ function renderGrading() {
             if (currentGradeTab === 'gz-grades') {
                 const students = DB.getStudentsForClass(classId);
                 const worksheets = getGZPlannedWorksheets(classId);
-                if (students.length && worksheets.length) {
-                    const targetCol = 1 + (worksheets.length - 1) * 4;
-                    const targetCell = cells[targetCol];
+                // Nur tatsächlich ausgegebene Blätter sind Ziel des Auto-Scrolls (Ausstehend wird übersprungen)
+                let targetIdx = -1, acc = 1;
+                worksheets.forEach(w => {
+                    if (w.counts) targetIdx = acc;
+                    acc += (w.noHw ? 2 : 4);
+                });
+                if (students.length && targetIdx >= 0) {
+                    const targetCell = cells[targetIdx];
                     if (targetCell) wrap.scrollLeft = targetCell.offsetLeft - 20;
-                    hwScrollRestored = true;
                 }
+                hwScrollRestored = true;
             } else {
                 const hws = (DB.loadTeachingPlan(classId) || []).filter(e => e.homeworkNr);
                 if (hws.length) {
@@ -2024,23 +2029,21 @@ function renderGrading() {
         // First render of other tabs — mark as restored so subsequent re-renders preserve scroll
         hwScrollRestored = true;
     }
-    // Restore focus to the same input after re-render
+    // Restore focus to the same input after re-render (preventScroll: kein Sprung,
+    // da focus() sonst die Zelle erneut in den Sichtbereich scrollt)
     if (savedFocus) {
         requestAnimationFrame(() => {
             const newRows = container.querySelectorAll('tbody tr');
-            console.log('FOCUS RESTORE:', { rowIdx: savedFocus.rowIdx, rowCount: newRows.length, inputIdx: savedFocus.inputIdx });
             if (savedFocus.rowIdx >= 0 && newRows[savedFocus.rowIdx]) {
                 const inputs = newRows[savedFocus.rowIdx].querySelectorAll('input, select, textarea');
-                console.log('FOCUS RESTORE inputs:', { inputCount: inputs.length, found: !!inputs[savedFocus.inputIdx] });
                 if (savedFocus.inputIdx >= 0 && inputs[savedFocus.inputIdx]) {
-                    inputs[savedFocus.inputIdx].focus();
-                    console.log('FOCUS RESTORE: focus set on', inputs[savedFocus.inputIdx].tagName, inputs[savedFocus.inputIdx].className);
+                    inputs[savedFocus.inputIdx].focus({ preventScroll: true });
                 }
             }
         });
     }
     attachGradeValidation(container);
-    setTimeout(function() { try { enableStickyPinning(); } catch (e) {} }, 50);
+    try { enableStickyPinning(); } catch (e) {}
 }
 
 function attachGradeValidation(container) {
@@ -3741,6 +3744,9 @@ window.toggleProjectOnTime = function(classId, studentId) {
 
 function renderOverview(classId) {
     const students = DB.getStudentsForClass(classId);
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const planMode = cls ? (cls.planMode || (cls.type === 'gz' ? 'gz' : (cls.type === 'dg' ? 'dg' : 'mathe'))) : 'mathe';
+    const isDG = planMode === 'dg';
     const allHws = filterPlanBySchoolYear(sortedPlan(classId).filter(e => e.homeworkNr)).map(e => ({ nr: e.homeworkNr, date: e.date }));
     const exams = DB.loadExams(classId);
     const cutoff = DB.loadSemesterCutoff(classId);
@@ -3763,7 +3769,7 @@ function renderOverview(classId) {
     html += '<div class="hw-grid-wrap"><table class="grading-table overview-table"><thead><tr>' +
         '<th class="name-th">Name</th><th>HÜ<br><small>Pkte / Note</small></th>';
     scopeData.exams.forEach(e => html += '<th>SA ' + e.nr + '<br><small>Pkte / Note</small></th>');
-    html += '<th>Ø SA</th><th>Prüf.</th><th>Projekt</th><th>Berechnet</th>';
+    html += '<th>Ø SA</th><th>Prüf.</th>' + (isDG ? '<th>Projekt</th>' : '') + '<th>Berechnet</th>';
     if (isYear) html += '<th>Note (1. Sem.)</th>';
     html += '<th>Note (ich)</th><th>Bemerkung</th>';
     if (isYear) html += '<th>Bemerkung 1. Sem.</th>';
@@ -3788,7 +3794,7 @@ function renderOverview(classId) {
         const examAvg = examCount ? examSum / examCount : null;
         const pr = DB.loadPruefung(classId)[s.id];
         const pruefGrade = (pr && pr.grade != null) ? pr.grade : null;
-        const projectData = DB.loadProjectGrades(classId)[s.id] || {};
+        const projectData = isDG ? (DB.loadProjectGrades(classId)[s.id] || {}) : {};
         const projectGrade = projectData.grade != null ? projectData.grade : null;
         const w = DB.loadWeights(classId);
         let computed = null;
@@ -3809,7 +3815,7 @@ function renderOverview(classId) {
             examCells +
             '<td>' + (examAvg != null ? '<span class="' + gradeClass(Math.round(examAvg)) + ' grade-cell">' + (Math.round(examAvg * 10) / 10) + '</span>' : '–') + '</td>' +
             '<td>' + (pruefGrade != null ? '<span class="' + gradeClass(pruefGrade) + ' grade-cell">' + pruefGrade + '</span>' : '–') + '</td>' +
-            '<td>' + (projectGrade != null ? '<span class="' + gradeClass(projectGrade) + ' grade-cell">' + projectGrade + '</span>' : '–') + '</td>' +
+            (isDG ? '<td>' + (projectGrade != null ? '<span class="' + gradeClass(projectGrade) + ' grade-cell">' + projectGrade + '</span>' : '–') + '</td>' : '') +
             '<td class="' + gradeClass(computed) + ' grade-cell">' + (computed != null ? computed : '–') + '</td>' +
             (isYear ? '<td class="' + gradeClass(semesterManualGrade) + ' grade-cell">' + (semesterManualGrade != null ? semesterManualGrade : '–') + '</td>' : '') +
             '<td>' + gradeSelect(activeManual, "setManualGrade('" + classId + "','" + s.id + "',this.value)", classId, gradeColorClass(activeManual)) + '</td>' +
@@ -3860,6 +3866,9 @@ window.setSemesterOverviewNoteComment = function(classId, studentId, val) {
 
 window.openWeightsModal = function(classId) {
     const weights = DB.loadWeights(classId);
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const planMode = cls ? (cls.planMode || (cls.type === 'gz' ? 'gz' : (cls.type === 'dg' ? 'dg' : 'mathe'))) : 'mathe';
+    const isDG = planMode === 'dg';
     showModal(
         '<div class="modal-header"><h2>Gewichtung</h2><button class="btn btn-secondary" onclick="hideModal()">×</button></div>' +
         '<div class="form-group exam-form">' +
@@ -3867,7 +3876,7 @@ window.openWeightsModal = function(classId) {
         '<label style="margin:0;">HÜ <input type="number" step="0.05" id="dg-w-hw" class="grade-input" style="width:60px;" value="' + (weights.hw || 0) + '"></label>' +
         '<label style="margin:0;">SA <input type="number" step="0.05" id="dg-w-exam" class="grade-input" style="width:60px;" value="' + (weights.exam || 0) + '"></label>' +
         '<label style="margin:0;">Prüf. <input type="number" step="0.05" id="dg-w-pruef" class="grade-input" style="width:60px;" value="' + (weights.pruefung || 0) + '"></label>' +
-        '<label style="margin:0;">Projekt <input type="number" step="0.05" id="dg-w-project" class="grade-input" style="width:60px;" value="' + (weights.project || 0) + '"></label>' +
+        (isDG ? '<label style="margin:0;">Projekt <input type="number" step="0.05" id="dg-w-project" class="grade-input" style="width:60px;" value="' + (weights.project || 0) + '"></label>' : '') +
         '</div>' +
         '<button class="btn" onclick="saveWeights(\'' + classId + '\')" style="margin-top:10px;">Speichern</button>' +
         '</div>'
@@ -3876,11 +3885,12 @@ window.openWeightsModal = function(classId) {
 
 window.saveWeights = function(classId) {
     captureUndo();
+    const projectInput = document.getElementById('dg-w-project');
     const weights = {
         hw: parseFloat(document.getElementById('dg-w-hw').value) || 0,
         exam: parseFloat(document.getElementById('dg-w-exam').value) || 0,
         pruefung: parseFloat(document.getElementById('dg-w-pruef').value) || 0,
-        project: parseFloat(document.getElementById('dg-w-project').value) || 0
+        project: projectInput ? (parseFloat(projectInput.value) || 0) : 0
     };
     DB.saveWeights(classId, weights);
     hideModal();
@@ -4653,13 +4663,77 @@ function getHolidayName(dateStr) {
     return m ? m.name : '';
 }
 
+const GZ_ISSUED_PENDING = 0;
+const GZ_ISSUED_HANDED_OUT = 1;
+const GZ_ISSUED_COMPUTER = 2;
+const GZ_ISSUED_LABELS = ['Ausstehend', 'Ausgegeben', 'Nur Computer'];
+
+function gzIssuedDefault(dateStr) {
+    if (!dateStr) return GZ_ISSUED_PENDING;
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return dateStr <= (y + '-' + m + '-' + d) ? GZ_ISSUED_HANDED_OUT : GZ_ISSUED_PENDING;
+}
+
+function gzWorksheetKey(w) {
+    if (w.noHw) return 'nohw:' + w.date;
+    return String(w.nr);
+}
+
+function getGZIssuedState(classId, w) {
+    const key = gzWorksheetKey(w);
+    const stored = DB.loadGZIssued(classId);
+    const raw = stored && Object.prototype.hasOwnProperty.call(stored, key) ? stored[key] : undefined;
+    if (raw === 0 || raw === 1 || raw === 2) return raw;
+    const gs = DB.loadGlobalSettings();
+    const mirror = (gs.computerWorksheets && gs.computerWorksheets[classId]) || [];
+    if (!w.noHw && w.nr != null && mirror.indexOf(w.nr) !== -1) return GZ_ISSUED_COMPUTER;
+    return gzIssuedDefault(w.date);
+}
+
+function gzIsIssued(w) {
+    return w.state !== GZ_ISSUED_PENDING;
+}
+
+function syncGZComputerMirror(classId, worksheets) {
+    const gs = DB.loadGlobalSettings();
+    gs.computerWorksheets = gs.computerWorksheets || {};
+    gs.computerWorksheets[classId] = worksheets
+        .filter(w => !w.noHw && w.nr != null && w.state === GZ_ISSUED_COMPUTER)
+        .map(w => w.nr);
+    DB.saveGlobalSettings(gs);
+}
+
+window.cycleGZIssued = function(classId, wsKey) {
+    captureUndo();
+    const worksheets = getGZPlannedWorksheets(classId);
+    const target = worksheets.find(w => gzWorksheetKey(w) === String(wsKey));
+    if (!target) return;
+    const stored = DB.loadGZIssued(classId);
+    stored[String(wsKey)] = (target.state + 1) % 3;
+    DB.saveGZIssued(classId, stored);
+    syncGZComputerMirror(classId, getGZPlannedWorksheets(classId));
+    renderGrading();
+};
+
+window.setGZIssuedState = function(classId, wsKey, value) {
+    const v = parseInt(value, 10);
+    if (v !== 0 && v !== 1 && v !== 2) return;
+    const stored = DB.loadGZIssued(classId);
+    stored[String(wsKey)] = v;
+    DB.saveGZIssued(classId, stored);
+    syncGZComputerMirror(classId, getGZPlannedWorksheets(classId));
+    renderGrading();
+};
+
 function getGZPlannedWorksheets(classId) {
     const cls = DB.loadClasses().find(c => c.id === classId);
     const firstLessonDate = cls && cls.firstLessonDate ? cls.firstLessonDate : null;
     const globalSettings = DB.loadGlobalSettings();
     const schoolYearStart = globalSettings.schoolYearStart || '';
     const schoolYearEnd = globalSettings.schoolYearEnd || '';
-    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
     if (!schoolYearStart || !schoolYearEnd || !firstLessonDate) return [];
     const startDate = firstLessonDate;
     const regularDates = [];
@@ -4677,7 +4751,6 @@ function getGZPlannedWorksheets(classId) {
     const plan = sortedPlan(classId);
     const supplierDates = plan.filter(e => e.supplier && e.date).map(e => e.date);
     const allDates = regularDates.concat(supplierDates);
-    const worksheetEntries = plan.filter(e => e.homeworkNr);
     const seen = new Set();
     const result = [];
     allDates.forEach(date => {
@@ -4687,7 +4760,12 @@ function getGZPlannedWorksheets(classId) {
         seen.add(entry.date);
         const hasHw = !!entry.homeworkNr;
         const nr = hasHw ? parseInt(entry.homeworkNr, 10) : null;
-        result.push({ nr: nr, title: entry.homeworkContent || entry.exerciseContent || '', date: entry.date, isComputerOnly: hasHw && computerOnly.indexOf(nr) !== -1, noHw: !hasHw });
+        const w = { nr: nr, title: entry.homeworkContent || entry.exerciseContent || '', date: entry.date, noHw: !hasHw };
+        w.key = gzWorksheetKey(w);
+        w.state = getGZIssuedState(classId, w);
+        w.isComputerOnly = w.state === GZ_ISSUED_COMPUTER;
+        w.counts = gzIsIssued(w);
+        result.push(w);
     });
     return result;
 }
@@ -4696,35 +4774,35 @@ function renderGZWorksheets(classId) {
     const planned = getGZPlannedWorksheets(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? cls.name : '';
-    const globalSettings = DB.loadGlobalSettings();
-    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
     let html = '<div class="view-header print-keep"><div><h2>Liste der ÜB – ' + escapeHtml(className) + '</h2></div>' +
+        '<button class="btn btn-secondary" onclick="window.printWorksheetList(\'' + classId + '\')" style="margin-right:10px;">🖨️ Liste drucken</button>' +
         '<button class="btn btn-secondary" onclick="window.exportWorksheetsCSV(\'' + classId + '\')">📊 Als CSV exportieren</button></div>';
     if (!planned.length) {
         html += '<p class="subtitle">Noch keine Übungsblätter in der Stundenplanung vorhanden.</p>';
         return html;
     }
-    html += '<table class="grading-table"><thead><tr><th>Nr.</th><th>Titel</th><th>Datum</th><th>Nur Computer</th></tr></thead><tbody>';
+    html += '<table class="grading-table"><thead><tr><th>Nr.</th><th>Titel</th><th>Datum</th><th>Status</th><th>Nur Computer</th></tr></thead><tbody>';
     planned.forEach(w => {
-        const isComputer = computerOnly.indexOf(w.nr) !== -1;
+        const isComputer = w.state === GZ_ISSUED_COMPUTER;
         const rowStyle = isComputer ? 'style="color:#16a34a;font-style:italic;"' : '';
         const toggleLabel = isComputer ? 'Als Mappe markieren' : 'Als Nur-Computer markieren';
         html += '<tr ' + rowStyle + '><td>' + (w.nr ? w.nr + '.' : '') + '</td><td>' + escapeHtml(w.title || '') + '</td><td>' + formatDateDE(w.date || '') + '</td>' +
-            '<td style="text-align:center;"><button class="btn btn-secondary" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + toggleLabel + '</button></td></tr>';
+            '<td style="text-align:center;"><button class="gz-issued-btn gz-issued-' + w.state + '" onclick="cycleGZIssued(\'' + classId + '\',\'' + w.key + '\')">' + GZ_ISSUED_LABELS[w.state] + '</button></td>' +
+            '<td style="text-align:center;">' + (w.noHw ? '' : '<button class="btn btn-secondary" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + toggleLabel + '</button>') + '</td></tr>';
     });
     html += '</tbody></table>';
     return html;
 }
 
 window.toggleComputerOnly = function(classId, worksheetNr) {
-    const globalSettings = DB.loadGlobalSettings();
-    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
-    const idx = computerOnly.indexOf(worksheetNr);
-    if (idx >= 0) computerOnly.splice(idx, 1);
-    else computerOnly.push(worksheetNr);
-    globalSettings.computerWorksheets = globalSettings.computerWorksheets || {};
-    globalSettings.computerWorksheets[classId] = computerOnly;
-    DB.saveGlobalSettings(globalSettings);
+    captureUndo();
+    const worksheets = getGZPlannedWorksheets(classId);
+    const target = worksheets.find(w => !w.noHw && w.nr === worksheetNr);
+    if (!target) return;
+    const stored = DB.loadGZIssued(classId);
+    stored[gzWorksheetKey(target)] = target.state === GZ_ISSUED_COMPUTER ? gzIssuedDefault(target.date) : GZ_ISSUED_COMPUTER;
+    DB.saveGZIssued(classId, stored);
+    syncGZComputerMirror(classId, getGZPlannedWorksheets(classId));
     renderGrading();
 };
 
@@ -4732,18 +4810,16 @@ window.exportWorksheetsCSV = function(classId) {
     const planned = getGZPlannedWorksheets(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? cls.name : 'Klasse';
-    const globalSettings = DB.loadGlobalSettings();
-    const computerOnly = (globalSettings.computerWorksheets && globalSettings.computerWorksheets[classId]) || [];
     if (!planned.length) {
         alertModal('Keine Übungsblätter zum Exportieren vorhanden.');
         return;
     }
-    const lines = ['Nr.;Titel;Datum;Nur Computer'];
+    const lines = ['Nr.;Titel;Datum;Status;Nur Computer'];
     planned.forEach(w => {
         const title = (w.title || '').replace(/"/g, '""');
         const date = formatDateDE(w.date || '');
-        const isComputer = computerOnly.indexOf(w.nr) !== -1;
-        lines.push('"' + w.nr + '";"' + title + '";"' + date + '";' + (isComputer ? 'Ja' : 'Nein'));
+        const isComputer = w.state === GZ_ISSUED_COMPUTER;
+        lines.push('"' + w.nr + '";"' + title + '";"' + date + '";' + GZ_ISSUED_LABELS[w.state] + ';' + (isComputer ? 'Ja' : 'Nein'));
     });
     const csv = lines.join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -4757,6 +4833,62 @@ window.exportWorksheetsCSV = function(classId) {
     URL.revokeObjectURL(url);
 };
 
+window.printWorksheetList = function(classId) {
+    const planned = getGZPlannedWorksheets(classId);
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const className = cls ? cls.name : 'Klasse';
+    const sheets = planned.filter(w => w.nr);
+    if (!sheets.length) {
+        alertModal('Keine Übungsblätter zum Drucken vorhanden.');
+        return;
+    }
+    let rows = '';
+    sheets.forEach(w => {
+        rows += '<tr><td class="ws-nr">' + w.nr + '.</td><td>' + escapeHtml(w.title || '') + '</td></tr>';
+    });
+
+    const printHtml = '<div id="ws-controls" style="margin-bottom:15px;display:flex;gap:10px;align-items:center;">' +
+        '<button id="ws-print-btn" style="padding:8px 16px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🖨️ Drucken</button>' +
+        '</div>' +
+        '<div id="ws-print-wrap" style="width:180mm;max-width:180mm;">' +
+        '<h2>Liste der ÜB – ' + escapeHtml(className) + '</h2>' +
+        '<table id="ws-print-table"><thead><tr><th>Nr.</th><th>Titel des Blattes</th></tr></thead><tbody>' +
+        rows + '</tbody></table></div>';
+
+    const printStyles = [
+        '@page { margin: 15mm; size: A4 portrait; }',
+        'body { font-family: Inter, Arial, sans-serif; background: #fff !important; color: #000 !important; padding: 10px; margin: 0; }',
+        '@media print { #ws-controls { display: none !important; } }',
+        'h2 { font-size: 16px; margin-bottom: 10px; color: #000 !important; }',
+        '#ws-print-wrap { width: 180mm; max-width: 180mm; box-sizing: border-box; }',
+        '#ws-print-table { width: 100%; border-collapse: collapse; }',
+        '#ws-print-table th, #ws-print-table td { border: 1px solid #999; padding: 6px 8px; font-size: 12px; text-align: left; vertical-align: top; overflow-wrap: break-word; }',
+        '#ws-print-table th { background: #f0f0f0; font-weight: 600; }',
+        '#ws-print-table td.ws-nr { width: 70px; text-align: center; }'
+    ].join('\n');
+
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Liste der ÜB</title>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+        '<style>' + printStyles + '</style>' +
+        '</head><body>' + printHtml +
+        '<script>' +
+        'var wsPrintBtn = document.getElementById("ws-print-btn");' +
+        'if (wsPrintBtn) wsPrintBtn.addEventListener("click", function(){ window.print(); });' +
+        '</script>' +
+        '</body></html>';
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'width=760,height=700');
+    if (win) {
+        setTimeout(function() {
+            const btn = win.document.getElementById('ws-print-btn');
+            if (btn) btn.focus();
+        }, 400);
+    }
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+};
+
 function renderGZGrades(classId) {
     normalizeGZForgotten(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
@@ -4764,9 +4896,9 @@ function renderGZGrades(classId) {
     const worksheets = getGZPlannedWorksheets(classId);
     const status = DB.loadWorksheetStatus(classId);
     const weights = DB.loadGZGradeWeights(classId);
-    // Status-Schlüssel: für Stuten ohne ÜB-Nummer wird die Datum als Schlüssel verwendet
-    function wsKey(w) { return w.noHw ? ('nohw:' + w.date) : w.nr; }
-    let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen.</p></div></div>';
+    // Status-Schlüssel: für Stunden ohne ÜB-Nummer wird das Datum als Schlüssel verwendet
+    function wsKey(w) { return gzWorksheetKey(w); }
+    let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">Schalter pro Blatt: Ausstehend → Ausgegeben → Nur Computer → Ausstehend. Ausstehende Blätter werden nicht als fehlend gewertet und fließen nicht in Ø, Berechnet, PDF und CSV ein. · k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen.</p></div></div>';
     if (!students.length) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
@@ -4774,30 +4906,32 @@ function renderGZGrades(classId) {
     html += '<div class="hw-grid-wrap"><table class="grading-table" id="gz-grades-table"><thead><tr><th rowspan="2" class="hw-sticky-left name-th">Name</th>';
     // Zähle pro Blatt, wie viele Schüler das Blatt noch nicht abgegeben haben (received === 'x')
     const notReceivedCount = {};
-    worksheets.forEach(w => { notReceivedCount[w.nr || w.date] = 0; });
+    worksheets.forEach(w => { notReceivedCount[w.key] = 0; });
     students.forEach(s => {
         const st = status[s.id] || {};
         worksheets.forEach(w => {
-            const cell = st[w.nr] || {};
-            if (cell.received === 'x') notReceivedCount[w.nr || w.date]++;
+            const cell = st[w.key] || {};
+            if (cell.received === 'x') notReceivedCount[w.key]++;
         });
     });
     worksheets.forEach(w => {
         const co = w.isComputerOnly ? ' <small style="color:#16a34a;font-style:italic;">(nur Computer)</small>' : '';
-        const toggleBtn = w.noHw ? '' : '<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;min-width:80px;" onclick="toggleComputerOnly(\'' + classId + '\',' + w.nr + ')">' + (w.isComputerOnly ? 'Nur Computer' : 'Ausgeteilt') + '</button>';
+        const toggleBtn = '<button class="gz-issued-btn gz-issued-' + w.state + '" title="Klick wechselt: Ausstehend → Ausgegeben → Nur Computer → Ausstehend" onclick="cycleGZIssued(\'' + classId + '\',\'' + w.key + '\')">' + GZ_ISSUED_LABELS[w.state] + '</button>';
         const colspan = w.noHw ? 2 : 4;
-        const notRcvd = notReceivedCount[w.nr || w.date];
+        const notRcvd = gzIsIssued(w) ? notReceivedCount[w.key] : 0;
         const notRcvdBadge = notRcvd > 0 ? '<span class="gz-not-received-badge" style="margin-left:auto;" title="Noch nicht abgegeben">fehlend: ' + notRcvd + '</span>' : '';
         const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
-        html += '<th colspan="' + colspan + '" class="gz-ws-sep' + computerClass + '"><div class="gz-ws-head"><span class="gz-ws-nr">' + (w.nr ? w.nr : '–') + '</span><span class="gz-ws-toggle-btn">' + toggleBtn + '</span>' + notRcvdBadge + '</div><div class="gz-ws-meta"><small>' + escapeHtml(w.title || '') + '</small><small>' + formatDateDE(w.date || '') + '</small></div>' + co + '</th>';
+        const pendingClass = w.counts ? '' : ' gz-ws-pending';
+        html += '<th colspan="' + colspan + '" class="gz-ws-sep' + computerClass + pendingClass + '"><div class="gz-ws-head"><span class="gz-ws-nr">' + (w.nr ? w.nr : '–') + '</span><span class="gz-ws-toggle-btn">' + toggleBtn + '</span>' + notRcvdBadge + '</div><div class="gz-ws-meta"><small>' + escapeHtml(w.title || '') + '</small><small>' + formatDateDE(w.date || '') + '</small></div>' + co + '</th>';
     });
     html += '<th rowspan="2" class="gz-ws-sep hw-sticky-left">Ø ÜB</th><th rowspan="2" class="hw-sticky-right-last">Fehlend</th></tr><tr>';
     worksheets.forEach(w => {
         const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
+        const pendingClass = w.counts ? '' : ' gz-ws-pending';
         if (w.noHw) {
-            html += '<th class="gz-ws-sep' + computerClass + '">k</th><th class="gz-ws-last' + computerClass + '">Verg.</th>';
+            html += '<th class="gz-ws-sep' + computerClass + pendingClass + '">k</th><th class="gz-ws-last' + computerClass + pendingClass + '">Verg.</th>';
         } else {
-            html += '<th class="gz-ws-sep' + computerClass + '">Note</th><th class="' + computerClass.trim() + '">k</th><th class="' + computerClass.trim() + '">Abg</th><th class="gz-ws-last' + computerClass + '">Verg.</th>';
+            html += '<th class="gz-ws-sep' + computerClass + pendingClass + '">Note</th><th class="' + (computerClass + pendingClass).trim() + '">k</th><th class="' + (computerClass + pendingClass).trim() + '">Abg</th><th class="gz-ws-last' + computerClass + pendingClass + '">Verg.</th>';
         }
     });
     html += '</tr></thead><tbody>';
@@ -4806,18 +4940,18 @@ function renderGZGrades(classId) {
         html += '<tr><td class="hw-sticky-left">' + studentNameHtml(s) + '</td>';
         let sum = 0, count = 0, missingCount = 0;
         const missingList = [];
-worksheets.forEach(w => {
+    worksheets.forEach(w => {
             const k = wsKey(w);
             const cell = st[k] || {};
             const grade = cell.grade || '';
             const absent = !!cell.absent;
             const received = cell.received || '';
-            if (!w.noHw) {
+            if (!w.noHw && w.counts) {
                 if (grade === '' || grade === 'missing') {
                     missingCount++;
                     missingList.push(w.nr);
                 }
-                if (grade && grade !== 'missing') { sum += parseFloat(grade); count++; }
+                if (grade && grade !== 'missing') { const gv = parseFloat(grade); if (!isNaN(gv)) { sum += gv; count++; } }
             }
             const matOn = gzForgottenHas(classId, w.date, s.id, 'material');
             const lapOn = gzForgottenHas(classId, w.date, s.id, 'laptop');
@@ -4827,20 +4961,21 @@ worksheets.forEach(w => {
             const forgotClass = (matOn || lapOn) ? 'gz-mat active' : '';
             const gradeSelectClass = grade ? ' gz-grade-' + grade : '';
             const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
+            const pendingClass = w.counts ? '' : ' gz-ws-pending';
             if (!w.noHw) {
                 const gradeOptions = cls.useHalfGrades ? [1,1.5,2,2.5,3,3.5,4,5] : [1,2,3,4,5];
-                html += '<td class="gz-ws-sep' + computerClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',this.value)">' +
+                html += '<td class="gz-ws-sep' + computerClass + pendingClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',this.value)">' +
                     '<option value="">–</option>' +
                     gradeOptions.map(g => '<option value="' + g + '"' + (grade == g ? ' selected' : '') + '>' + g + '</option>').join('') +
                     '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>ges</option>' +
                     '</select></td>';
             }
             // 'k' erscheint nur, wenn der Button aktiv ist (gelb) - wie beim 'x'.
-            html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">' + (absent ? 'k' : '') + '</button></td>';
+            html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">' + (absent ? 'k' : '') + '</button></td>';
             if (!w.noHw) {
-                html += '<td class="' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
+                html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
             }
-            html += '<td class="gz-ws-last ' + computerClass + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
+            html += '<td class="gz-ws-last ' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
         });
         const avg = count > 0 ? (sum / count).toFixed(2) : '–';
         const missingJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
@@ -4855,12 +4990,14 @@ worksheets.forEach(w => {
 function calcGZGrade(studentId, classId, weights, includeProject) {
     const status = DB.loadWorksheetStatus(classId);
     const st = status[studentId] || {};
-    const worksheets = DB.loadWorksheets(classId);
+    const worksheets = getGZPlannedWorksheets(classId);
     let sum = 0, totalWeight = 0;
     if (weights.worksheets && worksheets.length) {
         let wsSum = 0, wsCount = 0;
         worksheets.forEach(w => {
-            const g = st[w.nr] ? parseFloat(st[w.nr].grade) : NaN;
+            if (!w.counts || w.noHw) return;
+            const cell = st[gzWorksheetKey(w)];
+            const g = cell && cell.grade ? parseFloat(cell.grade) : NaN;
             if (!isNaN(g)) { wsSum += g; wsCount++; }
         });
         if (wsCount > 0) { sum += (wsSum / wsCount) * weights.worksheets; totalWeight += weights.worksheets; }
@@ -5277,9 +5414,10 @@ function renderGZOverview(classId) {
         let wsSum = 0, wsCount = 0;
         let sum = 0, totalWeight = 0;
         worksheets.forEach(w => {
-            const cell = st[w.nr] || {};
+            if (!w.counts || w.noHw) return;
+            const cell = st[gzWorksheetKey(w)] || {};
             const grade = cell.grade || '';
-            if (grade && grade !== 'missing') { wsSum += parseFloat(grade); wsCount++; }
+            if (grade && grade !== 'missing') { const gv = parseFloat(grade); if (!isNaN(gv)) { wsSum += gv; wsCount++; } }
         });
         const avg = wsCount > 0 ? (wsSum / wsCount).toFixed(2) : '–';
         let calcSemester = null, calcYear = null;
@@ -5490,9 +5628,10 @@ function renderGZAllOverview(cls, students) {
         const st = status[s.id] || {};
         let sum = 0, count = 0;
         worksheets.forEach(w => {
-            const cell = st[w.nr] || {};
+            if (!w.counts || w.noHw) return;
+            const cell = st[gzWorksheetKey(w)] || {};
             const grade = cell.grade || '';
-            if (grade && grade !== 'missing') { sum += parseFloat(grade); count++; }
+            if (grade && grade !== 'missing') { const gv = parseFloat(grade); if (!isNaN(gv)) { sum += gv; count++; } }
         });
         const avg = count > 0 ? (sum / count).toFixed(2) : '–';
         const p = portfolio[s.id] || {};
@@ -5729,8 +5868,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const currentInputs = Array.from(tr.querySelectorAll('input, select'));
         const currentIndex = currentInputs.indexOf(target);
         const targetIndex = Math.min(currentIndex >= 0 ? currentIndex : 0, allInputs.length - 1);
-        console.log('Enter pressed, moving to next row input', targetIndex, allInputs[targetIndex]);
-        setTimeout(function() { allInputs[targetIndex].focus(); }, 0);
+        setTimeout(function() { allInputs[targetIndex].focus({ preventScroll: true }); }, 0);
     });
     document.addEventListener('keydown', function(e) {
         const t = e.target;
@@ -5755,12 +5893,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         const targetInputs = Array.from(targetRow.querySelectorAll('input.ex-pts-input'));
         if (nc < 0 || nc >= targetInputs.length) return;
         const target = targetInputs[nc];
-        console.log('[EXAM-NAV] key=' + key + ' r=' + r + ' c=' + c + ' -> nr=' + nr + ' nc=' + nc + ' target=' + (target ? 'ok' : 'none'));
         e.preventDefault();
         if (key === 'ArrowUp' || key === 'ArrowDown') { try { t.blur(); } catch (err) {} }
-        try { target.focus(); } catch (err) {}
+        try { target.focus({ preventScroll: true }); } catch (err) {}
         try { target.select(); } catch (err) {}
-        if (key === 'ArrowUp' || key === 'ArrowDown') setTimeout(function() { try { target.focus(); } catch (e) {} try { target.select(); } catch (e) {} }, 60);
+        if (key === 'ArrowUp' || key === 'ArrowDown') setTimeout(function() { try { target.focus({ preventScroll: true }); } catch (e) {} try { target.select(); } catch (e) {} }, 60);
     });
     document.addEventListener('keydown', function(e) {
         const target = e.target;
@@ -5793,7 +5930,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const targetRow = allRows[targetRowIndex];
         const targetRowInputs = targetRow.querySelectorAll('input, select');
         if (targetIndex < targetRowInputs.length && targetRowInputs[targetIndex]) {
-            targetRowInputs[targetIndex].focus();
+            targetRowInputs[targetIndex].focus({ preventScroll: true });
         }
     });
     document.addEventListener('keydown', function(e) {

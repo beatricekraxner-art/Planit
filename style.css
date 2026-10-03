@@ -1518,6 +1518,65 @@ select.grade-input option {
         margin-left: auto;
     }
 
+    /* Drei-Zustände-Schalter pro ÜB-Blatt: Ausstehend / Ausgegeben / Nur Computer */
+    .gz-issued-btn {
+        -webkit-appearance: none;
+        appearance: none;
+        font-family: inherit;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.1;
+        padding: 2px 6px;
+        min-width: 74px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        text-align: center;
+    }
+
+    .gz-issued-btn.gz-issued-0 {
+        background: transparent;
+        color: var(--text-muted);
+        border-color: var(--text-muted);
+        border-style: dashed;
+        opacity: .75;
+    }
+
+    .gz-issued-btn.gz-issued-1 {
+        background: #0ea5e9;
+        color: #fff;
+        border-color: #0ea5e9;
+    }
+
+    .gz-issued-btn.gz-issued-2 {
+        background: #16a34a;
+        color: #fff;
+        border-color: #16a34a;
+    }
+
+    .gz-issued-btn:hover {
+        filter: brightness(1.1);
+    }
+
+    /* Ausstehende Blätter: Spalte ausgegraut, zählt nicht als fehlend */
+    #gz-grades-table .gz-ws-pending {
+        opacity: .5;
+    }
+
+    #gz-grades-table th.gz-ws-pending {
+        border-left: 2px dashed var(--text-muted);
+    }
+
+    #gz-grades-table .gz-ws-pending .gz-grade-select {
+        pointer-events: none;
+    }
+
+    [data-theme="light"] .gz-issued-btn.gz-issued-0 {
+        color: #6b7280;
+        border-color: #6b7280;
+    }
+
     .gz-ws-meta {
         font-size: 11px;
         line-height: 1.15;
@@ -1748,9 +1807,10 @@ select.grade-input option {
 
 #gz-grades-table .gz-grade-select {
     width: 100%;
-    padding: 3px 8px 3px 2px;
-    font-size: 14px;
-    border-radius: 6px;
+    padding: 10px 6px;
+    font-size: inherit;
+    font-weight: 600;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
     background: var(--bg-dark);
     color: var(--text-main);
