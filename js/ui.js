@@ -1868,31 +1868,6 @@ function renderGrading() {
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     const savedScrollTop = prevWrap ? prevWrap.scrollTop : 0;
-    // Anker merken: welche Zelle stand am linken Rand, und um wie viele Pixel?
-    // Gemessen wird durchgehend ueber getBoundingClientRect(), also in
-    // Bildschirmkoordinaten. Genau das ist wichtig: die festgepinnten
-    // Namens- und Fehlend-Zellen (position:fixed) liefern Werte, die nicht
-    // mit dem Scroll wandern, und wuerden einen Pixelwert verfälschen.
-    // Ohne Anker springt die Ansicht auf Tablets, weil dort die Spalten
-    // schmaler sind und sich die Tabellenbreite zwischen zwei Renderings
-    // aendert.
-    let savedAnchor = null;
-    if (prevWrap && savedScrollLeft > 0) {
-        const prevFirstRow = prevWrap.querySelector('tbody tr');
-        const prevCells = prevFirstRow ? prevFirstRow.children : null;
-        if (prevCells) {
-            const wrapRect = prevWrap.getBoundingClientRect();
-            for (let i = 0; i < prevCells.length; i++) {
-                const c = prevCells[i];
-                if (c.dataset.stuck) continue; // angepinnte Zellen nicht als Anker
-                const r = c.getBoundingClientRect();
-                if (r.width && r.right > wrapRect.left + 2) {
-                    savedAnchor = { idx: i, offset: r.left - wrapRect.left };
-                    break;
-                }
-            }
-        }
-    }
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
     const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
     const viewContainer = document.getElementById('view-container');
@@ -2013,27 +1988,7 @@ function renderGrading() {
         // noch der Wert der alten Tabelle, der gesetzte scrollLeft wird auf 0
         // begrenzt und die Tabelle springt nach links und dann wieder zurueck.
         if (!newWrap.scrollWidth) return false;
-
-        // Anker zuerst: er haelt die Ansicht auch dann, wenn sich die
-        // Tabellenbreite geaendert hat. Der noetige Versatz wird aus der
-        // aktuellen Geometrie berechnet und dann auf scrollLeft addiert -
-        // dadurch ist es egal, wie breit die Tabelle inzwischen ist.
-        let done = false;
-        if (savedAnchor) {
-            const wrapRect = newWrap.getBoundingClientRect();
-            const firstRow = newWrap.querySelector('tbody tr');
-            const cells = firstRow ? firstRow.children : null;
-            if (cells && cells[savedAnchor.idx] && !cells[savedAnchor.idx].dataset.stuck) {
-                const r = cells[savedAnchor.idx].getBoundingClientRect();
-                if (r.width) {
-                    const delta = r.left - (wrapRect.left + savedAnchor.offset);
-                    if (delta) newWrap.scrollLeft = newWrap.scrollLeft + delta;
-                    done = true;
-                }
-            }
-        }
-        // Rueckfall: Anker nicht vorhanden oder nicht anwendbar.
-        if (!done && savedScrollLeft && !newWrap.scrollLeft) newWrap.scrollLeft = savedScrollLeft;
+        if (savedScrollLeft) newWrap.scrollLeft = savedScrollLeft;
         if (savedScrollTop) newWrap.scrollTop = savedScrollTop;
         return true;
     }
@@ -5072,8 +5027,61 @@ window.setGZWorksheetGrade = function(classId, studentId, wsNr, value) {
     if (!all[studentId][wsNr]) all[studentId][wsNr] = {};
     all[studentId][wsNr].grade = value === '' ? '' : value;
     DB.saveWorksheetStatus(classId, all);
+    // Nur die betroffene Zeile im Bild nachrechnen. Ein kompletter Neuaufbau
+    // der Tabelle muss nach jeder Note Scrollposition, Fokus und die
+    // sticky-Spalten neu ausrichten - auf Tablets springt die Ansicht dabei
+    // sichtbar weg. Findet sich die Zeile nicht, bleibt der Neuaufbau.
+    if (updateGZGradeRow(classId, studentId)) return;
     renderGrading();
 };
+
+// Ø ÜB und Fehlend-Zaehler einer Zeile direkt im DOM aktualisieren.
+// Liefert false, wenn die Zeile nicht eindeutig gefunden wird.
+function updateGZGradeRow(classId, studentId) {
+    const table = document.getElementById('gz-grades-table');
+    if (!table) return false;
+    const rows = table.querySelectorAll('tbody tr');
+    if (!rows.length) return false;
+    const rowIdx = DB.getStudentsForClass(classId).findIndex(s => s.id === studentId);
+    if (rowIdx < 0 || !rows[rowIdx]) return false;
+    const row = rows[rowIdx];
+    const cells = row.children;
+    if (cells.length < 3) return false;
+    const selects = row.querySelectorAll('select.gz-grade-select');
+    if (!selects.length) return false;
+
+    // Die Selects der Zeile stehen in der Reihenfolge der Blaetter, die eine
+    // Nummer haben - genau so werden sie auch gerendert.
+    const worksheets = getGZPlannedWorksheets(classId);
+    let sum = 0, count = 0, missing = 0;
+    const missingList = [];
+    let selIdx = 0;
+    worksheets.forEach(w => {
+        if (w.noHw) return;
+        const sel = selects[selIdx++];
+        if (!sel) return;
+        sel.className = 'gz-grade-select' + (sel.value ? ' gz-grade-' + sel.value : '');
+        if (!w.counts) return;
+        // Gleiche Semantik wie renderGZGrades: nur eine leere Note zaehlt als
+        // fehlend. "ges" ist keine Note und weder fehlend noch im Mittelwert.
+        if (!sel.value) { missing++; missingList.push(w.nr); }
+        else {
+            const g = parseFloat(sel.value);
+            if (!isNaN(g)) { sum += g; count++; }
+        }
+    });
+    if (selIdx !== selects.length) return false; // Aufbau passt nicht zum Renderer
+
+    const avgCell = cells[cells.length - 2];
+    if (avgCell) avgCell.textContent = count > 0 ? (sum / count).toFixed(2) : '–';
+    const btn = cells[cells.length - 1].querySelector('button');
+    if (btn) {
+        btn.textContent = String(missing);
+        const listJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
+        btn.setAttribute('onclick', 'showMissingWorksheetsModal(\'' + classId + '\',\'' + studentId + '\',' + missing + ',\'' + listJson + '\')');
+    }
+    return true;
+}
 
 window.setGZAbsent = function(classId, studentId, wsNr, value) {
     captureUndo();
