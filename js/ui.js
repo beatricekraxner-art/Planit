@@ -1868,23 +1868,6 @@ function renderGrading() {
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     const savedScrollTop = prevWrap ? prevWrap.scrollTop : 0;
-    // Anker statt Pixelwert merken: welche Spalte stand am linken Rand?
-    // Ein Pixelwert allein springt, sobald sich eine Spaltenbreite aendert
-    // (z. B. durch einen anderen Wert im Fehlend-Feld).
-    let savedAnchor = null;
-    if (prevWrap && savedScrollLeft > 0) {
-        const prevFirstRow = prevWrap.querySelector('tbody tr');
-        if (prevFirstRow) {
-            const prevCells = prevFirstRow.children;
-            for (let i = 0; i < prevCells.length; i++) {
-                const c = prevCells[i];
-                if (c.offsetLeft + c.offsetWidth > prevWrap.scrollLeft) {
-                    savedAnchor = { idx: i, delta: c.offsetLeft - prevWrap.scrollLeft };
-                    break;
-                }
-            }
-        }
-    }
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
     const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
     const viewContainer = document.getElementById('view-container');
@@ -1994,39 +1977,28 @@ function renderGrading() {
     // Restore #view-container scroll (outer scrollable parent)
     if (viewContainer) viewContainer.scrollTop = savedViewScrollTop;
     // Restore scroll position for all tabs (prevents jumping back to the first row).
-    // A single requestAnimationFrame fires before the freshly rendered HTML is
-    // measured, so the scroll would be reset to 0 and the table would jump back
-    // to the top. One fallback setTimeout covers the case where the wrap is not
-    // ready in the first frame.
+    // Wichtig: das Layout wird vor dem Setzen erzwungen und der Wert noch
+    // einmal im naechsten Frame bestaetigt. Ein setTimeout(50) war als
+    // sichtbares Ruecken zu spaet - der Browser hatte die Position bis dahin
+    // schon neu justiert.
     function restoreWrapScroll() {
         const newWrap = document.querySelector('.hw-grid-wrap');
         if (!newWrap) return false;
-        // Erst das Layout erzwingen. Sonst ist scrollWidth noch der alte Wert,
-        // der gesetzte scrollLeft wird auf 0 begrenzt und die Tabelle springt
-        // erst nach links und dann wieder zurueck.
+        // Erst das Layout der neuen Tabelle erzwingen. Sonst ist scrollWidth
+        // noch der Wert der alten Tabelle, der gesetzte scrollLeft wird auf 0
+        // begrenzt und die Tabelle springt nach links und dann wieder zurueck.
         if (!newWrap.scrollWidth) return false;
-        let target = savedScrollLeft;
-        if (savedAnchor) {
-            const newFirstRow = newWrap.querySelector('tbody tr');
-            const newCells = newFirstRow ? newFirstRow.children : null;
-            if (newCells && newCells[savedAnchor.idx]) {
-                target = newCells[savedAnchor.idx].offsetLeft - savedAnchor.delta;
-            }
-        }
-        newWrap.scrollLeft = target;
+        if (savedScrollLeft) newWrap.scrollLeft = savedScrollLeft;
         if (savedScrollTop) newWrap.scrollTop = savedScrollTop;
-        return Math.abs(newWrap.scrollLeft - target) < 2;
+        return true;
     }
     if (hwScrollRestored) {
-        if (!restoreWrapScroll()) {
-            // Nachkorrekturen im naechsten Frame statt 50 ms spaeter: so fallen
-            // sie nicht als Ruecken auf.
-            let tries = 0;
-            const retry = function() {
-                if (!restoreWrapScroll() && ++tries < 4) requestAnimationFrame(retry);
-            };
-            requestAnimationFrame(retry);
-        }
+        restoreWrapScroll();
+        // Einmal im naechsten Frame bestaetigen: erst dann ist die neue
+        // Tabelle komplett durchgemessen, vorher kann der Wert begrenzt
+        // werden. Zwei Frames statt eines 50-ms-Timers - der Timer war als
+        // sichtbares Ruecken zu spaeat.
+        requestAnimationFrame(function() { requestAnimationFrame(restoreWrapScroll); });
     } else if (currentGradeTab === 'hw' || currentGradeTab === 'gz-grades') {
         // Auto-scroll to last column on first render of hw/gz-grades tabs
         setTimeout(() => {
@@ -2226,15 +2198,29 @@ window.toggleCollectionStudent = function(classId, collectionId, studentId) {
     if (!collection.completed) collection.completed = {};
     collection.completed[studentId] = !collection.completed[studentId];
     DB.saveClasses(classes);
-    var container = document.getElementById('grading-table-container');
-    if (container) {
-        var wrap = container.querySelector('.collection-wrap');
-        var scrollTop = wrap ? wrap.scrollTop : 0;
-        container.innerHTML = renderCollections(classId);
-        var newWrap = container.querySelector('.collection-wrap');
-        if (newWrap) newWrap.scrollTop = scrollTop;
-    }
+    rerenderCollectionWrap(classId);
 };
+
+// Checklisten werden nur teilweise neu aufgebaut, nicht ueber renderGrading().
+// Deshalb hier die Scrollposition selbst erhalten - inklusive Layout-Erzwingung,
+// sonst wird der Wert begrenzt und die Liste springt beim Abhaken.
+function rerenderCollectionWrap(classId) {
+    var container = document.getElementById('grading-table-container');
+    if (!container) return;
+    var wrap = container.querySelector('.collection-wrap');
+    var scrollTop = wrap ? wrap.scrollTop : 0;
+    var scrollLeft = wrap ? wrap.scrollLeft : 0;
+    container.innerHTML = renderCollections(classId);
+    var newWrap = container.querySelector('.collection-wrap');
+    if (!newWrap) return;
+    void newWrap.scrollWidth;
+    if (scrollLeft) newWrap.scrollLeft = scrollLeft;
+    if (scrollTop) newWrap.scrollTop = scrollTop;
+    requestAnimationFrame(function() {
+        if (scrollLeft) newWrap.scrollLeft = scrollLeft;
+        if (scrollTop) newWrap.scrollTop = scrollTop;
+    });
+}
 
 window.deleteCollection = function(classId, collectionId) {
     safeConfirm('Diese Checkliste wirklich löschen?').then(function(ok) {
@@ -2244,14 +2230,7 @@ window.deleteCollection = function(classId, collectionId) {
         if (!cls) return;
         cls.collections = cls.collections.filter(function(c) { return c.id !== collectionId; });
         DB.saveClasses(classes);
-        var container = document.getElementById('grading-table-container');
-        if (container) {
-            var wrap = container.querySelector('.collection-wrap');
-            var scrollTop = wrap ? wrap.scrollTop : 0;
-            container.innerHTML = renderCollections(classId);
-            var newWrap = container.querySelector('.collection-wrap');
-            if (newWrap) newWrap.scrollTop = scrollTop;
-        }
+        rerenderCollectionWrap(classId);
     });
 };
 
@@ -3085,16 +3064,12 @@ function renderHomeworkDetailed(classId, students, hws) {
 
 function toggleHwCorrected(classId, hwNr, val) {
     captureUndo();
-    const wrap = document.querySelector('.hw-grid-wrap');
-    const scrollLeft = wrap ? wrap.scrollLeft : 0;
     const obj = DB.loadHwCorrected(classId);
     if (val) obj[hwNr] = true; else delete obj[hwNr];
     DB.saveHwCorrected(classId, obj);
+    // Die Scrollposition regelt renderGrading(). Ein zusaetzliches Setzen
+    // hier waere eine zweite Korrektur und wuerde dazwischenfunken.
     renderGrading();
-    requestAnimationFrame(() => {
-        const w = document.querySelector('.hw-grid-wrap');
-        if (w) w.scrollLeft = scrollLeft;
-    });
 }
 
 function showMissingHwModal(classId, studentId) {
@@ -5747,14 +5722,12 @@ window.enableStickyPinning = function() {
             });
         }, { passive: true });
     }
-    // Sofort pinnen, noch vor dem Zeichnen. Nach einem Neuaufbau (jede
-    // Noteneingabe) stehen die Namens- und Fehlend-Spalte zuerst mit
-    // position:sticky und werden erst hier auf position:fixed mit
-    // Pixelkoordinaten umgestellt - genau dieses Nachspringen war das
-    // "kurz hin und her ruckeln". Der Lauf nach 100 ms bleibt als
-    // Absicherung, trifft dann aber dieselben Werte und faellt nicht auf.
-    if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
-    if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });
+    // Bewusst erst 100 ms nach dem Neuaufbau pinnen: updateStickyTh setzt
+    // feste Spaltenbreiten und steckt eine Spacer-Zeile ein. Vorher zu pinnen
+    // aendert die Tabellenbreite in dem Moment, in dem der Scrollwert gesetzt
+    // wird - der Browser begrenzt ihn dann auf 0 und die Tabelle springt nach
+    // links. renderGrading() setzt deshalb die Position zweimal: sofort und
+    // noch einmal im naechsten Frame, nach dem Pinnen.
     setTimeout(function() {
         if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
         if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });
