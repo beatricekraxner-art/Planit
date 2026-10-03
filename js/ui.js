@@ -1868,6 +1868,31 @@ function renderGrading() {
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     const savedScrollTop = prevWrap ? prevWrap.scrollTop : 0;
+    // Anker merken: welche Zelle stand am linken Rand, und um wie viele Pixel?
+    // Gemessen wird durchgehend ueber getBoundingClientRect(), also in
+    // Bildschirmkoordinaten. Genau das ist wichtig: die festgepinnten
+    // Namens- und Fehlend-Zellen (position:fixed) liefern Werte, die nicht
+    // mit dem Scroll wandern, und wuerden einen Pixelwert verfälschen.
+    // Ohne Anker springt die Ansicht auf Tablets, weil dort die Spalten
+    // schmaler sind und sich die Tabellenbreite zwischen zwei Renderings
+    // aendert.
+    let savedAnchor = null;
+    if (prevWrap && savedScrollLeft > 0) {
+        const prevFirstRow = prevWrap.querySelector('tbody tr');
+        const prevCells = prevFirstRow ? prevFirstRow.children : null;
+        if (prevCells) {
+            const wrapRect = prevWrap.getBoundingClientRect();
+            for (let i = 0; i < prevCells.length; i++) {
+                const c = prevCells[i];
+                if (c.dataset.stuck) continue; // angepinnte Zellen nicht als Anker
+                const r = c.getBoundingClientRect();
+                if (r.width && r.right > wrapRect.left + 2) {
+                    savedAnchor = { idx: i, offset: r.left - wrapRect.left };
+                    break;
+                }
+            }
+        }
+    }
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
     const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
     const viewContainer = document.getElementById('view-container');
@@ -1988,7 +2013,27 @@ function renderGrading() {
         // noch der Wert der alten Tabelle, der gesetzte scrollLeft wird auf 0
         // begrenzt und die Tabelle springt nach links und dann wieder zurueck.
         if (!newWrap.scrollWidth) return false;
-        if (savedScrollLeft) newWrap.scrollLeft = savedScrollLeft;
+
+        // Anker zuerst: er haelt die Ansicht auch dann, wenn sich die
+        // Tabellenbreite geaendert hat. Der noetige Versatz wird aus der
+        // aktuellen Geometrie berechnet und dann auf scrollLeft addiert -
+        // dadurch ist es egal, wie breit die Tabelle inzwischen ist.
+        let done = false;
+        if (savedAnchor) {
+            const wrapRect = newWrap.getBoundingClientRect();
+            const firstRow = newWrap.querySelector('tbody tr');
+            const cells = firstRow ? firstRow.children : null;
+            if (cells && cells[savedAnchor.idx] && !cells[savedAnchor.idx].dataset.stuck) {
+                const r = cells[savedAnchor.idx].getBoundingClientRect();
+                if (r.width) {
+                    const delta = r.left - (wrapRect.left + savedAnchor.offset);
+                    if (delta) newWrap.scrollLeft = newWrap.scrollLeft + delta;
+                    done = true;
+                }
+            }
+        }
+        // Rueckfall: Anker nicht vorhanden oder nicht anwendbar.
+        if (!done && savedScrollLeft && !newWrap.scrollLeft) newWrap.scrollLeft = savedScrollLeft;
         if (savedScrollTop) newWrap.scrollTop = savedScrollTop;
         return true;
     }
