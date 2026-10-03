@@ -1868,6 +1868,23 @@ function renderGrading() {
     const prevWrap = document.querySelector('.hw-grid-wrap');
     const savedScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
     const savedScrollTop = prevWrap ? prevWrap.scrollTop : 0;
+    // Anker statt Pixelwert merken: welche Spalte stand am linken Rand?
+    // Ein Pixelwert allein springt, sobald sich eine Spaltenbreite aendert
+    // (z. B. durch einen anderen Wert im Fehlend-Feld).
+    let savedAnchor = null;
+    if (prevWrap && savedScrollLeft > 0) {
+        const prevFirstRow = prevWrap.querySelector('tbody tr');
+        if (prevFirstRow) {
+            const prevCells = prevFirstRow.children;
+            for (let i = 0; i < prevCells.length; i++) {
+                const c = prevCells[i];
+                if (c.offsetLeft + c.offsetWidth > prevWrap.scrollLeft) {
+                    savedAnchor = { idx: i, delta: c.offsetLeft - prevWrap.scrollLeft };
+                    break;
+                }
+            }
+        }
+    }
     const prevPlanWrap = document.querySelector('.plan-table-wrap');
     const savedPlanScrollTop = prevPlanWrap ? prevPlanWrap.scrollTop : 0;
     const viewContainer = document.getElementById('view-container');
@@ -1984,13 +2001,32 @@ function renderGrading() {
     function restoreWrapScroll() {
         const newWrap = document.querySelector('.hw-grid-wrap');
         if (!newWrap) return false;
-        if (newWrap.scrollWidth <= 0 && newWrap.scrollHeight <= 0) return false;
-        if (savedScrollLeft) newWrap.scrollLeft = savedScrollLeft;
+        // Erst das Layout erzwingen. Sonst ist scrollWidth noch der alte Wert,
+        // der gesetzte scrollLeft wird auf 0 begrenzt und die Tabelle springt
+        // erst nach links und dann wieder zurueck.
+        if (!newWrap.scrollWidth) return false;
+        let target = savedScrollLeft;
+        if (savedAnchor) {
+            const newFirstRow = newWrap.querySelector('tbody tr');
+            const newCells = newFirstRow ? newFirstRow.children : null;
+            if (newCells && newCells[savedAnchor.idx]) {
+                target = newCells[savedAnchor.idx].offsetLeft - savedAnchor.delta;
+            }
+        }
+        newWrap.scrollLeft = target;
         if (savedScrollTop) newWrap.scrollTop = savedScrollTop;
-        return true;
+        return Math.abs(newWrap.scrollLeft - target) < 2;
     }
     if (hwScrollRestored) {
-        if (!restoreWrapScroll()) setTimeout(restoreWrapScroll, 50);
+        if (!restoreWrapScroll()) {
+            // Nachkorrekturen im naechsten Frame statt 50 ms spaeter: so fallen
+            // sie nicht als Ruecken auf.
+            let tries = 0;
+            const retry = function() {
+                if (!restoreWrapScroll() && ++tries < 4) requestAnimationFrame(retry);
+            };
+            requestAnimationFrame(retry);
+        }
     } else if (currentGradeTab === 'hw' || currentGradeTab === 'gz-grades') {
         // Auto-scroll to last column on first render of hw/gz-grades tabs
         setTimeout(() => {
@@ -5711,6 +5747,14 @@ window.enableStickyPinning = function() {
             });
         }, { passive: true });
     }
+    // Sofort pinnen, noch vor dem Zeichnen. Nach einem Neuaufbau (jede
+    // Noteneingabe) stehen die Namens- und Fehlend-Spalte zuerst mit
+    // position:sticky und werden erst hier auf position:fixed mit
+    // Pixelkoordinaten umgestellt - genau dieses Nachspringen war das
+    // "kurz hin und her ruckeln". Der Lauf nach 100 ms bleibt als
+    // Absicherung, trifft dann aber dieselben Werte und faellt nicht auf.
+    if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
+    if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });
     setTimeout(function() {
         if (window._stickyTheads) window._stickyTheads.forEach(function(th) { updateStickyTh(th); });
         if (window._stickyCells) window._stickyCells.forEach(function(c) { updateStickyCell(c); });

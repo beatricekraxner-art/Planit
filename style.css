@@ -3602,6 +3602,17 @@ select.grade-input.invalid {
 /* =============================================
    RESPONSIVE TABLES (Tablets & Mobile)
    ============================================= */
+/* Beim Noteneintrag wird die Tabelle komplett neu aufgebaut. Chrome/"Scroll
+   Anchoring" justiert danach die Scrollposition ein zweites Mal von allein -
+   das war das Ruecken ("kurz hin und her"). Die Position setzt jetzt
+   renderGrading() bewusst selbst, also Browser-Ankering abschalten. */
+.hw-grid-wrap,
+.overview-table-wrap,
+.collection-wrap,
+.plan-table-wrap {
+    overflow-anchor: none;
+}
+
 .plan-table-wrap {
     overflow-y: auto;
     max-height: calc(100vh - 200px);
