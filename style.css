@@ -3654,17 +3654,31 @@ select.grade-input.invalid {
         padding: 6px;
         font-size: 13px;
     }
+/* Tablet (769-1024 px): Diese Breite ist genau der Tablet-Fall, deshalb
+   duerfen die Bedienfelder hier NICHT kleiner werden als am Desktop.
+   Vorher stand hier width: 26 px / min-height: 24 px - dadurch waren die
+   Notenfelder am Tablet winzig, obwohl sie mit dem Finger bedient werden.
+   Groesse wie das Fehlend-Feld (.btn mit 10px Padding), nur mit
+   ausreichend Klickflaeche fuer den Finger. */
 #gz-grades-table .gz-grade-select {
-    width: 26px;
-    padding: 1px 2px;
-    font-size: 11px;
+    width: 100%;
+    min-width: 52px;
+    min-height: 38px;
+    padding: 10px 6px;
+    font-size: 14px;
 }
 #gz-grades-table .gz-toggle {
-    font-size: 11px;
-    min-width: 24px;
-    min-height: 24px;
-    padding: 2px 4px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 6px 8px;
+    font-size: 14px;
     width: auto;
+}
+#gz-grades-table .gz-issued-btn {
+    min-width: 86px;
+    min-height: 38px;
+    padding: 6px 10px;
+    font-size: 13px;
 }
 /* Bewusst KEIN background/color hier: diese Regel hat dieselbe Spezifitaet
    wie die Farbregeln (z. B. #gz-grades-table .gz-recv-x) und steht weiter
@@ -3713,7 +3727,8 @@ select.grade-input.invalid {
     }
     #gz-grades-table .gz-grade-select {
         min-height: 44px;
-        width: 44px;
+        width: 100%;
+        min-width: 52px;
         padding: 6px;
         font-size: 14px;
     }
@@ -3773,7 +3788,8 @@ select.grade-input.invalid {
     }
     #gz-grades-table .gz-grade-select {
         min-height: 44px;
-        width: 44px;
+        width: 100%;
+        min-width: 52px;
     }
     #gz-grades-table .gz-toggle {
         min-width: 44px;
