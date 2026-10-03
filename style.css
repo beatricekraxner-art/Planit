@@ -1861,6 +1861,24 @@ select.grade-input option {
     font-weight: 700;
 }
 
+/* Bei "nur Computer" setzen die gruenen Regeln weiter oben die Flaeche mit
+   !important - dadurch blieb bei Note 4 und 5 nur der Rahmen farbig und die
+   Flaeche gruen. Diese Regeln sind deshalb bewusst ebenfalls !important und
+   mit einer Klasse mehr spezifisch, damit die Notenfarbe gewinnt. */
+#gz-grades-table .gz-computer-only .gz-grade-select.gz-grade-4 {
+    background: #fbbf24 !important;
+    color: #1a1d24 !important;
+    border-color: #fbbf24 !important;
+    font-weight: 700 !important;
+}
+
+#gz-grades-table .gz-computer-only .gz-grade-select.gz-grade-5 {
+    background: #ef4444 !important;
+    color: #fff !important;
+    border-color: #ef4444 !important;
+    font-weight: 700 !important;
+}
+
 /* Farbcodierung der Notenauswahl (1=grün … 5=rot), analog zu den GZ-Selects.
    Die Regeln gelten allgemein für .grade-X (Selects und Noten-Spans in Übersichten). */
 .grade-1 {
