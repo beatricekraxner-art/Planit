@@ -5031,13 +5031,13 @@ window.setGZWorksheetGrade = function(classId, studentId, wsNr, value) {
     // der Tabelle muss nach jeder Note Scrollposition, Fokus und die
     // sticky-Spalten neu ausrichten - auf Tablets springt die Ansicht dabei
     // sichtbar weg. Findet sich die Zeile nicht, bleibt der Neuaufbau.
-    if (updateGZGradeRow(classId, studentId)) return;
+    if (updateGZGradeRow(classId, studentId, wsNr)) return;
     renderGrading();
 };
 
 // Ø ÜB und Fehlend-Zaehler einer Zeile direkt im DOM aktualisieren.
 // Liefert false, wenn die Zeile nicht eindeutig gefunden wird.
-function updateGZGradeRow(classId, studentId) {
+function updateGZGradeRow(classId, studentId, wsNr) {
     const table = document.getElementById('gz-grades-table');
     if (!table) return false;
     const rows = table.querySelectorAll('tbody tr');
@@ -5053,13 +5053,16 @@ function updateGZGradeRow(classId, studentId) {
     // Die Selects der Zeile stehen in der Reihenfolge der Blaetter, die eine
     // Nummer haben - genau so werden sie auch gerendert.
     const worksheets = getGZPlannedWorksheets(classId);
+    const targetKey = String(wsNr);
     let sum = 0, count = 0, missing = 0;
     const missingList = [];
     let selIdx = 0;
+    let targetSel = null;
     worksheets.forEach(w => {
         if (w.noHw) return;
         const sel = selects[selIdx++];
         if (!sel) return;
+        if (gzWorksheetKey(w) === targetKey) targetSel = sel;
         sel.className = 'gz-grade-select' + (sel.value ? ' gz-grade-' + sel.value : '');
         if (!w.counts) return;
         // Gleiche Semantik wie renderGZGrades: nur eine leere Note zaehlt als
@@ -5080,6 +5083,10 @@ function updateGZGradeRow(classId, studentId) {
         const listJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
         btn.setAttribute('onclick', 'showMissingWorksheetsModal(\'' + classId + '\',\'' + studentId + '\',' + missing + ',\'' + listJson + '\')');
     }
+    // Der Fokus soll auf dem gerade bewerteten Feld bleiben. Auf Tablets nimmt
+    // der native Auswahldialog ihn mit, danach steht er beim ersten Blatt.
+    // preventScroll, weil der sonst genau wieder dorthin scrollt.
+    if (targetSel && document.activeElement !== targetSel) targetSel.focus({ preventScroll: true });
     return true;
 }
 

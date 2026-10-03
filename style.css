@@ -1841,16 +1841,11 @@ select.grade-input option {
     color: #fff;
     font-weight: 700;
 }
-    padding: 3px 2px;
-    font-size: 14px;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-dark);
-    color: var(--text-main);
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-}
+
+/* Achtung: hier standen frueher Deklarationen ohne Selector ("padding: 3px 2px;
+   ... -moz-appearance: none; }"). Der Browser hat dadurch die Regel
+   #gz-grades-table .gz-grade-4 verschluckt - Note 4 blieb dadurch ungefaerbt.
+   Der vollstaendige Block steht weiter oben bei #gz-grades-table .gz-grade-select. */
 
 #gz-grades-table .gz-grade-4 {
     background: #fbbf24;
