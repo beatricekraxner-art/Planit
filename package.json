@@ -8,6 +8,8 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
+    "postbuild": "node tools/sync-data.js",
+    "sync-data": "node tools/sync-data.js",
     "build-win": "electron-builder --win"
   },
   "build": {
