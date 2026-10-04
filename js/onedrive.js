@@ -58,8 +58,31 @@
     const OD_SESSION_KEY = 'onedrive_session_account';
     const OD_TOKEN_KEY = 'onedrive_session_token';
 
-    function getClientId() { return (localStorage.getItem(CLIENT_KEY) || '').trim(); }
-    function getTenant() { return (localStorage.getItem(TENANT_KEY) || 'common').trim(); }
+    // In der Datendatei stehen Client-ID und Tenant mit Anfuehrungszeichen
+    // darin, also "common" statt common: exportAll legt den localStorage-Text
+    // ab, importAll laesst eine Zeichenkette unveraendert, die gueltiges JSON
+    // ist - und "common" ist gueltiges JSON. Jede Geraete-Runde legt eine
+    // weitere Ebene an. Aus common wurde so die Anmeldeadresse
+    //   https://login.microsoftonline.com/"common
+    // und MSAL meldet genau das mit "could not resolve endpoints". Beide Werte
+    // werden hier bereinigt und zurueckgeschrieben, damit sich der Fehler
+    // nicht beim naechsten Speichern wieder fortpflanzt.
+    function aufraeumen(key, standard) {
+        let roh = '';
+        try { roh = (localStorage.getItem(key) || '').trim(); } catch (e) { return standard; }
+        let wert = roh;
+        while (wert.length > 1 && wert.charAt(0) === '"' && wert.charAt(wert.length - 1) === '"') {
+            wert = wert.slice(1, -1).trim();
+        }
+        if (!wert) return standard;
+        if (wert !== roh) {
+            try { localStorage.setItem(key, wert); } catch (e) { }
+        }
+        return wert;
+    }
+
+    function getClientId() { return aufraeumen(CLIENT_KEY, ''); }
+    function getTenant() { return aufraeumen(TENANT_KEY, 'common'); }
     function getRedirectUri() {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             return 'http://localhost:9014/';
