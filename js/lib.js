@@ -859,7 +859,7 @@ let FilePersist = {
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
     },
     chooseFile: async function() {
-        alertModal('Automatische Speicherung ist aktiv. Die Datei planit-daten.json im Ordner "Plan-it" (OneDrive-Ordner oder Anwendungsordner) wird automatisch gespeichert und zwischen Geräten synchronisiert.');
+        alertModal('Automatische Speicherung ist aktiv. Die Datei planit-daten.json im OneDrive-Ordner Antigravity_Versuch wird automatisch gespeichert und zwischen Geräten synchronisiert.');
         return true;
     },
     bootstrap: async function() {
