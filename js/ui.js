@@ -6083,6 +6083,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (window.FilePersist && window.FilePersist.bootstrap) {
             await window.FilePersist.bootstrap();
         }
+        // Kann auf diesem Geraet ueberhaupt gespeichert werden? Auf Tablet und
+        // Handy laeuft kein lokaler Server, dort ist nur OneDrive moeglich.
+        // Faellt die App auf den lokalen Pfad zurueck, ohne dass es einen
+        // Speicher gibt, ist das bis jetzt nur am stillen Datenverlust zu
+        // merken gewesen - deshalb wird es hier ausgesprochen.
+        if (isWebApp && window.FilePersist && window.FilePersist.providerName !== 'onedrive') {
+            let speicherbar = false;
+            try {
+                const probe = await fetch('planit-daten.json', { method: 'GET', cache: 'no-store' });
+                const text = probe.ok ? (await probe.text()).trim() : '';
+                speicherbar = text.charAt(0) === '{';
+            } catch (e) { }
+            if (!speicherbar && window.SyncGuard) {
+                window.SyncGuard.notify('warn', 'Achtung: Auf diesem Gerät wird nichts gespeichert. ' +
+                    'Es gibt hier keinen lokalen Speicher und OneDrive ist nicht verbunden. ' +
+                    'In den OneDrive-Einstellungen auf "Mit OneDrive verbinden" tippen, sonst gehen ' +
+                    'Änderungen verloren, sobald du die App schließt.');
+            }
+        }
         if (typeof setODStatus === 'function') {
             setODStatus(window.OD && window.OD.isConnected && window.OD.isConnected());
         }

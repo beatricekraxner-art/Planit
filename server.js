@@ -1,33 +1,124 @@
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const url = require('url');
 
 const PORT = 9014;
 const appDir = path.join(__dirname);
-const dataDir = appDir;
+const DATENDATEI = 'planit-daten.json';
+const ORDNER_DATEI = 'planit-datenordner.json';
+// Reicht von dist\win-unpacked\resources\app bis zum Projektordner (3 Stufen).
+const MAX_OEFFNUNGEN = 6;
 
-// Migrate existing data file from old locations if needed
-const oldLocations = [
-    path.join(process.env.APPDATA || '', 'plan-it', 'planit-daten.json'),
-    path.join(appDir, 'planit-daten.json')
-];
-const newFile = path.join(dataDir, 'planit-daten.json');
-if (!fs.existsSync(newFile)) {
-    for (const oldFile of oldLocations) {
-        if (oldFile && fs.existsSync(oldFile)) {
-            try {
-                fs.copyFileSync(oldFile, newFile);
-                console.log('Migrated planit-daten.json from', oldFile, 'to', newFile);
-                break;
-            } catch (e) { console.error('Migration failed:', e); }
-        }
-    }
+// --- Wo die Daten liegen -----------------------------------------------------
+// Sie muessen im OneDrive-Ordner "Antigravity_Versuch" liegen. Das Tablet greift
+// ueber Microsoft Graph auf genau die Datei
+// OneDrive/Antigravity_Versuch/planit-daten.json zu, der PC liefert seine
+// Aenderungen ueber den OneDrive-Desktop-Client dorthin. Deshalb darf der
+// Ordner nicht an __dirname haengen: gestartet aus dem Build waere das
+// dist\win-unpacked\resources\app, die Daten laegen dann ausserhalb von
+// OneDrive und das Tablet saehe keine Aenderung mehr.
+function appDataDir() {
+    return process.env.APPDATA || os.homedir();
 }
+
+function ordnerAusDatei(datei) {
+    // "ordner" nennt den Datenordner. Fehlt das Feld oder existiert der Ordner
+    // nicht mehr, zaehlt der Ordner, in dem die Datei selbst liegt.
+    try {
+        const obj = JSON.parse(fs.readFileSync(datei, 'utf8'));
+        if (obj && obj.ordner && fs.existsSync(obj.ordner)) return obj.ordner;
+    } catch (e) { }
+    const eigener = path.dirname(datei);
+    return fs.existsSync(eigener) ? eigener : null;
+}
+
+function mitKennzeichnung(dir) {
+    const datei = path.join(dir, ORDNER_DATEI);
+    return fs.existsSync(datei) ? ordnerAusDatei(datei) : null;
+}
+
+function ordnerMerken(dataDir) {
+    // Ohne diese Notiz findet der portable Start aus dem TEMP-Ordner den
+    // Projektordner nicht, weil der TEMP-Ordner keine Kennzeichnung hat.
+    const ziel = path.join(appDataDir(), 'Plan-it', ORDNER_DATEI);
+    const inhalt = JSON.stringify({ ordner: dataDir }, null, 2) + '\n';
+    try {
+        if (fs.existsSync(ziel) && fs.readFileSync(ziel, 'utf8') === inhalt) return;
+        fs.mkdirSync(path.dirname(ziel), { recursive: true });
+        fs.writeFileSync(ziel, inhalt, 'utf8');
+    } catch (e) { }
+}
+
+function datenOrdner() {
+    if (process.env.PLANIT_DATA_DIR && fs.existsSync(process.env.PLANIT_DATA_DIR)) {
+        return process.env.PLANIT_DATA_DIR;
+    }
+    // Neben der App liegende Kennzeichnung: bewusste Handeingabe, wird nicht
+    // gemerkt, damit sie nur fuer diesen Start gilt.
+    const direkt = mitKennzeichnung(appDir);
+    if (direkt) return direkt;
+    // Von resources\app aus nach oben bis zum Projektordner.
+    let dir = appDir;
+    for (let i = 0; i < MAX_OEFFNUNGEN; i++) {
+        const eltern = path.dirname(dir);
+        if (eltern === dir) break;
+        dir = eltern;
+        const gefunden = mitKennzeichnung(dir);
+        if (gefunden) { ordnerMerken(gefunden); return gefunden; }
+    }
+    const gemerkt = ordnerAusDatei(path.join(appDataDir(), 'Plan-it', ORDNER_DATEI));
+    if (gemerkt) return gemerkt;
+    // Zuletzt der OneDrive-Ordner selbst - dieselbe Adresse, die auch
+    // js/onedrive.js fuer das Tablet benutzt.
+    const oneDrive = [process.env.OneDrive, process.env.OneDriveCommercial, process.env.OneDriveConsumer]
+        .filter(Boolean)
+        .map((p) => path.join(p, 'Antigravity_Versuch'))
+        .find((p) => fs.existsSync(p));
+    if (oneDrive) { ordnerMerken(oneDrive); return oneDrive; }
+    return appDir;
+}
+
+const dataDir = datenOrdner();
 
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
+
+// Alte Ablageorte werden nur gelesen, nie wieder beschrieben: bis September
+// 2026 lag die Datei in %APPDATA%\Plan-it, mit dem Build daneben der App. Beide
+// Orte sind fuer PC und Tablet nicht erreichbar.
+function ausAltemOrdnerUebernehmen() {
+    const ziel = path.join(dataDir, DATENDATEI);
+    const alt = [
+        path.join(appDir, DATENDATEI),
+        path.join(appDataDir(), 'Plan-it', DATENDATEI)
+    ];
+    for (const datei of alt) {
+        if (path.resolve(datei) === path.resolve(ziel) || !fs.existsSync(datei)) continue;
+        try {
+            const altZeit = fs.statSync(datei).mtimeMs;
+            const zielZeit = fs.existsSync(ziel) ? fs.statSync(ziel).mtimeMs : 0;
+            if (altZeit <= zielZeit) continue;
+            if (fs.existsSync(ziel)) {
+                // Vor dem Ersetzen eine Kopie des bisherigen Stands. Der
+                // Anwendungsordner wird beim naechsten Build geloescht, eine
+                // Sicherung in %APPDATA% nicht.
+                const sicherung = path.join(appDataDir(), 'Plan-it', 'backups',
+                    'planit-stand-vor-dem-ordnerwechsel-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json');
+                fs.mkdirSync(path.dirname(sicherung), { recursive: true });
+                fs.copyFileSync(ziel, sicherung);
+                console.log('Bisheriger Stand gesichert: ' + sicherung);
+            }
+            fs.copyFileSync(datei, ziel);
+            console.log('Neueren Stand aus ' + datei + ' in den Datenordner uebernommen.');
+            return;
+        } catch (e) { console.error('Uebernahme fehlgeschlagen:', e); }
+    }
+}
+
+ausAltemOrdnerUebernehmen();
 
 const mime = {
     '.html': 'text/html; charset=utf-8',

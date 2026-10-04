@@ -57,7 +57,14 @@ function isSessionKey(k) {
     return !!k && (
         k.charAt(0) === '_' ||
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(k) ||
-        k.indexOf('onedrive_session_token') === 0 ||
+        // Der Anmelde-Cache von MSAL (msal.token.keys..., msal.account.keys) und
+        // das gemerkte Konto gehoeren ausschliesslich zu diesem Geraet. Sie sind
+        // nicht durch /^_/ oder die UUID am Anfang abgedeckt, wurden also mit in
+        // die gemeinsame Datei geschrieben. Beim Abruf auf dem Tablet haben sie
+        // dort die eigene Anmeldung ueberschrieben - es liess sich kein Token
+        // mehr holen, und die App hat danach stillschweigend nichts gespeichert.
+        k.indexOf('msal.') === 0 ||
+        k.indexOf('onedrive_session_') === 0 ||
         k.indexOf('server-telemetry-') === 0
     );
 }

@@ -14,6 +14,10 @@
 
     let msal = null;
     let _loginPromise = null;
+    // Letzter Fehler beim stillen Tokenabruf. Solange er gesetzt ist, sieht die
+    // App verbunden aus, kann aber nichts laden und nichts speichern.
+    let _tokenFehler = null;
+    let _letzteMeldung = 0;
 
     function saveSession(account, accessToken) {
         try {
@@ -87,13 +91,37 @@
         try {
             ensureMsal();
             const account = msal.getAllAccounts()[0];
-            if (!account) return null;
+            if (!account) { _tokenFehler = null; return null; }
             const res = await msal.acquireTokenSilent({ scopes: SCOPES, account: account });
+            _tokenFehler = null;
             return res.accessToken;
         } catch (e) {
             console.error('getTokenSilent failed', e);
+            _tokenFehler = (e && (e.errorCode || e.message)) || 'Token nicht abrufbar';
             return null;
         }
+    }
+
+    // Einmal sichtbar melden, nicht bei jedem 30-Sekunden-Speicherversuch.
+    function meldeKeinSpeichern(grund) {
+        const jetzt = Date.now();
+        if (jetzt - _letzteMeldung < 120000) return;
+        _letzteMeldung = jetzt;
+        const text = 'OneDrive speichert gerade nicht (' + grund + '). Deine Änderungen bleiben nur ' +
+            'in diesem Gerät und gehen sonst verloren. In den OneDrive-Einstellungen auf ' +
+            '"Mit OneDrive verbinden" tippen.';
+        console.error(text);
+        if (window.SyncGuard && window.SyncGuard.notify) window.SyncGuard.notify('warn', text);
+        window.dispatchEvent(new CustomEvent('od-save-error', { detail: 'OneDrive: ' + grund }));
+        try { renderODStatus(); } catch (e) { }
+    }
+
+    // Konto vorhanden, aber kein Token zu bekommen. Genau dieser Zustand ist
+    // lange unbemerkt geblieben: isConnected() sah ja nach "verbunden" aus.
+    function verbindungsProblem() {
+        if (getClientId() && OneDrivePersist.isConnected() && _tokenFehler) return _tokenFehler;
+        if (!getClientId()) return 'keine Client-ID konfiguriert';
+        return null;
     }
 
     async function ensureValidToken() {
@@ -155,7 +183,11 @@
                                     console.log('OneDrive bootstrap: aktuelle Daten vom Server übernommen (Versuch ' + attempt + ').');
                                 }
                             }
+                        } else {
+                            meldeKeinSpeichern(_tokenFehler || 'kein Token');
                         }
+                    } else {
+                        meldeKeinSpeichern('nicht angemeldet');
                     }
                     await this._acquireLock();
                     this.startAutoSave();
@@ -231,11 +263,13 @@
             try {
                 if (!this.isConnected()) {
                     console.error('OneDrive saveToFile: not connected');
+                    meldeKeinSpeichern('nicht angemeldet');
                     return;
                 }
                 const token = await getTokenSilent();
                 if (!token) {
                     console.error('OneDrive saveToFile: no token');
+                    meldeKeinSpeichern(_tokenFehler || 'kein Token');
                     return;
                 }
                 const remoteText = await this._download(token);
@@ -348,10 +382,13 @@
         const el = document.getElementById('od-status');
         if (!el) return;
         const connected = OneDrivePersist.isConnected();
-        el.className = 'sync-status ' + (connected ? 'od-connected' : 'od-disconnected');
-        el.textContent = connected ? 'OneDrive: verbunden' : 'OneDrive: nicht verbunden';
+        const problem = verbindungsProblem();
+        el.className = 'sync-status ' + (connected && !problem ? 'od-connected' : 'od-disconnected');
+        el.textContent = !connected ? 'OneDrive: nicht verbunden'
+            : (problem ? 'OneDrive: Anmeldung erneuern (' + problem + ')'
+                : 'OneDrive: verbunden');
         const btn = document.getElementById('od-connect-btn');
-        if (btn) btn.textContent = connected ? 'OneDrive: verbunden' : 'Mit OneDrive verbinden';
+        if (btn) btn.textContent = (connected && !problem) ? 'OneDrive: verbunden' : 'Mit OneDrive verbinden';
     }
 
     function renderODConfig() {
@@ -371,6 +408,7 @@
         },
         getClientId: getClientId,
         getTenant: getTenant,
+        verbindungsProblem: verbindungsProblem,
         renderStatus: renderODStatus,
         async init() {
             try {
@@ -420,6 +458,7 @@
                 out.push('MSAL Fehler: ' + e.message);
             }
             out.push('OneDrive verbunden: ' + OneDrivePersist.isConnected());
+            out.push('Problem: ' + (verbindungsProblem() || 'keines'));
             out.push('PENDING_KEY: ' + localStorage.getItem(PENDING_KEY));
             out.push('========================');
             console.log(out.join('\n'));

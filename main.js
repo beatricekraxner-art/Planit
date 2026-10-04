@@ -416,8 +416,12 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
     if (mainWindow) {
-        try {
-            await mainWindow.webContents.executeJavaScript('window.FilePersist && window.FilePersist.saveToFile ? FilePersist.saveToFile() : Promise.resolve()');
+try {
+            // Beim Beenden ueber den aktiven Anbieter sichern (OneDrive oder lokal),
+            // damit die letzte Aenderung nicht im Abstand von 100 ms verloren geht.
+            await mainWindow.webContents.executeJavaScript(
+                'window.appSaveNow ? window.appSaveNow() : (window.FilePersist && window.FilePersist.saveToFile ? window.FilePersist.saveToFile() : Promise.resolve())'
+            );
         } catch (e) {}
     }
     if (localServer) {
