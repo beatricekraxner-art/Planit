@@ -4982,11 +4982,11 @@ function renderGZGrades(classId) {
                     '</select></td>';
             }
             // 'k' erscheint nur, wenn der Button aktiv ist (gelb) - wie beim 'x'.
-            html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">' + (absent ? 'k' : '') + '</button></td>';
+            html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" data-gz-act="k" data-gz-ws="' + escapeHtml(k) + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(this,\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + (absent ? 'k' : '') + '</button></td>';
             if (!w.noHw) {
-                html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
+                html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" data-gz-act="recv" data-gz-ws="' + escapeHtml(k) + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(this,\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
             }
-            html += '<td class="gz-ws-last ' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
+            html += '<td class="gz-ws-last ' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" data-gz-act="verg" data-gz-date="' + escapeHtml(w.date || '') + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(this,\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
         });
         const avg = count > 0 ? (sum / count).toFixed(2) : '–';
         const missingJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
@@ -5090,17 +5090,67 @@ function updateGZGradeRow(classId, studentId, wsNr) {
     return true;
 }
 
-window.setGZAbsent = function(classId, studentId, wsNr, value) {
+// Knöpfe k / Abg / Verg. derselben Zeile im Bild nachziehen - gleiches
+// Vorgehen wie bei der Note. Ein kompletter Neuaufbau der Tabelle setzt
+// Scrollposition und sticky-Spalten zurueck; sichtbar springt die Ansicht
+// dabei nach links und wieder zurueck. Die Buttons tragen data-gz-act und
+// stehen ueber data-gz-ws bzw. data-gz-date mit den Daten in Verbindung.
+function updateGZToggles(classId, studentId, keepFocus) {
+    const table = document.getElementById('gz-grades-table');
+    if (!table) return false;
+    const rows = table.querySelectorAll('tbody tr');
+    if (!rows.length) return false;
+    const rowIdx = DB.getStudentsForClass(classId).findIndex(s => s.id === studentId);
+    if (rowIdx < 0 || !rows[rowIdx]) return false;
+    const row = rows[rowIdx];
+    const status = (DB.loadWorksheetStatus(classId) || {})[studentId] || {};
+    const forgot = DB.loadForgotMaterial(classId) || {};
+
+    row.querySelectorAll('[data-gz-act]').forEach(function(btn) {
+        const act = btn.getAttribute('data-gz-act');
+        if (act === 'verg') {
+            const d = forgot[btn.getAttribute('data-gz-date')];
+            const inMat = !!(d && d.material && d.material.indexOf(studentId) !== -1);
+            const inLap = !!(d && d.laptop && d.laptop.indexOf(studentId) !== -1);
+            btn.textContent = inMat ? 'Mat' : (inLap ? 'Lap' : '');
+            btn.className = 'gz-toggle ' + ((inMat || inLap) ? 'gz-mat active' : '');
+            return;
+        }
+        const cell = status[btn.getAttribute('data-gz-ws')] || {};
+        if (act === 'k') {
+            const absent = !!cell.absent;
+            btn.textContent = absent ? 'k' : '';
+            btn.className = 'gz-toggle gz-k' + (absent ? ' active' : '');
+        } else {
+            const received = cell.received || '';
+            btn.textContent = received === 'x' ? 'x' : (received === 'ng' ? 'ng' : '');
+            btn.className = 'gz-toggle ' + (received === 'x' ? 'gz-recv-x' : (received === 'ng' ? 'gz-recv-ng' : ''));
+        }
+    });
+    // Der Knopf soll markiert bleiben, damit direkt der nächste gesetzt werden
+    // kann. preventScroll, weil focus() sonst wieder dorthin scrollt.
+    if (keepFocus && document.activeElement !== keepFocus) {
+        try { keepFocus.focus({ preventScroll: true }); } catch (e) { }
+    }
+    return true;
+}
+
+window.setGZAbsent = function(btn, classId, studentId, wsNr) {
     captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
     if (!all[studentId][wsNr]) all[studentId][wsNr] = {};
-    all[studentId][wsNr].absent = value ? true : false;
+    // Den naechsten Zustand aus den Daten lesen, nicht aus dem gerenderten
+    // Aufruf: Nach dem Klicken wird nicht neu gerendert, ein im HTML
+    // mitgegebener Wert bliebe dort stehen und der Knopf liesse sich nicht
+    // mehr ausschalten.
+    all[studentId][wsNr].absent = !all[studentId][wsNr].absent;
     DB.saveWorksheetStatus(classId, all);
+    if (updateGZToggles(classId, studentId, btn)) return;
     renderGrading();
 };
 
-window.setGZReceived = function(classId, studentId, wsNr) {
+window.setGZReceived = function(btn, classId, studentId, wsNr) {
     captureUndo();
     const all = DB.loadWorksheetStatus(classId);
     if (!all[studentId]) all[studentId] = {};
@@ -5108,6 +5158,7 @@ window.setGZReceived = function(classId, studentId, wsNr) {
     const cur = all[studentId][wsNr].received || '';
     all[studentId][wsNr].received = cur === '' ? 'x' : (cur === 'x' ? 'ng' : '');
     DB.saveWorksheetStatus(classId, all);
+    if (updateGZToggles(classId, studentId, btn)) return;
     renderGrading();
 };
 
@@ -5380,7 +5431,7 @@ window.toggleGZForgotten = function(classId, date, studentId, kind, checked) {
     renderGrading();
 };
 
-window.cycleGZForgotten = function(classId, date, studentId) {
+window.cycleGZForgotten = function(btn, classId, date, studentId) {
     captureUndo();
     const data = DB.loadForgotMaterial(classId);
     if (!data[date]) data[date] = { material: [], laptop: [] };
@@ -5398,6 +5449,7 @@ window.cycleGZForgotten = function(classId, date, studentId) {
     data[date].material = mat;
     data[date].laptop = lap;
     DB.saveForgotMaterial(classId, data);
+    if (updateGZToggles(classId, studentId, btn)) return;
     renderGrading();
 };
 
