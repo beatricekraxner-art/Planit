@@ -569,6 +569,7 @@ select option:disabled {
     flex: 1;
     padding: 40px;
     overflow-y: auto;
+    overflow-x: visible;
 }
 
 #view-container::-webkit-scrollbar {
@@ -2241,7 +2242,15 @@ th.exam-sticky-left.name-th,
     overflow-y: auto;
     max-height: calc(100vh - 140px);
     position: relative;
-    padding-bottom: calc(100vh - 140px);
+    padding-bottom: 0;
+}
+.hw-grid-wrap::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+.hw-grid-wrap::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
 }
 .overview-table-wrap {
     overflow-x: auto;
@@ -2316,21 +2325,20 @@ th.exam-sticky-left.name-th,
     accent-color: var(--secondary);
 }
 
-/* Detailed homework matrix */
-.hw-grid-wrap {
-    overflow-x: auto;
-    overflow-y: auto;
-    max-height: calc(100vh - 140px);
-    padding-bottom: calc(100vh - 140px);
+
+/* HW detail table: thead not sticky, only sticky left/right cells are sticky */
+.hw-detail-table thead {
+    position: static !important;
+    z-index: auto !important;
 }
-.hw-grid-wrap thead {
-    position: sticky;
-    top: 0;
-    z-index: 11;
-    background: var(--bg-panel);
+.hw-detail-table thead th {
+    position: static !important;
 }
-.overview-table-wrap {
-    overflow-x: auto;
+.hw-detail-table thead .hw-sticky-left,
+.hw-detail-table thead .hw-sticky-right,
+.hw-detail-table thead .hw-sticky-right-last {
+    position: sticky !important;
+    background: var(--bg-panel) !important;
 }
 
 .hw-detail-table {
@@ -3713,6 +3721,7 @@ select.grade-input.invalid {
     -webkit-appearance: none;
     appearance: none;
 }
+
     .hw-grid-wrap,
     .overview-table-wrap,
     .collection-wrap {
