@@ -2902,8 +2902,7 @@ function computeHwGrade(classId, studentId, hws) {
 
 let hwViewMode = 'detailed';
 
-function renderHomework(classId) {
-    const students = DB.getStudentsForClass(classId);
+function getHwHws(classId) {
     const plan = sortedPlan(classId);
     const isDG = isDGClass(classId);
     const globalSettings = DB.loadGlobalSettings();
@@ -2925,6 +2924,14 @@ function renderHomework(classId) {
         seen.add(key);
         return true;
     });
+    return hws;
+}
+
+function renderHomework(classId) {
+    const students = DB.getStudentsForClass(classId);
+    const plan = sortedPlan(classId);
+    const isDG = isDGClass(classId);
+    const hws = getHwHws(classId);
     const status = DB.loadHwStatus(classId);
     let html = '<div class="view-header"><div><h2>Hausübungen</h2><p class="subtitle">Kompakt: nur Note/Fehlend. Detail: Matrix mit „korrigiert/abgesammelt" pro HÜ – leere Zelle bei korrigierter HÜ = automatisch erbracht.</p></div>' +
         '<div class="grading-controls">' +
@@ -3284,16 +3291,55 @@ function openHwListModal(classId) {
     showModal(html);
 }
 
+function updateHwStatusRow(classId, studentId) {
+    const table = document.querySelector('.hw-detail-table');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    const students = DB.getStudentsForClass(classId);
+    const rowIdx = students.findIndex(s => s.id === studentId);
+    if (rowIdx < 0 || !rows[rowIdx]) return;
+    const row = rows[rowIdx];
+    const hws = getHwHws(classId);
+    const calc = computeHwGrade(classId, studentId, hws);
+
+    if (!isDGClass(classId)) {
+        const cell = DB.loadHwStatus(classId)[studentId] || {};
+        hws.forEach((h, i) => {
+            const select = row.querySelectorAll('select.hw-status')[i];
+            if (select) {
+                select.className = 'hw-status' + (cell[h.nr] ? ' hw-status-' + cell[h.nr].status : '');
+            }
+        });
+    }
+
+    const missingCell = row.querySelector('td.hw-sticky-right');
+    if (missingCell) {
+        const btn = missingCell.querySelector('button');
+        if (btn) {
+            btn.textContent = calc.missing != null ? calc.missing : '–';
+        }
+        missingCell.className = 'hw-sticky-right ' + gradeClass(calc.missing) + ' grade-cell';
+    }
+
+    const gradeCell = row.querySelector('td.hw-sticky-right-last');
+    if (gradeCell) {
+        gradeCell.textContent = calc.grade != null ? calc.grade : '–';
+        gradeCell.className = 'hw-sticky-right-last ' + gradeClass(calc.grade) + ' grade-cell';
+    }
+}
+
 function setHwStatus(classId, studentId, hwNr, status) {
     captureUndo();
     DB.setHwStatus(classId, studentId, hwNr, status, undefined);
-    renderGrading();
+    updateHwStatusRow(classId, studentId);
 }
 
 function setHwCollected(classId, studentId, hwNr, collected) {
     captureUndo();
     DB.setHwStatus(classId, studentId, hwNr, undefined, collected);
-    renderGrading();
+    updateHwStatusRow(classId, studentId);
 }
 
 function setExamExamplePoints(classId, studentId, examId, exampleId, points, inputEl) {
