@@ -3726,7 +3726,6 @@ select.grade-input.invalid {
     .overview-table-wrap,
     .collection-wrap {
         -webkit-overflow-scrolling: touch;
-        scroll-behavior: smooth;
     }
     .hw-grid-wrap::-webkit-scrollbar,
     .overview-table-wrap::-webkit-scrollbar,
@@ -3775,7 +3774,6 @@ select.grade-input.invalid {
     .overview-table-wrap,
     .collection-wrap {
         -webkit-overflow-scrolling: touch;
-        scroll-behavior: smooth;
         border-radius: 8px;
     }
     .hw-sticky-left,
