@@ -2326,19 +2326,31 @@ th.exam-sticky-left.name-th,
 }
 
 
-/* HW detail table: thead not sticky, only sticky left/right cells are sticky */
+/* HW detail table: thead sticky at top, left/right cells also sticky */
 .hw-detail-table thead {
-    position: static !important;
-    z-index: auto !important;
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 15 !important;
+    background: var(--bg-panel) !important;
 }
 .hw-detail-table thead th {
-    position: static !important;
-}
-.hw-detail-table thead .hw-sticky-left,
-.hw-detail-table thead .hw-sticky-right,
-.hw-detail-table thead .hw-sticky-right-last {
+    position: -webkit-sticky !important;
     position: sticky !important;
+    top: 0 !important;
     background: var(--bg-panel) !important;
+}
+.hw-detail-table thead .hw-sticky-left {
+    left: 0 !important;
+    z-index: 20 !important;
+}
+.hw-detail-table thead .hw-sticky-right {
+    right: 70px !important;
+    z-index: 10 !important;
+}
+.hw-detail-table thead .hw-sticky-right-last {
+    right: 0 !important;
+    z-index: 10 !important;
 }
 
 .hw-detail-table {
