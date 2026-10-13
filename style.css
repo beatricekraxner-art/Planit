@@ -322,6 +322,7 @@ select option:disabled {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    margin-top: 80px; /* Space for fixed topbar */
 }
 
 .topbar {
@@ -332,6 +333,12 @@ select option:disabled {
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border-color);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--bg-panel);
 }
 
 .sidebar-toggle {
@@ -568,8 +575,7 @@ select option:disabled {
 #view-container {
     flex: 1;
     padding: 40px;
-    overflow-y: auto;
-    overflow-x: visible;
+    overflow: hidden; /* Tables handle their own scrolling */
 }
 
 #view-container::-webkit-scrollbar {
@@ -2240,9 +2246,9 @@ th.exam-sticky-left.name-th,
 .hw-grid-wrap {
     overflow-x: auto;
     overflow-y: auto;
-    max-height: calc(100vh - 140px);
+    max-height: calc(100vh - 220px); /* 80px topbar + 40px padding + buffer */
     position: relative;
-    padding-bottom: 0;
+    padding-bottom: 160px; /* Extra space so last row can scroll up to sticky header */
 }
 .hw-grid-wrap::-webkit-scrollbar {
     height: 6px;
@@ -2254,7 +2260,10 @@ th.exam-sticky-left.name-th,
 }
 .overview-table-wrap {
     overflow-x: auto;
+    overflow-y: auto;
     position: relative;
+    max-height: calc(100vh - 220px);
+    padding-bottom: 160px; /* Extra space so last row can scroll up to sticky header */
 }
 
 .hw-grid-wrap::after {
@@ -3648,11 +3657,12 @@ select.grade-input.invalid {
 
 .plan-table-wrap {
     overflow-y: auto;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 280px); /* 80px topbar + 40px padding + view-header + buffer */
     background: var(--bg-panel);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     width: 100%;
+    padding-bottom: 160px; /* Extra space so last row can scroll up to sticky header */
 }
 .plan-search-input {
     width: 180px;
