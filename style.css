@@ -85,8 +85,8 @@
     }
 
 #gz-grades-table .gz-computer-only {
-        background: rgba(22, 163, 74, 0.18) !important;
-        color: #065f46 !important;
+        background: #dcfce7 !important;
+        color: #052e16 !important;
     }
 #gz-grades-table th.gz-computer-only,
 #gz-grades-table th.gz-ws-sep.gz-computer-only,
@@ -94,8 +94,8 @@
 #gz-grades-table th[class*="gz-computer-only"],
 #gz-grades-table thead th.gz-computer-only,
 #gz-grades-table thead tr th.gz-computer-only {
-        background: rgba(22, 163, 74, 0.18) !important;
-        color: #065f46 !important;
+        background: #dcfce7 !important;
+        color: #052e16 !important;
     }
 
 #gz-grades-table .gz-computer-only .gz-grade-select {
@@ -111,6 +111,10 @@
         border-left: none !important;
         border-right: none !important;
         box-shadow: none !important;
+    }
+    /* Aber rechte Trennlinie bei letzten Zellen eines Blatts (gz-ws-last) beibehalten */
+    #gz-grades-table .gz-computer-only.gz-ws-last {
+        border-right: 3px solid #94a3b8 !important;
     }
     /* Auch Nachbarzellen rechts davon keine linke Grenze */
     #gz-grades-table .gz-computer-only + td,
@@ -321,7 +325,7 @@ select option:disabled {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible; /* Allow scrollbars from children to be visible */
     margin-top: 80px; /* Space for fixed topbar */
 }
 
@@ -570,12 +574,19 @@ select option:disabled {
 
 #grading-table-container {
     transition: opacity 0.15s ease;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 #view-container {
     flex: 1;
+    min-height: 0;
     padding: 40px;
-    overflow: hidden; /* Tables handle their own scrolling */
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
 }
 
 #view-container::-webkit-scrollbar {
@@ -593,7 +604,10 @@ select option:disabled {
 }
 
 .view.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
 }
 
 @keyframes fadeIn {
@@ -927,6 +941,16 @@ select option:disabled {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 12px;
+}
+
+/* =============================================
+    DASHBOARD CALENDAR WRAPPER
+    ============================================= */
+.calendar-wrapper {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 40px;
 }
 
 /* =============================================
@@ -1415,59 +1439,134 @@ select.grade-input option {
     color: var(--text-main);
 }
 
-#gz-grades-table {
-    table-layout: auto;
-    min-width: max-content;
-    border-collapse: separate;
-    border-spacing: 0;
-}
+/* Prevent general grading-table sticky from creating transparent stripe */
+    #gz-grades-table thead th {
+        position: static;
+    }
 
 #gz-grades-table th,
 #gz-grades-table td {
     border: none !important;
     text-align: center;
     padding: 4px 6px;
+    background: var(--bg-panel) !important;
 }
 
 #gz-grades-table .hw-sticky-left,
     #gz-grades-table .hw-sticky-right,
-    #gz-grades-table .hw-sticky-right-last,
-    #gz-grades-table th.hw-sticky-left,
-    #gz-grades-table th.hw-sticky-right,
-    #gz-grades-table th.hw-sticky-right-last,
-    #gz-grades-table thead th[rowspan] {
+    #gz-grades-table .hw-sticky-right-last {
         position: -webkit-sticky;
         position: sticky;
         top: 0;
         background: var(--bg-panel) !important;
-        z-index: 10;
+        z-index: 20;
     }
-
-    #gz-grades-table .hw-sticky-left {
-        left: 0;
-        z-index: 10;
+    #gz-grades-table th.hw-sticky-left,
+    #gz-grades-table th.hw-sticky-right,
+    #gz-grades-table th.hw-sticky-right-last,
+    #gz-grades-table thead th[rowspan],
+    #gz-grades-table thead tr:first-child th {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0;
+        background: var(--bg-panel) !important;
+        z-index: 30;
     }
-
+    /* First column header - opaque background + highest z-index */
+    #gz-grades-table thead th.hw-sticky-left,
     #gz-grades-table thead th[rowspan].hw-sticky-left {
+        position: -webkit-sticky;
+        position: sticky;
         left: 0;
-        z-index: 11;
+        z-index: 2001;
+        background: var(--bg-panel) !important;
     }
-    #gz-grades-table thead th[rowspan].hw-sticky-right-last {
+/* =============================================
+   GZ GRADES TABLE - STICKY COLUMNS & HEADERS
+   z-index hierarchy:
+   2001 - First column header (Name)
+   2000 - First column body (Name)
+   999  - Last column headers (Verg./Fehlend)
+   30   - Middle sticky columns (Note/k/Abg headers)
+   20   - General sticky fallback
+   10   - Last column body (scrolls under first column)
+   ============================================= */
+
+    /* First column (Name) - stays fixed on left, highest z-index */
+    #gz-grades-table .hw-sticky-left {
+        position: -webkit-sticky;
+        position: sticky;
+        left: 0;
+        background: var(--bg-panel) !important;
+    }
+    #gz-grades-table thead th.hw-sticky-left,
+    #gz-grades-table thead th[rowspan].hw-sticky-left {
+        z-index: 2001;
+    }
+    #gz-grades-table tbody td.hw-sticky-left {
+        z-index: 2000;
+    }
+
+    /* Last column headers (Verg./Fehlend) - fixed on right */
+    /* First row + rowspan: high z-index (999), sticky both axes */
+    #gz-grades-table thead tr:first-child th.gz-ws-last,
+    #gz-grades-table thead th.gz-ws-sep[rowspan].hw-sticky-right-last {
+        position: -webkit-sticky;
+        position: sticky;
         right: 0;
-        z-index: 11;
+        background: var(--bg-panel) !important;
+        z-index: 999;
+    }
+    /* Second row "Verg." - ONLY vertical sticky (top: 68px), NO horizontal sticky */
+    /* right: auto explicitly overrides old rule's right: 0 */
+    #gz-grades-table thead tr:nth-child(2) th.gz-ws-last {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 68px;
+        right: auto;
+        background: var(--bg-panel) !important;
+        z-index: 15;
     }
 
-#gz-grades-table .hw-sticky-right {
-    right: 70px;
-    min-width: 70px;
-    width: 70px;
-}
+    /* Last column body (Verg. buttons) - scrolls under first column */
+    #gz-grades-table tbody td.gz-ws-last,
+    #gz-grades-table tbody td.hw-sticky-right-last {
+        position: -webkit-sticky;
+        position: sticky;
+        right: 0;
+        background: var(--bg-panel) !important;
+        z-index: 10;
+    }
 
-#gz-grades-table .hw-sticky-right-last {
-    right: 0;
-    min-width: 70px;
-    width: 70px;
-}
+    /* Middle sticky columns (Note/k/Abg headers) - vertical sticky only */
+    #gz-grades-table thead th.hw-sticky-right,
+    #gz-grades-table thead th.hw-sticky-right-last,
+    #gz-grades-table thead th[rowspan],
+    #gz-grades-table thead tr:first-child th {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0;
+        background: var(--bg-panel) !important;
+        z-index: 30;
+    }
+    /* Second header row (Note/k/Abg/Verg.) sits below first row */
+    #gz-grades-table thead tr:nth-child(2) th {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 68px;
+        background: var(--bg-panel) !important;
+        z-index: 25;
+    }
+
+    /* General fallback for any other sticky cells */
+    #gz-grades-table .hw-sticky-left,
+    #gz-grades-table .hw-sticky-right,
+    #gz-grades-table .hw-sticky-right-last {
+        position: -webkit-sticky;
+        position: sticky;
+        background: var(--bg-panel) !important;
+        z-index: 20;
+    }
 
 /* Note-Spalte (Select) */
     #gz-grades-table td.gz-ws-sep {
@@ -1476,21 +1575,41 @@ select.grade-input option {
         max-width: 52px;
         text-align: center;
     }
-    /* Header-Trennlinien zwischen Blättern bis ganz nach oben (beide Header-Zeilen) */
-    /* Erste Reihe: nach JEDEM colspan-Th (jedes Blatt) */
-    #gz-grades-table thead tr:first-child th.gz-ws-sep[colspan] {
-        border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    /* Durchschnitt ÜB Spalte schmaler */
+    #gz-grades-table td.gz-avg-col,
+    #gz-grades-table th.gz-ws-sep.hw-sticky-left {
+        min-width: 36px !important;
+        max-width: 42px !important;
+        padding: 0 2px !important;
     }
-    /* Zweite Reihe: nach gz-ws-last (Verg.) */
-    #gz-grades-table thead th.gz-ws-last {
-        border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    /* Header-Trennlinien: NUR nach "Verg" (gz-ws-last), keine anderen Trennlinien */
+    /* Erste Reihe: nach "Verg" (gz-ws-last) jedes Blatts */
+    #gz-grades-table thead tr:first-child th.gz-ws-last {
+        border-right: 3px solid var(--border-color) !important;
     }
-    /* rowspan Zellen (Ø ÜB, Fehlend) */
-    #gz-grades-table thead th.gz-ws-sep[rowspan] {
-        border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    /* Rowspan header (falls vorhanden) */
+    #gz-grades-table thead th.gz-ws-sep[rowspan].hw-sticky-right-last {
+        border-right: 3px solid var(--border-color) !important;
     }
-    [data-theme="light"] #gz-grades-table thead tr:first-child th.gz-ws-sep[colspan],
-    [data-theme="light"] #gz-grades-table thead th.gz-ws-last,
+    /* Last column (gz-ws-last) - both header and body */
+    #gz-grades-table thead tr:first-child th.gz-ws-last,
+    #gz-grades-table thead th.gz-ws-sep[rowspan].hw-sticky-right-last {
+        position: -webkit-sticky;
+        position: sticky;
+        right: 0;
+        top: 0;
+        background: var(--bg-panel) !important;
+        z-index: 999;
+    }
+    /* Second header row "Verg." sits below first row */
+    #gz-grades-table tbody td.gz-ws-last {
+        position: -webkit-sticky;
+        position: sticky;
+        right: 0;
+        background: var(--bg-panel) !important;
+        z-index: 10;
+    }
+    [data-theme="light"] #gz-grades-table thead tr:first-child th.gz-ws-last,
     [data-theme="light"] #gz-grades-table thead th.gz-ws-sep[rowspan] {
         border-right: 3px solid rgba(0, 0, 0, 0.35) !important;
     }
@@ -1571,10 +1690,6 @@ select.grade-input option {
         opacity: .5;
     }
 
-    #gz-grades-table th.gz-ws-pending {
-        border-left: 2px dashed var(--text-muted);
-    }
-
     #gz-grades-table .gz-ws-pending .gz-grade-select {
         pointer-events: none;
     }
@@ -1610,10 +1725,17 @@ select.grade-input option {
     #gz-grades-table thead th:not(.gz-ws-sep):not(.hw-sticky-left):not(.hw-sticky-right-last),
     #gz-grades-table tbody td:not(.gz-ws-sep):not(.hw-sticky-left):not(.hw-sticky-right):not(.hw-sticky-right-last):not(.gz-ws-last) {
         padding-left: 8px;
+        border-left: none !important;
+        border-right: none !important;
+    }
+    /* Note-Spalte (gz-ws-sep) auch ohne Trennlinien nach rechts innerhalb des Blatts */
+    #gz-grades-table td.gz-ws-sep:not(.gz-ws-last),
+    #gz-grades-table th.gz-ws-sep:not([colspan]):not(.gz-ws-last) {
+        border-right: none !important;
     }
 
 #gz-grades-table .gz-ws-last {
-    border-right: 3px solid rgba(255, 255, 255, 0.9) !important;
+    border-right: 3px solid var(--border-color) !important;
 }
 
 [data-theme="light"] #gz-grades-table .gz-ws-last {
@@ -1621,8 +1743,8 @@ select.grade-input option {
 }
 
 #gz-grades-table .gz-computer-only {
-        background: rgba(22, 163, 74, 0.25) !important;
-        color: #4ade80 !important;
+        background: #dcfce7 !important;
+        color: #052e16 !important;
         font-weight: 600;
     }
 #gz-grades-table th.gz-computer-only,
@@ -1631,8 +1753,8 @@ select.grade-input option {
 #gz-grades-table th[class*="gz-computer-only"],
 #gz-grades-table thead th.gz-computer-only,
 #gz-grades-table thead tr th.gz-computer-only {
-        background: rgba(22, 163, 74, 0.25) !important;
-        color: #4ade80 !important;
+        background: #dcfce7 !important;
+        color: #052e16 !important;
         font-weight: 600;
     }
 
@@ -1640,11 +1762,6 @@ select.grade-input option {
     background: rgba(22, 163, 74, 0.35) !important;
     color: #4ade80 !important;
     font-weight: 600;
-}
-
-/* Keine Trennlinie nach der Verg.-Spalte in einer "nur Computer"-Zeile */
-#gz-grades-table .gz-computer-only .gz-ws-last {
-    border-right: none !important;
 }
 
 /* Verstecke Trennlinien bei "nur Computer" Zellen */
@@ -1684,6 +1801,7 @@ select.grade-input option {
     min-height: 24px;
     padding: 2px 4px;
     border: 1px solid var(--border-color);
+    border-radius: 4px;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
@@ -1780,45 +1898,41 @@ select.grade-input option {
 .gz-toggle.gz-k.active {
     background: #fbbf24;
     color: #1a1d24;
-    border-color: #fbbf24;
     font-weight: 700;
 }
 
 .gz-toggle.gz-recv-x {
     background: #ef4444;
     color: #fff;
-    border-color: #ef4444;
     font-weight: 700;
 }
 
 .gz-toggle.gz-recv-ng {
     background: #2563eb;
     color: #1a1d24;
-    border-color: #2563eb;
     font-weight: 700;
 }
 
 .gz-toggle.gz-mat.active {
     background: #f97316;
     color: #fff;
-    border-color: #f97316;
     font-weight: 700;
 }
 
 .gz-toggle.gz-lap.active {
     background: #a78bfa;
     color: #fff;
-    border-color: #a78bfa;
     font-weight: 700;
 }
 
 #gz-grades-table .gz-grade-select {
     width: 100%;
-    padding: 10px 6px;
+    max-width: 48px;
+    padding: 8px 4px;
     font-size: inherit;
     font-weight: 600;
     border-radius: 8px;
-    border: 1px solid var(--border-color);
+    border: none !important;
     background: var(--bg-dark);
     color: var(--text-main);
     appearance: none;
@@ -2246,24 +2360,33 @@ th.exam-sticky-left.name-th,
 .hw-grid-wrap {
     overflow-x: auto;
     overflow-y: auto;
-    max-height: calc(100vh - 220px); /* 80px topbar + 40px padding + buffer */
+    flex: 1;
+    min-height: 0;
     position: relative;
-    padding-bottom: 160px; /* Extra space so last row can scroll up to sticky header */
+    padding-bottom: 60px; /* Extra space so last row can scroll up to sticky header */
 }
 .hw-grid-wrap::-webkit-scrollbar {
-    height: 6px;
-    width: 6px;
+    height: 14px;
+    width: 14px;
 }
 .hw-grid-wrap::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 3px;
+    background: #888 !important;
+    border-radius: 7px;
+    border: 3px solid var(--bg-panel);
+}
+.hw-grid-wrap::-webkit-scrollbar-track {
+    background: var(--bg-dark) !important;
+}
+.hw-grid-wrap::-webkit-scrollbar-corner {
+    background: var(--bg-dark);
 }
 .overview-table-wrap {
     overflow-x: auto;
     overflow-y: auto;
     position: relative;
-    max-height: calc(100vh - 220px);
-    padding-bottom: 160px; /* Extra space so last row can scroll up to sticky header */
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 60px; /* Extra space so last row can scroll up to sticky header (reduced from 160px to keep scrollbar visible) */
 }
 
 .hw-grid-wrap::after {
@@ -2335,37 +2458,44 @@ th.exam-sticky-left.name-th,
 }
 
 
-/* HW detail table: thead sticky at top, left/right cells also sticky */
+/* HW detail table: thead is STATIC (not sticky) - only left/right cells sticky horizontally */
 .hw-detail-table thead {
-    position: -webkit-sticky !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 15 !important;
-    background: var(--bg-panel) !important;
+    position: static !important;
+    z-index: auto !important;
+    background: transparent !important;
 }
 .hw-detail-table thead th {
-    position: -webkit-sticky !important;
-    position: sticky !important;
-    top: 0 !important;
+    position: static !important;
     background: var(--bg-panel) !important;
 }
+/* Only left/right sticky cells stick horizontally */
 .hw-detail-table thead .hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
     left: 0 !important;
     z-index: 20 !important;
+    background: var(--bg-panel) !important;
 }
 .hw-detail-table thead .hw-sticky-right {
+    position: -webkit-sticky !important;
+    position: sticky !important;
     right: 70px !important;
     z-index: 10 !important;
+    background: var(--bg-panel) !important;
 }
 .hw-detail-table thead .hw-sticky-right-last {
+    position: -webkit-sticky !important;
+    position: sticky !important;
     right: 0 !important;
     z-index: 10 !important;
+    background: var(--bg-panel) !important;
 }
 
 .hw-detail-table {
     width: auto !important;
     min-width: max-content;
     border-collapse: separate;
+    border-spacing: 0;
 }
 .grading-table thead th {
     position: -webkit-sticky;
@@ -2409,7 +2539,12 @@ th.exam-sticky-left.name-th,
     left: 0;
     z-index: 10;
     background: var(--bg-panel) !important;
-    border-right: 1px solid var(--border-color);
+}
+#gz-grades-table .hw-sticky-left {
+    border-right: none !important;
+}
+.grading-table .hw-sticky-left {
+    /* border-right: 1px solid var(--border-color); - removed for gz-grades-table */
 }
 #gz-grades-table thead th.hw-sticky-left {
     text-align: center;
@@ -2423,7 +2558,7 @@ th.exam-sticky-left.name-th,
     right: 70px;
     z-index: 10;
     background: var(--bg-panel) !important;
-    border-left: 1px solid var(--border-color);
+    /* border-left: 1px solid var(--border-color); - removed for gz-grades-table */
     text-align: center;
     min-width: 70px;
     width: 70px;
@@ -2437,7 +2572,7 @@ th.exam-sticky-left.name-th,
     right: 0;
     z-index: 10;
     background: var(--bg-panel) !important;
-    border-left: 1px solid var(--border-color);
+    /* border-left: 1px solid var(--border-color); - removed for gz-grades-table */
     text-align: center;
     min-width: 70px;
     width: 70px;
@@ -3617,7 +3752,7 @@ select.grade-input.invalid {
     outline: none;
 }
 
-.collection-wrap { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 140px); margin-top: 4px; border-radius: 8px; position: relative; padding-bottom: calc(100vh - 140px); }
+.collection-wrap { overflow-x: auto; overflow-y: auto; flex: 1; min-height: 0; margin-top: 4px; border-radius: 8px; position: relative; padding-bottom: 60px; }
 .collection-table { width: 100%; border-collapse: separate; border-spacing: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .collection-table th,
 .collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
@@ -3657,12 +3792,13 @@ select.grade-input.invalid {
 
 .plan-table-wrap {
     overflow-y: auto;
-    max-height: calc(100vh - 280px); /* 80px topbar + 40px padding + view-header + buffer */
+    flex: 1;
+    min-height: 0;
     background: var(--bg-panel);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     width: 100%;
-    padding-bottom: 160px; /* Extra space so last row can scroll up to sticky header */
+    padding-bottom: 60px; /* Extra space so last row can scroll up to sticky header */
 }
 .plan-search-input {
     width: 180px;
@@ -3716,9 +3852,10 @@ select.grade-input.invalid {
    ausreichend Klickflaeche fuer den Finger. */
 #gz-grades-table .gz-grade-select {
     width: 100%;
-    min-width: 52px;
+    max-width: 48px;
+    min-width: 44px;
     min-height: 38px;
-    padding: 10px 6px;
+    padding: 10px 4px;
     font-size: 14px;
 }
 #gz-grades-table .gz-toggle {
@@ -3749,17 +3886,23 @@ select.grade-input.invalid {
     .collection-wrap {
         -webkit-overflow-scrolling: touch;
     }
-    .hw-grid-wrap::-webkit-scrollbar,
+.hw-grid-wrap::-webkit-scrollbar,
     .overview-table-wrap::-webkit-scrollbar,
     .collection-wrap::-webkit-scrollbar {
-        height: 6px;
-        width: 6px;
+        height: 14px;
+        width: 14px;
     }
     .hw-grid-wrap::-webkit-scrollbar-thumb,
     .overview-table-wrap::-webkit-scrollbar-thumb,
     .collection-wrap::-webkit-scrollbar-thumb {
-        background: var(--border-color);
-        border-radius: 3px;
+        background: #888 !important;
+        border-radius: 7px;
+        border: 3px solid var(--bg-panel);
+    }
+    .hw-grid-wrap::-webkit-scrollbar-track,
+    .overview-table-wrap::-webkit-scrollbar-track,
+    .collection-wrap::-webkit-scrollbar-track {
+        background: var(--bg-dark) !important;
     }
 }
 
@@ -3782,8 +3925,9 @@ select.grade-input.invalid {
     #gz-grades-table .gz-grade-select {
         min-height: 44px;
         width: 100%;
-        min-width: 52px;
-        padding: 6px;
+        max-width: 48px;
+        min-width: 44px;
+        padding: 6px 4px;
         font-size: 14px;
     }
     #gz-grades-table .gz-toggle {
@@ -3842,7 +3986,8 @@ select.grade-input.invalid {
     #gz-grades-table .gz-grade-select {
         min-height: 44px;
         width: 100%;
-        min-width: 52px;
+        max-width: 48px;
+        min-width: 44px;
     }
     #gz-grades-table .gz-toggle {
         min-width: 44px;
@@ -3857,6 +4002,101 @@ select.grade-input.invalid {
         margin: 0 -16px;
         padding: 0 16px;
     }
+}
+
+/* =============================================
+   GZ GRADES TABLE - FORCE REMOVE ALL VERTICAL BORDERS
+   (must be at end to override all duplicate sections)
+   ============================================= */
+#gz-grades-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+#gz-grades-table th,
+#gz-grades-table td {
+    border-left: none !important;
+    border-right: none !important;
+    box-shadow: none !important;
+}
+/* Only keep separator after "Note" columns (now last column in each worksheet) */
+#gz-grades-table .gz-ws-sep:not(.gz-ws-last) {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table .gz-ws-sep:not(.gz-ws-last) {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Override green computer-only separator to match 1px */
+#gz-grades-table .gz-computer-only.gz-ws-sep:not(.gz-ws-last) {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table .gz-computer-only.gz-ws-sep:not(.gz-ws-last) {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Continuous separator through BOTH header rows (row 1 colspan + row 2 Note) */
+#gz-grades-table thead tr:nth-child(2) th.gz-ws-sep:not(.gz-ws-last) {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead tr:nth-child(2) th.gz-ws-sep:not(.gz-ws-last) {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* REMOVE any separator from gz-ws-last (Verg column) - was 3px in earlier rules */
+#gz-grades-table .gz-ws-last,
+#gz-grades-table .gz-computer-only.gz-ws-last {
+    border-right: none !important;
+}
+[data-theme="light"] #gz-grades-table .gz-ws-last,
+[data-theme="light"] #gz-grades-table .gz-computer-only.gz-ws-last {
+    border-right: none !important;
+}
+/* Separator BEFORE "k" column (first column in each worksheet) */
+#gz-grades-table .gz-ws-first {
+    border-left: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table .gz-ws-first {
+    border-left: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Header row 2: also on th.gz-ws-first */
+#gz-grades-table thead tr:nth-child(2) th.gz-ws-first {
+    border-left: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead tr:nth-child(2) th.gz-ws-first {
+    border-left: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Header Ø ÜB column (rowspan=2) - 1px separator to Fehlend */
+#gz-grades-table thead th.gz-ws-sep.hw-sticky-left[rowspan] {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead th.gz-ws-sep.hw-sticky-left[rowspan] {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Body Ø ÜB column - continuous separator to Fehlend */
+#gz-grades-table tbody td.gz-ws-sep.gz-avg-col {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table tbody td.gz-ws-sep.gz-avg-col {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Header separator between worksheets (first header row, colspan cells) */
+#gz-grades-table thead tr:first-child th.gz-ws-sep[colspan] {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead tr:first-child th.gz-ws-sep[colspan] {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Remove sticky-left border in gz-grades-table */
+#gz-grades-table .hw-sticky-left {
+    border-right: none !important;
+}
+/* Remove sticky-right/sticky-right-last left borders in gz-grades-table */
+#gz-grades-table .hw-sticky-right,
+#gz-grades-table .hw-sticky-right-last {
+    border-left: none !important;
+}
+/* Remove grading-table inherited borders */
+#gz-grades-table.grading-table th,
+#gz-grades-table.grading-table td {
+    border-left: none !important;
+    border-right: none !important;
 }
 
 

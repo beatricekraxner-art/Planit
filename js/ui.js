@@ -4987,7 +4987,7 @@ function renderGZGrades(classId) {
         if (w.noHw) {
             html += '<th class="gz-ws-sep' + computerClass + pendingClass + '">k</th><th class="gz-ws-last' + computerClass + pendingClass + '">Verg.</th>';
         } else {
-            html += '<th class="gz-ws-sep' + computerClass + pendingClass + '">Note</th><th class="' + (computerClass + pendingClass).trim() + '">k</th><th class="' + (computerClass + pendingClass).trim() + '">Abg</th><th class="gz-ws-last' + computerClass + pendingClass + '">Verg.</th>';
+            html += '<th class="gz-ws-first ' + (computerClass + pendingClass).trim() + '">k</th><th class="' + (computerClass + pendingClass).trim() + '">Abg</th><th class="gz-ws-last' + computerClass + pendingClass + '">Verg.</th><th class="gz-ws-sep' + computerClass + pendingClass + '">Note</th>';
         }
     });
     html += '</tr></thead><tbody>';
@@ -5018,6 +5018,12 @@ function renderGZGrades(classId) {
             const gradeSelectClass = grade ? ' gz-grade-' + grade : '';
             const computerClass = w.isComputerOnly ? ' gz-computer-only' : '';
             const pendingClass = w.counts ? '' : ' gz-ws-pending';
+            // 'k' erscheint nur, wenn der Button aktiv ist (gelb) - wie beim 'x'.
+            html += '<td class="gz-ws-first ' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">' + (absent ? 'k' : '') + '</button></td>';
+            if (!w.noHw) {
+                html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
+            }
+            html += '<td class="gz-ws-last ' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
             if (!w.noHw) {
                 const gradeOptions = cls.useHalfGrades ? [1,1.5,2,2.5,3,3.5,4,5] : [1,2,3,4,5];
                 html += '<td class="gz-ws-sep' + computerClass + pendingClass + '"><select class="gz-grade-select' + gradeSelectClass + '" onchange="setGZWorksheetGrade(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',this.value)">' +
@@ -5026,16 +5032,10 @@ function renderGZGrades(classId) {
                     '<option value="seen"' + (grade === 'seen' ? ' selected' : '') + '>ges</option>' +
                     '</select></td>';
             }
-            // 'k' erscheint nur, wenn der Button aktiv ist (gelb) - wie beim 'x'.
-            html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle gz-k' + (absent ? ' active' : '') + '" title="bei Ausgabe nicht anwesend" onclick="setGZAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\',' + (!absent) + ')">' + (absent ? 'k' : '') + '</button></td>';
-            if (!w.noHw) {
-                html += '<td class="' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + recvClass + '" title="Abgabe: leer=abgegeben, x=nicht abgegeben, ng=nachgebracht" onclick="setGZReceived(\'' + classId + '\',\'' + s.id + '\',\'' + k + '\')">' + recvLabel + '</button></td>';
-            }
-            html += '<td class="gz-ws-last ' + (computerClass + pendingClass).trim() + '" style="text-align:center;"><button class="gz-toggle ' + forgotClass + '" title="Vergessen: leer=nichts, Mat=Material, Lap=Laptop" onclick="cycleGZForgotten(\'' + classId + '\',\'' + w.date + '\',\'' + s.id + '\')">' + forgotLabel + '</button></td>';
         });
-        const avg = count > 0 ? (sum / count).toFixed(2) : '–';
-        const missingJson = JSON.stringify(missingList).replace(/"/g, '&quot;');
-        html += '<td class="gz-ws-sep">' + avg + '</td>' +
+const avg = count > 0 ? (sum / count).toFixed(2) : '–';
+        const missingJson = JSON.stringify(missingList).replace(/"/g, '"');
+        html += '<td class="gz-ws-sep gz-avg-col">' + avg + '</td>' +
             '<td class="hw-sticky-right-last"><button class="btn btn-secondary" onclick="showMissingWorksheetsModal(\'' + classId + '\',\'' + s.id + '\',' + missingCount + ',\'' + missingJson + '\')">' + missingCount + '</button></td>';
         html += '</tr>';
     });
