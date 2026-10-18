@@ -1332,7 +1332,6 @@ select option:disabled {
     background: rgba(0, 0, 0, 0.2);
     color: var(--text-muted);
     font-size: 13px;
-    text-transform: uppercase;
 }
 
 .grade-switcher {
@@ -1439,10 +1438,28 @@ select.grade-input option {
     color: var(--text-main);
 }
 
-/* Prevent general grading-table sticky from creating transparent stripe */
-    #gz-grades-table thead th {
-        position: static;
-    }
+/* GZ Grades Table: Header beim vertikalen Scrollen fix, erste Spalte auch horizontal */
+#gz-grades-table thead th {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    background: var(--bg-panel) !important;
+    z-index: 40 !important;
+}
+#gz-grades-table thead th.hw-sticky-left,
+#gz-grades-table thead th[rowspan].hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 2001 !important;
+    background: var(--bg-panel) !important;
+}
+
+#gz-grades-table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+}
 
 #gz-grades-table th,
 #gz-grades-table td {
@@ -1450,6 +1467,9 @@ select.grade-input option {
     text-align: center;
     padding: 4px 6px;
     background: var(--bg-panel) !important;
+}
+#gz-grades-table tbody td {
+    border-bottom: 1px solid var(--border-color) !important;
 }
 
 #gz-grades-table .hw-sticky-left,
@@ -1472,13 +1492,22 @@ select.grade-input option {
         background: var(--bg-panel) !important;
         z-index: 30;
     }
+    /* Beide Header-Zeilen zusammen kleben, damit keine durchsichtige Lücke über der ersten Datenzeile entsteht */
+    #gz-grades-table thead tr:nth-child(2) th {
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 30 !important;
+        background: var(--bg-panel) !important;
+    }
     /* First column header - opaque background + highest z-index */
     #gz-grades-table thead th.hw-sticky-left,
     #gz-grades-table thead th[rowspan].hw-sticky-left {
-        position: -webkit-sticky;
-        position: sticky;
-        left: 0;
-        z-index: 2001;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 2001 !important;
         background: var(--bg-panel) !important;
     }
 /* =============================================
@@ -1768,10 +1797,16 @@ select.grade-input option {
 #gz-grades-table .gz-computer-only,
 #gz-grades-table td.gz-computer-only,
 #gz-grades-table th.gz-computer-only {
-    border: none !important;
+    border-top: none !important;
     border-left: none !important;
     border-right: none !important;
+    border-bottom: none !important;
     box-shadow: none !important;
+}
+/* Trennlinie bei "nur Computer" Zellen dennoch sichtbar */
+#gz-grades-table tbody td.gz-computer-only {
+    border-bottom: 3px solid #ff0000 !important;
+    box-shadow: inset 0 3px 0 #ff0000 !important;
 }
 /* Auch Nachbarzellen rechts davon keine linke Grenze */
 #gz-grades-table .gz-computer-only + td,
@@ -1811,24 +1846,168 @@ select.grade-input option {
     width: auto;
 }
 
-#gz-project-table thead th {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0;
+#gz-project-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
     background: var(--bg-panel) !important;
-    z-index: 10;
+}
+#gz-project-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 100 !important;
     white-space: nowrap;
 }
 #gz-project-table thead th.hw-sticky-left {
-    left: 0;
-    z-index: 11;
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 101 !important;
+    background: var(--bg-panel) !important;
+}
+#gz-project-table tbody td {
+    position: static !important;
 }
 #gz-project-table tbody td.hw-sticky-left {
     position: -webkit-sticky;
     position: sticky;
     left: 0;
     top: auto;
-    z-index: 5;
+    z-index: 1;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
+#mitarbeit-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background: var(--bg-panel) !important;
+}
+#mitarbeit-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 100 !important;
+    white-space: nowrap;
+}
+#mitarbeit-table thead th.hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 101 !important;
+    background: var(--bg-panel) !important;
+}
+#mitarbeit-table tbody td {
+    position: static !important;
+}
+#mitarbeit-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 1;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
+#overview-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background: var(--bg-panel) !important;
+}
+#overview-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 100 !important;
+    white-space: nowrap;
+}
+#overview-table thead th.hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 101 !important;
+    background: var(--bg-panel) !important;
+}
+#overview-table tbody td {
+    position: static !important;
+}
+#overview-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 1;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
+#gz-overview-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background: var(--bg-panel) !important;
+}
+#gz-overview-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 100 !important;
+    white-space: nowrap;
+}
+#gz-overview-table thead th.hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 101 !important;
+    background: var(--bg-panel) !important;
+}
+#gz-overview-table tbody td {
+    position: static !important;
+}
+#gz-overview-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 1;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
+#pruefungen-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background: var(--bg-panel) !important;
+}
+#pruefungen-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 100 !important;
+    white-space: nowrap;
+}
+#pruefungen-table thead th.hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 101 !important;
+    background: var(--bg-panel) !important;
+}
+#pruefungen-table tbody td {
+    position: static !important;
+}
+#pruefungen-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 1;
     background: var(--bg-panel) !important;
     border-right: 1px solid var(--border-color);
 }
@@ -2458,14 +2637,18 @@ th.exam-sticky-left.name-th,
 }
 
 
-/* HW detail table: thead is STATIC (not sticky) - only left/right cells sticky horizontally */
+/* HW detail table: thead sticky at top, left/right cells also sticky horizontally */
 .hw-detail-table thead {
-    position: static !important;
-    z-index: auto !important;
-    background: transparent !important;
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 15 !important;
+    background: var(--bg-panel) !important;
 }
 .hw-detail-table thead th {
-    position: static !important;
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
     background: var(--bg-panel) !important;
 }
 /* Only left/right sticky cells stick horizontally */
@@ -3218,6 +3401,24 @@ th.exam-sticky-left.name-th,
 .exam-table thead th:last-child {
     border-right: none;
 }
+.exam-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 20 !important;
+    background: var(--bg-panel) !important;
+}
+.exam-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 20 !important;
+}
+.exam-table thead th.exam-sticky-left {
+    z-index: 21 !important;
+}
+.exam-table thead th.exam-sticky-right {
+    z-index: 21 !important;
+}
 
 .exam-table .exam-ex-col,
 .exam-table .exam-ex-cell {
@@ -3758,13 +3959,54 @@ select.grade-input.invalid {
 .collection-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border-color); }
 .collection-table thead th { background: linear-gradient(to bottom, var(--bg-panel), var(--bg-dark)); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: normal; overflow-wrap: break-word; position: sticky; top: 0; z-index: 10; }
 .collection-table thead th:first-child,
-.collection-table tbody td:first-child { text-align: left; font-weight: 500; width: auto; padding-right: 0; white-space: nowrap; }
+.collection-table tbody td:first-child {
+    text-align: left;
+    font-weight: 500;
+    width: auto;
+    padding-right: 0;
+    white-space: nowrap;
+}
+#collection-table thead {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background: var(--bg-panel) !important;
+}
+#collection-table thead th {
+    position: static !important;
+    background: var(--bg-panel) !important;
+    z-index: 100 !important;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+#collection-table thead th.hw-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 101 !important;
+    background: var(--bg-panel) !important;
+    white-space: nowrap;
+}
+#collection-table tbody td {
+    position: static !important;
+}
+#collection-table tbody td.hw-sticky-left {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    top: auto;
+    z-index: 1;
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border-color);
+}
 .collection-table thead th:nth-child(2),
 .collection-table tbody td:nth-child(2) { padding-left: 0; padding-right: 0; }
 
 .collection-table thead th:nth-child(n+3),
 .collection-table tbody td:nth-child(n+3) { padding-left: 4px; padding-right: 4px; }
-.collection-new-btn { margin-bottom: 10px; padding: 8px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.collection-new-btn { margin-bottom: 10px; padding: 6px 10px; font-size: 13px; display: inline-flex !important; align-items: center; gap: 6px; width: auto !important; max-width: fit-content !important; flex-shrink: 0 !important; }
 .collection-table tbody tr { transition: background 0.15s; }
 .collection-table tbody tr:hover { background: rgba(99, 102, 241, 0.06); }
 .collection-table tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.015); }
@@ -4055,18 +4297,46 @@ select.grade-input.invalid {
 [data-theme="light"] #gz-grades-table .gz-ws-first {
     border-left: 1px solid rgba(0, 0, 0, 0.35) !important;
 }
-/* Header row 2: also on th.gz-ws-first */
-#gz-grades-table thead tr:nth-child(2) th.gz-ws-first {
-    border-left: 1px solid var(--border-color) !important;
+/* noHw worksheets: remove separator after "k" in second header row */
+#gz-grades-table thead tr:nth-child(2) th.gz-ws-nohw.gz-ws-sep:not(.gz-ws-last) {
+    border-right: none !important;
 }
-[data-theme="light"] #gz-grades-table thead tr:nth-child(2) th.gz-ws-first {
-    border-left: 1px solid rgba(0, 0, 0, 0.35) !important;
+[data-theme="light"] #gz-grades-table thead tr:nth-child(2) th.gz-ws-nohw.gz-ws-sep:not(.gz-ws-last) {
+    border-right: none !important;
 }
+/* noHw worksheets: separator AFTER "Verg" (both header rows) */
+#gz-grades-table thead th.gz-ws-nohw.gz-ws-last {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead th.gz-ws-nohw.gz-ws-last {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* noHw worksheets: first header row colspan cell - separator after Verg */
+#gz-grades-table thead tr:first-child th.gz-ws-nohw[colspan] {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead tr:first-child th.gz-ws-nohw[colspan] {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+#gz-grades-table tbody td.gz-ws-nohw.gz-ws-last {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table tbody td.gz-ws-nohw.gz-ws-last {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Header row 2: also on th.gz-ws-first - REMOVED to avoid double line with previous worksheet's Note */
 /* Header Ø ÜB column (rowspan=2) - 1px separator to Fehlend */
 #gz-grades-table thead th.gz-ws-sep.hw-sticky-left[rowspan] {
     border-right: 1px solid var(--border-color) !important;
 }
 [data-theme="light"] #gz-grades-table thead th.gz-ws-sep.hw-sticky-left[rowspan] {
+    border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+/* Fehlend column (rowspan=2) - match 1px thickness */
+#gz-grades-table thead th.gz-ws-sep[rowspan].hw-sticky-right-last {
+    border-right: 1px solid var(--border-color) !important;
+}
+[data-theme="light"] #gz-grades-table thead th.gz-ws-sep[rowspan].hw-sticky-right-last {
     border-right: 1px solid rgba(0, 0, 0, 0.35) !important;
 }
 /* Body Ø ÜB column - continuous separator to Fehlend */
