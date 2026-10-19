@@ -1519,8 +1519,74 @@ window.enlargeStudentPhoto = function(event, img) {
 };
 
 function studentNameHtml(s) {
-    return '<span class="stu-namecell">' + studentAvatarHtml(s, 28) + '<span>' + escapeHtml(s.name) + '</span></span>';
+    const sid = (s && s.id !== undefined && s.id !== null) ? String(s.id) : '';
+    return '<span class="stu-namecell" data-stu-id="' + escapeHtml(sid) + '">' + studentAvatarHtml(s, 28) + '<span class="stu-name-text">' + escapeHtml(s.name) + '</span></span>';
 }
+
+/* ============================================================
+    ZEILE HERVORHEBEN
+    Ein Klick auf einen Schülernamen in einer Tabelle hebt die
+    komplette Zeile leicht hervor, damit beim Eintragen klar ist,
+    welcher Schüler gerade bearbeitet wird. Die Markierung bleibt
+    bestehen, bis ein anderer Name angeklickt wird, und überlebt
+    ein Neu-Rendern der Tabelle.
+   ============================================================ */
+(function initRowHighlight() {
+    let activeStuId = null;
+    let activeScope = null;
+
+    function scopeOf(el) {
+        const table = el.closest ? el.closest('table') : null;
+        if (!table) return '';
+        return table.id || table.getAttribute('data-row-scope') || table.className || 'table';
+    }
+
+    function cssEsc(value) {
+        if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(value);
+        return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    }
+
+    function clearRows(except) {
+        document.querySelectorAll('tr.row-active').forEach(function (tr) {
+            if (tr !== except) tr.classList.remove('row-active');
+        });
+    }
+
+    function restore() {
+        if (!activeStuId) return;
+        const cells = document.querySelectorAll('.stu-namecell[data-stu-id="' + cssEsc(activeStuId) + '"]');
+        cells.forEach(function (cell) {
+            if (scopeOf(cell) !== activeScope) return;
+            const tr = cell.closest('tbody tr');
+            if (tr) tr.classList.add('row-active');
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        const target = e.target;
+        if (!target || !target.closest) return;
+        if (target.closest('.stu-avatar-clickable')) return;
+        const cell = target.closest('.stu-namecell');
+        if (!cell) return;
+        const tr = cell.closest('tbody tr');
+        if (!tr) return;
+        const stuId = cell.getAttribute('data-stu-id') || '';
+        if (!stuId) {
+            clearRows(null);
+            activeStuId = null;
+            activeScope = null;
+            return;
+        }
+        activeStuId = stuId;
+        activeScope = scopeOf(cell);
+        clearRows(tr);
+        tr.classList.add('row-active');
+    });
+
+    // Nach einem Neu-Render der Tabelle die Markierung wiederherstellen
+    const observer = new MutationObserver(function () { restore(); });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+})();
 
 // Bild verkleinern (max. Kantenlänge) und als JPEG-DataURL zurückgeben, um Speicher zu sparen
 function resizeImageFile(file, maxSize, callback) {

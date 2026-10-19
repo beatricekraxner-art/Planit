@@ -4369,6 +4369,83 @@ select.grade-input.invalid {
     border-right: none !important;
 }
 
+/* =============================================
+   AKTIVE ZEILE HERVORHEBEN
+   Ein Klick auf einen Schülernamen hebt die komplette Zeile
+   leicht hervor, damit beim Eintragen klar ist, welcher
+   Schüler gerade bearbeitet wird.
+   ============================================= */
+:root {
+    --row-active-bg: rgba(99, 102, 241, 0.18);
+    --row-active-name-bg: rgba(99, 102, 241, 0.30);
+}
+[data-theme="light"] {
+    --row-active-bg: rgba(59, 130, 246, 0.12);
+    --row-active-name-bg: rgba(59, 130, 246, 0.20);
+}
+
+/* Name ist anklickbar -> Cursor + dezenter Hover-Hinweis */
+.stu-namecell {
+    cursor: pointer;
+}
+.stu-namecell:hover .stu-name-text {
+    background: rgba(99, 102, 241, 0.16);
+}
+[data-theme="light"] .stu-namecell:hover .stu-name-text {
+    background: rgba(59, 130, 246, 0.14);
+}
+
+/* Zeile leicht einfärben */
+table tbody tr.row-active > td {
+    background-color: var(--row-active-bg) !important;
+}
+/* Sticky-Spalten (Name links, letzte Spalte rechts) mitfärben */
+table tbody tr.row-active > td.hw-sticky-left,
+table tbody tr.row-active > td.exam-sticky-left,
+table tbody tr.row-active > td.hw-sticky-right,
+table tbody tr.row-active > td.hw-sticky-right-last,
+table tbody tr.row-active > td.exam-sticky-right {
+    background-color: var(--row-active-bg) !important;
+}
+/* Namensspalte etwas kräftiger, damit die Zeile auch beim Scrollen auffällt */
+table tbody tr.row-active > td.hw-sticky-left,
+table tbody tr.row-active > td.exam-sticky-left {
+    background-color: var(--row-active-name-bg) !important;
+}
+
+/* GZ-Tabelle: eigene, IDspezifische Regeln (höhere Spezifität) */
+#gz-grades-table tbody tr.row-active > td:not(.gz-computer-only) {
+    background-color: var(--row-active-bg) !important;
+}
+#gz-grades-table tbody tr.row-active > td.hw-sticky-left,
+#gz-grades-table tbody tr.row-active > td.gz-ws-sep.hw-sticky-left {
+    background-color: var(--row-active-name-bg) !important;
+}
+
+/* Tabellen mit eigener ID: deren Sticky-Spalte hat eine eigene
+   Hintergrundregel, deshalb hier ID-genau nachziehen */
+#collection-table tbody tr.row-active > td.hw-sticky-left,
+#gz-project-table tbody tr.row-active > td.hw-sticky-left,
+#mitarbeit-table tbody tr.row-active > td.hw-sticky-left,
+#overview-table tbody tr.row-active > td.hw-sticky-left,
+#gz-overview-table tbody tr.row-active > td.hw-sticky-left,
+#pruefungen-table tbody tr.row-active > td.hw-sticky-left,
+#dg-project-table tbody tr.row-active > td.hw-sticky-left {
+    background-color: var(--row-active-name-bg) !important;
+}
+
+/* Beim Ausdrucken keine Hervorhebung */
+@media print {
+    table tbody tr.row-active > td,
+    table tbody tr.row-active > td.hw-sticky-left,
+    table tbody tr.row-active > td.exam-sticky-left,
+    #gz-grades-table tbody tr.row-active > td:not(.gz-computer-only),
+    #gz-grades-table tbody tr.row-active > td.hw-sticky-left {
+        background-color: transparent !important;
+    }
+}
+
+
 
 
 
