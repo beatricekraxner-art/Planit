@@ -519,6 +519,19 @@ async function generateAndSavePdf(html, filePath) {
         win.close();
     }
 }
+// CSV/Text-Dateien direkt in den Download-Ordner schreiben - kein Speichern-Dialog
+ipcMain.handle('save-text-file', async (event, { content, filename }) => {
+    const path = require('path');
+    const fs = require('fs');
+    const { app } = require('electron');
+    const downloads = app.getPath('downloads');
+    const safe = String(filename || 'export.txt').replace(/[\\/:*?"<>|]/g, '_');
+    const filePath = path.join(downloads, safe);
+    // BOM nur fuer CSV, damit Excel die Umlaute richtig liest
+    const bom = /\.csv$/i.test(safe) ? '\uFEFF' : '';
+    fs.writeFileSync(filePath, bom + String(content || ''), 'utf8');
+    return { filePath, directory: downloads, filename: safe };
+});
 ipcMain.handle('show-notification', async (event, options) => {
     const { Notification } = require('electron');
     if (Notification.isSupported()) {

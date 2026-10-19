@@ -57,6 +57,10 @@ function validateGradeInputs(container) {
 
 window.exportGradesCSV = function() {
     const classes = DB.getSortedClasses();
+    // Eine Datei für alle Klassen - die Spalte "Klasse" trennt die Klassen.
+    const isYear = allGradesOverviewScope === 'year';
+    const lines = ['Klasse;Name;Ø ÜB;Mappe 1. Sem.;Fehlend;Laptop vergessen;Berechnet;Note (1. Sem.)'];
+    if (isYear) lines[0] += ';Projekt;Note (Jahr)';
     classes.forEach(cls => {
         const students = DB.getStudentsForClass(cls.id);
         if (!students.length) return;
@@ -67,9 +71,7 @@ window.exportGradesCSV = function() {
         const mitarbeit = DB.loadMitarbeit(classId);
         const project = DB.loadProjectGrades(classId);
         const semesterManual = DB.loadSemesterManualGrades(classId);
-        const isYear = gradeOverviewScope === 'year';
-        const lines = ['Name;Ø ÜB;Mappe 1. Sem.;Fehlend;Laptop vergessen;Berechnet;Note (1. Sem.)'];
-        if (isYear) lines[0] += ';Projekt;Note (Jahr)';
+        const className = (cls.name || '').replace(/"/g, '""');
         students.forEach(s => {
             const st = status[s.id] || {};
             const m = mitarbeit[s.id] || {};
@@ -99,21 +101,12 @@ window.exportGradesCSV = function() {
             const forgotMat = forgot.material || 0;
             const forgotLap = forgot.laptop || 0;
             const name = s.name.replace(/"/g, '""');
-            let row = '"' + name + '";' + avg + ';' + folder + ';' + forgotMat + ';' + forgotLap + ';' + computed + ';' + manualGrade;
+            let row = '"' + className + '";"' + name + '";' + avg + ';' + folder + ';' + forgotMat + ';' + forgotLap + ';' + computed + ';' + manualGrade;
             if (isYear) row += ';' + proj + ';' + manualGrade;
             lines.push(row);
         });
-        const csv = lines.join('\n');
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'notenuebersicht_' + cls.name.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
     });
+    downloadTextFile(lines.join('\n'), 'notenuebersicht_alle-klassen.csv', 'text/csv');
 };
 
 window.exportTimetablesPDF = async function() {
@@ -5053,15 +5046,7 @@ window.exportWorksheetsCSV = function(classId) {
         lines.push('"' + w.nr + '";"' + title + '";"' + date + '";' + GZ_ISSUED_LABELS[w.state] + ';' + (isComputer ? 'Ja' : 'Nein'));
     });
     const csv = lines.join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'uebungsliste_' + className.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadTextFile(csv, 'uebungsliste_' + className.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv', 'text/csv');
 };
 
 window.printWorksheetList = function(classId) {
@@ -5078,9 +5063,7 @@ window.printWorksheetList = function(classId) {
         rows += '<tr><td class="ws-nr">' + w.nr + '.</td><td>' + escapeHtml(w.title || '') + '</td></tr>';
     });
 
-    const printHtml = '<div id="ws-controls" style="margin-bottom:15px;display:flex;gap:10px;align-items:center;">' +
-        '<button id="ws-print-btn" style="padding:8px 16px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🖨️ Drucken</button>' +
-        '</div>' +
+    const printHtml = printWindowControls() +
         '<div id="ws-print-wrap" style="width:180mm;max-width:180mm;">' +
         '<h2>Liste der ÜB – ' + escapeHtml(className) + '</h2>' +
         '<table id="ws-print-table"><thead><tr><th>Nr.</th><th>Titel des Blattes</th></tr></thead><tbody>' +
@@ -5089,7 +5072,7 @@ window.printWorksheetList = function(classId) {
     const printStyles = [
         '@page { margin: 15mm; size: A4 portrait; }',
         'body { font-family: Inter, Arial, sans-serif; background: #fff !important; color: #000 !important; padding: 10px; margin: 0; }',
-        '@media print { #ws-controls { display: none !important; } }',
+        '@media print { .print-controls { display: none !important; } }',
         'h2 { font-size: 16px; margin-bottom: 10px; color: #000 !important; }',
         '#ws-print-wrap { width: 180mm; max-width: 180mm; box-sizing: border-box; }',
         '#ws-print-table { width: 100%; border-collapse: collapse; }',
@@ -5102,10 +5085,7 @@ window.printWorksheetList = function(classId) {
         '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' + printStyles + '</style>' +
         '</head><body>' + printHtml +
-        '<script>' +
-        'var wsPrintBtn = document.getElementById("ws-print-btn");' +
-        'if (wsPrintBtn) wsPrintBtn.addEventListener("click", function(){ window.print(); });' +
-        '</script>' +
+        printWindowScript('uebungsliste_' + className.replace(/[^a-zA-Z0-9_.-]/g, '_') + '.html') +
         '</body></html>';
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -5113,11 +5093,289 @@ window.printWorksheetList = function(classId) {
     const win = window.open(url, '_blank', 'width=760,height=700');
     if (win) {
         setTimeout(function() {
-            const btn = win.document.getElementById('ws-print-btn');
+            const btn = win.document.getElementById('pw-print-btn');
             if (btn) btn.focus();
         }, 400);
     }
     setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+};
+
+/* ============================================================
+    GZ-NOTENMATRIX (Sicherheitskopie)
+    Listet jede einzelne ÜB-Note pro Schüler auf - als Druckliste
+    und als CSV. Dient als Absicherung, falls die Daten verloren
+    gehen: die Übersicht zeigt nur den Ø, hier steht jede Note.
+   ============================================================ */
+
+// Rohdaten einer Klasse: Schüler x ÜB mit allen Markierungen
+function collectGZGradeMatrix(classId) {
+    const cls = DB.loadClasses().find(c => c.id === classId);
+    const students = DB.getStudentsForClass(classId);
+    const worksheets = getGZPlannedWorksheets(classId);
+    const status = DB.loadWorksheetStatus(classId);
+    const forgot = DB.loadForgotMaterial(classId);
+    const rows = students.map(function (s) {
+        const st = status[s.id] || {};
+        const cells = worksheets.map(function (w) {
+            const cell = getGZCell(st, w);
+            const d = forgot[w.date] || {};
+            return {
+                key: gzWorksheetKey(w),
+                grade: cell.grade || '',
+                absent: !!cell.absent,
+                received: cell.received || '',
+                mat: !!(d.material && d.material.indexOf(s.id) !== -1),
+                lap: !!(d.laptop && d.laptop.indexOf(s.id) !== -1)
+            };
+        });
+        return { student: s, cells: cells };
+    });
+    return { cls: cls, students: students, worksheets: worksheets, rows: rows };
+}
+
+// Text einer Matrixzelle: Note plus Markierungen (k / Abg / Material, Laptop)
+function gzMatrixCellText(cell) {
+    let t = cell.grade || '';
+    if (t === 'seen') t = 'ges';
+    else if (t === 'missing') t = 'fehlt';
+    else if (t === '') t = '–';
+    const flags = [];
+    if (cell.absent) flags.push('k');
+    if (cell.received === 'x') flags.push('x');
+    else if (cell.received === 'ng') flags.push('ng');
+    if (cell.mat) flags.push('Mat');
+    else if (cell.lap) flags.push('Lap');
+    return t + (flags.length ? ' ' + flags.join('/') : '');
+}
+
+// Kopfleiste der Druckfenster: Drucken und als HTML-Datei speichern
+function printWindowControls() {
+    return '<div class="print-controls" style="margin-bottom:15px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+        '<button id="pw-print-btn" style="padding:8px 16px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🖨️ Drucken</button>' +
+        '<button id="pw-save-btn" style="padding:8px 16px;background:#fff;color:#333;border:1px solid #ccc;border-radius:6px;cursor:pointer;font-weight:600;">💾 Als HTML speichern</button>' +
+        '<span style="font-size:12px;color:#555;">Die gespeicherte Datei lässt sich jederzeit öffnen und drucken.</span>' +
+        '</div>';
+}
+
+// Skript der Druckfenster: Drucken und Speichern der gedruckten Liste
+function printWindowScript(fileName) {
+    const name = String(fileName || 'liste.html').replace(/[^a-zA-Z0-9_.-]/g, '_');
+    return '<script>' +
+        'var pwPrintBtn = document.getElementById("pw-print-btn");' +
+        'if (pwPrintBtn) pwPrintBtn.addEventListener("click", function(){ window.print(); });' +
+        'var pwSaveBtn = document.getElementById("pw-save-btn");' +
+        'if (pwSaveBtn) pwSaveBtn.addEventListener("click", function(){' +
+        'var content = "<!DOCTYPE html>\\n" + document.documentElement.outerHTML;' +
+        'var fileName = "' + name + '";' +
+        'if (window.electronAPI && window.electronAPI.saveTextFile) {' +
+        'window.electronAPI.saveTextFile(content, fileName).then(function(res){ if (res && res.filePath) alert("Gespeichert:\\n" + res.filePath); });' +
+        '} else {' +
+        'var blob = new Blob([content], {type: "text/html;charset=utf-8"});' +
+        'var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName;' +
+        'document.body.appendChild(a); a.click(); document.body.removeChild(a);' +
+        '}' +
+        '});' +
+        '</script>';
+}
+
+// Druckdokument mit der Notenmatrix (eine Sektion je Klasse)
+function gzMatrixPrintDocument(matrices) {
+    const today = new Date();
+    const stamp = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    let sections = '';
+    matrices.forEach(function (m, idx) {
+        const className = m.cls ? m.cls.name : 'Klasse';
+        const subject = m.cls ? m.cls.subject : '';
+        let head = '<tr><th class="nm">Name</th>';
+        m.worksheets.forEach(function (w) {
+            const label = w.nr ? escapeHtml(String(w.nr)) + '.' : '–';
+            head += '<th>' + label + '<br><small>' + escapeHtml(formatDateDE(w.date || '')) + '</small></th>';
+        });
+        head += '<th class="avg">Ø ÜB</th><th class="miss">Fehlend</th></tr>';
+        let body = '';
+        m.rows.forEach(function (r) {
+            let sum = 0, cnt = 0, missing = 0;
+            let tds = '';
+            r.cells.forEach(function (c, i) {
+                const w = m.worksheets[i];
+                tds += '<td>' + escapeHtml(gzMatrixCellText(c)) + '</td>';
+                if (w.counts && !w.noHw) {
+                    if (c.grade && c.grade !== 'missing' && c.grade !== 'seen') {
+                        const gv = parseFloat(c.grade);
+                        if (!isNaN(gv)) { sum += gv; cnt++; }
+                    }
+                    // Fehlend zaehlt wie in der App: Note leer oder "fehlt"
+                    if (!c.grade || c.grade === 'missing') missing++;
+                }
+            });
+            body += '<tr><td class="nm">' + escapeHtml(r.student.name) + '</td>' + tds +
+                '<td class="avg">' + (cnt ? (sum / cnt).toFixed(2) : '–') + '</td>' +
+                '<td class="miss">' + (missing || '–') + '</td></tr>';
+        });
+        sections += '<div class="sheet' + (idx ? ' page-break' : '') + '">' +
+            '<h2>' + escapeHtml(className) + (subject ? ' &ndash; ' + escapeHtml(subject) : '') + '</h2>' +
+            '<p class="meta">Noten aller ÜB &middot; Stand: ' + escapeHtml(formatDateDE(stamp)) +
+            ' &middot; k = bei Ausgabe nicht anwesend &middot; x = nicht abgegeben &middot; ng = nachgebracht' +
+            ' &middot; Mat/Lap = Material/Laptop vergessen</p>' +
+            '<table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+    });
+
+    const printStyles = [
+        '@page { margin: 8mm; size: A4 landscape; }',
+        'body { font-family: Inter, Arial, sans-serif; background: #fff !important; color: #000 !important; padding: 10px; margin: 0; }',
+        '@media print { .print-controls { display: none !important; } .page-break { page-break-before: always; } }',
+        'h2 { font-size: 15px; margin: 0 0 4px; color: #000 !important; }',
+        '.meta { font-size: 10px; color: #444 !important; margin: 0 0 8px; }',
+        '.sheet { margin-bottom: 18px; }',
+        'table { border-collapse: collapse; width: 100%; table-layout: fixed; }',
+        'th, td { border: 1px solid #bbb; padding: 3px 4px; font-size: 9px; text-align: center; vertical-align: middle; overflow-wrap: break-word; }',
+        'th { background: #ececec; font-weight: 600; }',
+        'td.nm, th.nm { text-align: left; width: 130px; }',
+        'th.avg, td.avg { width: 48px; background: #f6f6f6; }',
+        'th.miss, td.miss { width: 48px; background: #f6f6f6; }',
+        'td small, th small { font-weight: 400; color: #555; font-size: 8px; }'
+    ].join('\n');
+
+    const fileName = matrices.length === 1
+        ? 'gz-ueb-noten_' + ((matrices[0].cls && matrices[0].cls.name) || 'Klasse').replace(/[^a-zA-Z0-9_.-]/g, '_') + '.html'
+        : 'gz-ueb-noten_alle-klassen.html';
+
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Noten aller ÜB</title>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+        '<style>' + printStyles + '</style>' +
+        '</head><body>' +
+        printWindowControls() +
+        sections +
+        printWindowScript(fileName) +
+        '</body></html>';
+    return html;
+}
+
+function openGZMatrixPrintWindow(matrices) {
+    if (!matrices.length) {
+        alertModal('Keine GZ-Klasse mit Schülern gefunden.');
+        return;
+    }
+    const html = gzMatrixPrintDocument(matrices);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'width=1200,height=800');
+    if (win) {
+        setTimeout(function () {
+            const btn = win.document.getElementById('pw-print-btn');
+            if (btn) btn.focus();
+        }, 400);
+    }
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+// Alle GZ-Klassen mit Schülern
+function gzClassesWithStudents() {
+    return DB.getSortedClasses().filter(function (cls) {
+        if (cls.type !== 'gz') return false;
+        return DB.getStudentsForClass(cls.id).length > 0;
+    });
+}
+
+window.printGZGradeMatrix = function (classId) {
+    const m = collectGZGradeMatrix(classId);
+    if (!m.students.length) {
+        alertModal('Keine Schüler in dieser Klasse.');
+        return;
+    }
+    openGZMatrixPrintWindow([m]);
+};
+
+window.printAllGZGradeMatrices = function () {
+    const classes = gzClassesWithStudents();
+    if (!classes.length) {
+        alertModal('Keine GZ-Klasse mit Schülern gefunden.');
+        return;
+    }
+    openGZMatrixPrintWindow(classes.map(function (cls) { return collectGZGradeMatrix(cls.id); }));
+};
+
+// CSV-Zeilen (ohne Kopfzeile) fuer eine Klasse
+function gzGradeMatrixCSVRows(classId) {
+    const m = collectGZGradeMatrix(classId);
+    const className = m.cls ? m.cls.name : 'Klasse';
+    const lines = [];
+    m.rows.forEach(function (r) {
+        r.cells.forEach(function (c, i) {
+            const w = m.worksheets[i];
+            const grade = c.grade === 'seen' ? 'ges' : (c.grade === 'missing' ? 'fehlt' : c.grade);
+            const name = r.student.name.replace(/"/g, '""');
+            const title = (w.title || '').replace(/"/g, '""');
+            lines.push([
+                '"' + className + '"',
+                '"' + name + '"',
+                '"' + c.key + '"',
+                '"' + (w.nr != null ? w.nr : '') + '"',
+                '"' + formatDateDE(w.date || '') + '"',
+                '"' + title + '"',
+                '"' + GZ_ISSUED_LABELS[w.state] + '"',
+                '"' + grade + '"',
+                c.absent ? 'x' : '',
+                c.received ? c.received : '',
+                c.mat ? 'Mat' : (c.lap ? 'Lap' : '')
+            ].join(';'));
+        });
+    });
+    return lines;
+}
+
+const GZ_MATRIX_CSV_HEADER = 'Klasse;Name;Schlüssel;Nr.;Datum;Titel;Status;Note;k;Abg;Verg';
+
+function gzGradeMatrixCSV(classId) {
+    return [GZ_MATRIX_CSV_HEADER].concat(gzGradeMatrixCSVRows(classId)).join('\n');
+}
+
+function downloadTextFile(content, filename, mime) {
+    // In der Electron-App direkt in den Download-Ordner speichern - das
+    // oeffnet keinen Speichern-Dialog und kein zusaetzliches Fenster.
+    if (window.electronAPI && typeof window.electronAPI.saveTextFile === 'function') {
+        window.electronAPI.saveTextFile(content, filename).then(function (res) {
+            if (res && res.filePath) alertModal('Gespeichert:\n' + res.filePath);
+        }).catch(function (e) {
+            alertModal('Fehler beim Speichern: ' + (e && e.message ? e.message : e));
+        });
+        return;
+    }
+    // Fallback fuer den Betrieb im Browser
+    const blob = new Blob(['\uFEFF' + content], { type: (mime || 'text/plain') + ';charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+window.exportGZGradeMatrixCSV = function (classId) {
+    const m = collectGZGradeMatrix(classId);
+    if (!m.students.length) {
+        alertModal('Keine Schüler in dieser Klasse.');
+        return;
+    }
+    const className = m.cls ? m.cls.name : 'Klasse';
+    downloadTextFile(gzGradeMatrixCSV(classId),
+        'gz-ueb-noten_' + className.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv', 'text/csv');
+};
+
+window.exportAllGZGradeMatricesCSV = function () {
+    const classes = gzClassesWithStudents();
+    if (!classes.length) {
+        alertModal('Keine GZ-Klasse mit Schülern gefunden.');
+        return;
+    }
+    // Eine einzige Datei für alle GZ-Klassen - die Spalte "Klasse" trennt sie.
+    const lines = [GZ_MATRIX_CSV_HEADER];
+    classes.forEach(function (cls) {
+        gzGradeMatrixCSVRows(cls.id).forEach(function (line) { lines.push(line); });
+    });
+    downloadTextFile(lines.join('\n'), 'gz-ueb-noten_alle-klassen.csv', 'text/csv');
 };
 
 function renderGZGrades(classId) {
@@ -5129,7 +5387,10 @@ function renderGZGrades(classId) {
     const weights = DB.loadGZGradeWeights(classId);
     // Status-Schlüssel: für Stunden ohne ÜB-Nummer wird das Datum als Schlüssel verwendet
     function wsKey(w) { return gzWorksheetKey(w); }
-    let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">Schalter pro Blatt: Ausstehend → Ausgegeben → Nur Computer → Ausstehend. Ausstehende Blätter werden nicht als fehlend gewertet und fließen nicht in Ø, Berechnet, PDF und CSV ein. · k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen.</p></div></div>';
+    let html = '<div class="view-header"><div><h2>ÜB Noten</h2><p class="subtitle">Schalter pro Blatt: Ausstehend → Ausgegeben → Nur Computer → Ausstehend. Ausstehende Blätter werden nicht als fehlend gewertet und fließen nicht in Ø, Berechnet, PDF und CSV ein. · k = bei Ausgabe nicht anwesend (gelb) · Blatt: x = nicht bekommen (rot), ng = nachgebracht (grün) · Mat/Lap = Material/Laptop bei dieser Stunde vergessen.</p></div>' +
+        '<div style="display:flex;gap:10px;flex-shrink:0;">' +
+        '<button class="btn btn-secondary" onclick="window.printGZGradeMatrix(\'' + classId + '\')">🖨️ Notenliste drucken</button>' +
+        '<button class="btn btn-secondary" onclick="window.exportGZGradeMatrixCSV(\'' + classId + '\')">📊 Notenliste (CSV)</button></div></div>';
     if (!students.length) {
         html += '<p class="subtitle">Keine Schüler in dieser Klasse.</p>';
         return html;
@@ -5777,6 +6038,8 @@ function renderGradesOverview() {
         '<div class="grading-controls" style="margin-bottom:15px;">' +
         '<button class="btn no-print" onclick="window.exportGradesCSV()" style="margin-right:10px;">CSV Export</button>' +
         '<button class="btn no-print" onclick="window.exportGradesPDF()" style="margin-right:10px;">📄 PDF Export</button>' +
+        '<button class="btn no-print" onclick="window.printAllGZGradeMatrices()" style="margin-right:10px;" title="Alle GZ-Klassen: jede ÜB-Note als Liste">🗂️ GZ-Notenliste (alle Klassen)</button>' +
+        '<button class="btn no-print" onclick="window.exportAllGZGradeMatricesCSV()" style="margin-right:10px;" title="Alle GZ-Klassen: jede ÜB-Note als CSV">📊 GZ-Notenliste CSV</button>' +
         '<button class="btn ' + (isYear ? 'btn-secondary' : '') + '" onclick="setAllGradesOverviewScope(\'semester\')">1. Semester</button>' +
         '<button class="btn ' + (isYear ? '' : 'btn-secondary') + '" onclick="setAllGradesOverviewScope(\'year\')">Ganzes Jahr</button>' +
         '<button class="btn no-print" onclick="window.openGradesOverviewPrint()" style="margin-left:10px;">🖨️ Drucken</button>' +
@@ -5825,7 +6088,7 @@ window.openGradesOverviewPrint = function() {
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Notenübersicht</title>' +
         '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' + printStyle + '</style>' +
-        '</head><body>' + content + '</body></html>';
+        '</head><body>' + printWindowControls() + content + printWindowScript('notenuebersicht_alle-klassen.html') + '</body></html>';
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const win = window.open(url, '_blank', 'width=1200,height=800');

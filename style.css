@@ -608,6 +608,11 @@ select option:disabled {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    /* Ansichten ohne eigene Scrollbox (Notenuebersicht, To-do, ...) brauchen
+       hier eine Scrollbox. Der Body hat overflow:hidden, ohne diese Regel
+       waere der Inhalt abgeschnitten und nicht erreichbar. */
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 @keyframes fadeIn {
@@ -1342,6 +1347,8 @@ select option:disabled {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
     margin-bottom: 10px;
     align-items: center;
 }

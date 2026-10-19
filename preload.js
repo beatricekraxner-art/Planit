@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
     selectDirectory: (options) => ipcRenderer.invoke('dialog:selectDirectory', options),
     showNotification: (options) => ipcRenderer.invoke('show-notification', options),
-    exportPdf: (html, classId, name) => ipcRenderer.invoke('export-pdf', { html, classId, name })
+    exportPdf: (html, classId, name) => ipcRenderer.invoke('export-pdf', { html, classId, name }),
+    saveTextFile: (content, filename) => ipcRenderer.invoke('save-text-file', { content, filename })
 });
