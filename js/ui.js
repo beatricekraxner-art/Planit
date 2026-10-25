@@ -1576,6 +1576,22 @@ function studentNameHtml(s) {
         tr.classList.add('row-active');
     });
 
+    // Klick / Fokus auf ein Eingabefeld in einer Zeile -> Zeile dauerhaft markieren
+    document.addEventListener('focusin', function (e) {
+        const target = e.target;
+        if (!target || !target.closest) return;
+        const tr = target.closest('tbody tr');
+        if (!tr) return;
+        const interactive = target.closest('input,select,textarea,button');
+        if (!interactive) return;
+        const nameCell = tr.querySelector('.stu-namecell');
+        const stuId = nameCell ? nameCell.getAttribute('data-stu-id') || '' : '';
+        activeStuId = stuId;
+        activeScope = scopeOf(tr);
+        clearRows(tr);
+        tr.classList.add('row-active');
+    });
+
     // Nach einem Neu-Render der Tabelle die Markierung wiederherstellen
     const observer = new MutationObserver(function () { restore(); });
     observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -2989,7 +3005,7 @@ function computeHwGrade(classId, studentId, hws) {
     hws.forEach(h => {
         if (isDG) {
             const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
-            const cell = st[h.sheets] || {};
+            const cell = getDgHwCell(st, h);
             sheets.forEach(name => {
                 const val = cell.status && typeof cell.status === 'object' ? (cell.status[name] || '') : '';
                 if (val === 'k') return;
@@ -3068,7 +3084,7 @@ function renderHomework(classId) {
     students.forEach(s => {
         const calc = computeHwGrade(classId, s.id, hws);
         const collected = hws.filter(h => {
-            const cell = status[s.id] && status[s.id][h.nr] ? status[s.id][h.nr] : {};
+            const cell = isDG ? getDgHwCell(status[s.id], h) : (status[s.id] && status[s.id][h.nr] ? status[s.id][h.nr] : {});
             return cell.collected || cell.status === 'collected';
         }).length;
         const missingText = calc.missingNrs && calc.missingNrs.length ? 'Fehlende HÜs: ' + calc.missingNrs.join(', ') : (calc.missing ? 'Fehlende (' + calc.missing + ')' : '–');
@@ -3125,7 +3141,7 @@ function renderHomeworkDetailed(classId, students, hws) {
                 });
             });
             columns.forEach(col => {
-                const cell = status[s.id] && status[s.id][col.hwNr] ? status[s.id][col.hwNr] : {};
+                const cell = getDgHwCell(status[s.id], { sheets: col.hwNr });
                 const val = getDGHwSheetValue(cell, col.sheet);
                 const selClass = (val === '0' || val === 'k') ? ' hw-status-' + val : '';
                 html += '<td class="hw-cell">' +
@@ -3159,7 +3175,7 @@ function renderHomeworkDetailed(classId, students, hws) {
         columns.forEach(col => {
             let countX = 0, countK = 0;
             students.forEach(s => {
-                const cell = status[s.id] && status[s.id][col.hwNr] ? status[s.id][col.hwNr] : {};
+                const cell = getDgHwCell(status[s.id], { date: col.hwNr, sheets: col.sheets });
                 const val = getDGHwSheetValue(cell, col.sheet);
                 if (val === '0' || val === 'forgotten') countX++;
                 else if (val === 'k') countK++;
@@ -3211,7 +3227,7 @@ function showMissingHwModal(classId, studentId) {
     plan.forEach(h => {
         if (isDG) {
             const sheets = (h.homeworkSheets || '').split(',').map(s => s.trim()).filter(Boolean);
-            const cell = st[h.homeworkSheets] || {};
+            const cell = getDgHwCell(st, h);
             sheets.forEach(name => {
                 const val = cell.status && typeof cell.status === 'object' ? (cell.status[name] || '') : '';
                 if (val === 'k') sick.push(h.homeworkSheets + '/' + name);
@@ -3268,7 +3284,7 @@ function showAllMissingHwModal(classId) {
         plan.forEach(h => {
             if (isDG) {
                 const sheets = (h.homeworkSheets || '').split(',').map(s => s.trim()).filter(Boolean);
-                const cell = st[h.homeworkSheets] || {};
+                const cell = getDgHwCell(st, h);
                 sheets.forEach(name => {
                     const val = cell.status && typeof cell.status === 'object' ? (cell.status[name] || '') : '';
                     if (val === 'k') sick.push(h.homeworkSheets + '/' + name);
@@ -3356,7 +3372,7 @@ function renderMissingHwOverview(classId) {
             plan.forEach(h => {
                 const sheets = (h.homeworkSheets || '').split(',').map(s => s.trim()).filter(Boolean);
                 sheets.forEach(name => {
-                    columns.push({ hwNr: h.nr, sheet: name });
+                    columns.push({ hwNr: h.sheets, sheet: name });
                 });
             });
             columns.forEach(col => {
@@ -3730,7 +3746,7 @@ function renderExamTable(classId, exam) {
         exam.examples.forEach((ex, i) => {
             const pts = (!isAbsent && rec.examplePoints && rec.examplePoints[ex.id] != null) ? rec.examplePoints[ex.id] : '';
             if (pts !== '' && !isNaN(pts)) { sum += parseFloat(pts); blockSum += parseFloat(pts); hasAnyPoints = true; }
-            html += '<td class="exam-ex-cell"><input type="number" class="grade-input ex-pts-input" data-row="' + rowIdx + '" data-col="' + i + '" value="' + pts + '" ' + (isAbsent ? 'disabled' : '') + ' onchange="setExamExamplePoints(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',\'' + ex.id + '\',this.value,this)"></td>';
+            html += '<td class="exam-ex-cell"><input type="number" class="grade-input ex-pts-input" data-row="' + rowIdx + '" data-col="' + i + '" value="' + pts + '" ' + (isAbsent ? 'disabled' : '') + ' onchange="setExamExamplePoints(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',\'' + ex.id + '\',this.value,this); examInputNext(this)"></td>';
             if (subSet.has(i + 1)) {
                 html += '<td class="exam-subtotal-cell" data-subtot-cell="1"><strong>' + blockSum + '</strong></td>';
                 blockSum = 0;
@@ -3760,6 +3776,19 @@ function renderExamTable(classId, exam) {
         });
     }, 0);
     return html;
+}
+
+function examInputNext(input) {
+    const row = parseInt(input.getAttribute('data-row'), 10);
+    const col = parseInt(input.getAttribute('data-col'), 10);
+    let next = document.querySelector('.ex-pts-input[data-row="' + row + '"][data-col="' + (col + 1) + '"]');
+    if (!next) {
+        next = document.querySelector('.ex-pts-input[data-row="' + (row + 1) + '"][data-col="0"]');
+    }
+    if (next) {
+        next.focus();
+        next.select();
+    }
 }
 
 function renderExamStats(classId, exam, containerId) {
@@ -4775,6 +4804,15 @@ function getDGHwSheetValue(cell, sheetName) {
     if (!sheetName) return typeof cell.status === 'string' ? cell.status : '';
     if (typeof cell.status === 'object' && cell.status !== null) return cell.status[sheetName] || '';
     return '';
+}
+
+// DG-Hausübungsstatus nach Datum (nicht nach Blatt-String) schluesseln,
+// damit Aenderungen an den Blatt-Namen/Titeln die Aufzeichnungen nicht
+// verlieren. Alte Daten unter dem Blatt-String werden als Fallback gelesen.
+function getDgHwCell(st, h) {
+    if (!st) return {};
+    const sheets = (h && (h.sheets || h.homeworkSheets)) || '';
+    return sheets ? (st[sheets] || {}) : {};
 }
 
 function getDGHwCellStatus(cell, sheetNames) {

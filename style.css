@@ -3421,9 +3421,38 @@ th.exam-sticky-left.name-th,
     z-index: 20 !important;
 }
 .exam-table thead th.exam-sticky-left {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
     z-index: 21 !important;
 }
-.exam-table thead th.exam-sticky-right {
+.exam-table thead th.exam-sum-cell.exam-sticky-right {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    right: 150px !important;
+    z-index: 21 !important;
+}
+.exam-table thead th.exam-sticky-right.exam-grade-col {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    right: 100px !important;
+    z-index: 21 !important;
+}
+.exam-table thead th.exam-sticky-right:nth-last-child(2) {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    right: 50px !important;
+    z-index: 21 !important;
+}
+.exam-table thead th.exam-sticky-right:last-child {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    right: 0 !important;
     z-index: 21 !important;
 }
 
@@ -3495,16 +3524,29 @@ th.exam-sticky-left.name-th,
 .exam-table .exam-grade-col.exam-sticky-right,
 .exam-table .exam-grade-cell.exam-sticky-right,
 .exam-table thead .exam-grade-col.exam-sticky-right {
-    right: 50px;
+    right: 100px !important;
 }
 
 .exam-table .exam-sum-cell.exam-sticky-right,
 .exam-table thead .exam-sum-cell.exam-sticky-right {
-    right: 100px;
+    right: 150px !important;
+}
+
+.exam-table .exam-return-cell.exam-sticky-right { right: 50px; }
+.exam-table .exam-absent-cell.exam-sticky-right { right: 0; }
+
+.exam-table tbody tr:focus-within {
+    background: rgba(99, 102, 241, 0.15) !important;
+    outline: 2px solid var(--primary) !important;
+    outline-offset: -2px;
+}
+
+.exam-table thead th.exam-sticky-right:nth-last-child(2) {
+    right: 50px !important;
 }
 
 .exam-table thead .exam-sticky-right {
-    z-index: 3;
+    z-index: 21 !important;
     background: var(--bg-panel) !important;
 }
 
@@ -4450,6 +4492,43 @@ table tbody tr.row-active > td.exam-sticky-left {
     #gz-grades-table tbody tr.row-active > td.hw-sticky-left {
         background-color: transparent !important;
     }
+}
+
+/* Zeile hervorheben, wenn in ein Bearbeitungsfeld geklickt wird (bleibt bis zum nächsten Klick) */
+table tbody tr:focus-within > td {
+    background-color: var(--row-active-bg) !important;
+}
+table tbody tr:focus-within > td.hw-sticky-left,
+table tbody tr:focus-within > td.exam-sticky-left,
+table tbody tr:focus-within > td.hw-sticky-right,
+table tbody tr:focus-within > td.hw-sticky-right-last,
+table tbody tr:focus-within > td.exam-sticky-right {
+    background-color: var(--row-active-bg) !important;
+}
+table tbody tr:focus-within > td.hw-sticky-left,
+table tbody tr:focus-within > td.exam-sticky-left {
+    background-color: var(--row-active-name-bg) !important;
+}
+
+/* GZ-Tabelle: eigene, IDspezifische Regeln (höhere Spezifität) */
+#gz-grades-table tbody tr:focus-within > td:not(.gz-computer-only) {
+    background-color: var(--row-active-bg) !important;
+}
+#gz-grades-table tbody tr:focus-within > td.hw-sticky-left,
+#gz-grades-table tbody tr:focus-within > td.gz-ws-sep.hw-sticky-left {
+    background-color: var(--row-active-name-bg) !important;
+}
+
+/* Tabellen mit eigener ID: deren Sticky-Spalte hat eine eigene
+   Hintergrundregel, deshalb hier ID-genau nachziehen */
+#collection-table tbody tr:focus-within > td.hw-sticky-left,
+#gz-project-table tbody tr:focus-within > td.hw-sticky-left,
+#mitarbeit-table tbody tr:focus-within > td.hw-sticky-left,
+#overview-table tbody tr:focus-within > td.hw-sticky-left,
+#gz-overview-table tbody tr:focus-within > td.hw-sticky-left,
+#pruefungen-table tbody tr:focus-within > td.hw-sticky-left,
+#dg-project-table tbody tr:focus-within > td.hw-sticky-left {
+    background-color: var(--row-active-name-bg) !important;
 }
 
 
