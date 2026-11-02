@@ -329,6 +329,10 @@ select option:disabled {
     margin-top: 80px; /* Space for fixed topbar */
 }
 
+.sidebar {
+    margin-top: 80px; /* Space for fixed topbar, so menu is not covered */
+}
+
 .topbar {
     min-height: 80px;
     height: auto;
@@ -3621,6 +3625,33 @@ th.exam-sticky-left.name-th,
     appearance: checkbox;
 }
 
+/* Noten-Hintergrund in der Schularbeiten-Tabelle auch am Bildschirm (außerhalb @media print) */
+.exam-table .grade-cell.grade-1 {
+    color: #065f46 !important;
+    background: #d1fae5 !important;
+}
+.exam-table .grade-cell.grade-2 {
+    color: #3f6212 !important;
+    background: #dcfce7 !important;
+}
+.exam-table .grade-cell.grade-3 {
+    color: #713f12 !important;
+    background: #fef3c7 !important;
+}
+.exam-table .grade-cell.grade-4 {
+    color: #92400e !important;
+    background: #fef3c7 !important;
+}
+.exam-table .grade-cell.grade-5 {
+    color: #991b1b !important;
+    background: #fee2e2 !important;
+}
+.exam-table .grade-cell.grade-absent {
+    color: #374151 !important;
+    background: #e5e7eb !important;
+    border-left: 3px solid #ef4444 !important;
+}
+
 @media print {
     body {
         background-color: white !important;
@@ -3709,6 +3740,14 @@ th.exam-sticky-left.name-th,
         color: #065f46 !important;
         background: #d1fae5 !important;
     }
+    .exam-table .grade-cell.grade-2 {
+        color: #3f6212 !important;
+        background: #dcfce7 !important;
+    }
+    .exam-table .grade-cell.grade-3 {
+        color: #713f12 !important;
+        background: #fef3c7 !important;
+    }
     .exam-table .grade-cell.grade-4 {
         color: #92400e !important;
         background: #fef3c7 !important;
@@ -3724,6 +3763,41 @@ th.exam-sticky-left.name-th,
         color: #374151 !important;
         background: #e5e7eb !important;
         border-left: 3px solid #ef4444 !important;
+    }
+    /* Schularbeit-Druck: Querformat, alle Spalten, kompakte Zeilen, keine Avatare */
+    @page { size: landscape; margin: 1.2cm 1cm; }
+    .exam-table {
+        width: 100% !important;
+        font-size: 10.5px !important;
+        line-height: 1.15 !important;
+    }
+    .exam-table th,
+    .exam-table td {
+        padding: 2px 3px !important;
+        white-space: normal !important;
+        vertical-align: middle !important;
+    }
+    .exam-table .stu-avatar,
+    .exam-table .stu-avatar-initials,
+    .exam-table .stu-avatar-clickable {
+        display: none !important;
+    }
+    .exam-table .stu-namecell {
+        padding-left: 2px !important;
+    }
+    .exam-table .exam-sticky-left {
+        width: auto !important;
+        max-width: none !important;
+    }
+    .exam-table .exam-sticky-right {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        position: static !important;
+    }
+    .exam-table .exam-ex-cell input {
+        font-size: 10.5px !important;
+        padding: 1px 2px !important;
     }
     .timetable-grid {
         display: flex;

@@ -1921,6 +1921,7 @@ let lastRenderedPlanClassId = null;
 let lastPlanScrollInitialized = false;
 let lastSelectedGradeClassId = null;
 let currentExamId = null;
+let currentExamClassId = null;
 let examPointGrid = [];
 
 function renderGrading() {
@@ -2178,6 +2179,8 @@ function validateAllGrades() {
     document.querySelectorAll('.grade-input').forEach(inp => {
         if (inp.classList.contains('remark-input')) return;
         if (inp.tagName === 'TEXTAREA') return;
+        if (inp.classList.contains('ex-pts-input')) return;
+        if (inp.step === '0.05') return;
         if (!isValidGrade(inp.value)) {
             inp.classList.add('invalid');
             valid = false;
@@ -3479,46 +3482,52 @@ function setHwCollected(classId, studentId, hwNr, collected) {
 
 function setExamExamplePoints(classId, studentId, examId, exampleId, points, inputEl) {
     captureUndo();
-    DB.setExamExamplePoints(classId, studentId, examId, exampleId, points);
-    const exam = (DB.loadExams(classId) || []).find(e => e.id === examId);
-    if (inputEl) {
-        const row = inputEl.closest('tr');
-        const rec = DB.loadExamRecords(classId);
-        const studentRec = (rec[studentId] && rec[studentId][examId]) ? rec[studentId][examId] : { examplePoints: {}, returned: false };
-        if (row && exam) {
-            let sum = 0;
-            let hasAnyPoints = false;
-            const subSet = new Set((exam.subtotals || []).filter(p => p >= 1 && p < exam.examples.length));
-            let prevBoundary = 0;
-            const subtotalCells = row.querySelectorAll('[data-subtot-cell]');
-            let subtotalIdx = 0;
-            exam.examples.forEach((ex, i) => {
-                const pts = (studentRec.examplePoints && studentRec.examplePoints[ex.id] != null) ? studentRec.examplePoints[ex.id] : '';
-                if (pts !== '' && !isNaN(pts)) { sum += parseFloat(pts); hasAnyPoints = true; }
-                if (subSet.has(i + 1)) {
-                    let blockSum = 0, blockMax = 0;
-                    for (let k = prevBoundary; k <= i; k++) {
-                        const bp = (studentRec.examplePoints && studentRec.examplePoints[exam.examples[k].id] != null) ? studentRec.examplePoints[exam.examples[k].id] : '';
-                        if (bp !== '' && !isNaN(bp)) blockSum += parseFloat(bp);
-                        blockMax += exam.examples[k].maxPoints;
+    // 0 ist ein valider Punktestand -> als Zahl speichern (nicht als leerer String)
+    const ptsNum = points === '' || points === null || points === undefined ? null : points;
+    DB.setExamExamplePoints(classId, studentId, examId, exampleId, ptsNum);
+    try {
+        const exam = (DB.loadExams(classId) || []).find(e => e.id === examId);
+        if (inputEl) {
+            const row = inputEl.closest('tr');
+            const rec = DB.loadExamRecords(classId);
+            const studentRec = (rec[studentId] && rec[studentId][examId]) ? rec[studentId][examId] : { examplePoints: {}, returned: false };
+            if (row && exam) {
+                let sum = 0;
+                let hasAnyPoints = false;
+                const subSet = new Set((exam.subtotals || []).filter(p => p >= 1 && p < exam.examples.length));
+                let prevBoundary = 0;
+                const subtotalCells = row.querySelectorAll('[data-subtot-cell]');
+                let subtotalIdx = 0;
+                exam.examples.forEach((ex, i) => {
+                    const p = (studentRec.examplePoints && studentRec.examplePoints[ex.id] != null) ? studentRec.examplePoints[ex.id] : '';
+                    if (p !== '' && !isNaN(p)) { sum += parseFloat(p); hasAnyPoints = true; }
+                    if (subSet.has(i + 1)) {
+                        let blockSum = 0, blockMax = 0;
+                        for (let k = prevBoundary; k <= i; k++) {
+                            const bp = (studentRec.examplePoints && studentRec.examplePoints[exam.examples[k].id] != null) ? studentRec.examplePoints[exam.examples[k].id] : '';
+                            if (bp !== '' && !isNaN(bp)) blockSum += parseFloat(bp);
+                            blockMax += exam.examples[k].maxPoints;
+                        }
+                        if (subtotalCells[subtotalIdx]) subtotalCells[subtotalIdx].innerHTML = '<strong>' + blockSum + '</strong>';
+                        subtotalIdx++;
+                        prevBoundary = i + 1;
                     }
-                    if (subtotalCells[subtotalIdx]) subtotalCells[subtotalIdx].innerHTML = '<strong>' + blockSum + '</strong>';
-                    subtotalIdx++;
-                    prevBoundary = i + 1;
+                });
+                const sumCell = row.querySelector('.exam-sum-cell');
+                const gradeCell = row.querySelector('.exam-grade-cell');
+                if (sumCell) sumCell.innerHTML = '<strong>' + (exam.maxPoints > 0 ? sum : '–') + '</strong>';
+                if (gradeCell) {
+                    const g = (exam.maxPoints > 0 && hasAnyPoints) ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null;
+                    gradeCell.className = 'exam-grade-cell ' + gradeClass(g) + ' grade-cell';
+                    gradeCell.textContent = g != null ? g : '–';
                 }
-            });
-            const sumCell = row.querySelector('.exam-sum-cell');
-            const gradeCell = row.querySelector('.exam-grade-cell');
-            if (sumCell) sumCell.innerHTML = '<strong>' + (exam.maxPoints > 0 ? sum : '–') + '</strong>';
-            if (gradeCell) {
-                const g = (exam.maxPoints > 0 && hasAnyPoints) ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null;
-                gradeCell.className = 'exam-grade-cell ' + gradeClass(g) + ' grade-cell';
-                gradeCell.textContent = g != null ? g : '–';
+                const statsEl = document.getElementById('exam-stats-' + examId);
+                if (statsEl) statsEl.innerHTML = renderExamStats(classId, exam);
+                return;
             }
-            const statsEl = document.getElementById('exam-stats-' + examId);
-            if (statsEl) statsEl.innerHTML = renderExamStats(classId, exam);
-            return;
         }
+    } catch (e) {
+        console.error('setExamExamplePoints error:', e);
     }
     renderGrading();
 }
@@ -3814,6 +3823,7 @@ function renderExamStats(classId, exam, containerId) {
 }
 
 function renderExamsView(classId) {
+    currentExamClassId = classId;
     const exams = DB.loadExams(classId);
     const cls = DB.loadClasses().find(c => c.id === classId);
     const className = cls ? escapeHtml(cls.name) : '';
@@ -3837,7 +3847,89 @@ function renderExamsView(classId) {
     return html;
 }
 
-function printExam() { window.print(); }
+function printExam() {
+    if (!currentExamId || !currentExamClassId) return;
+    const exam = (DB.loadExams(currentExamClassId) || []).find(e => e.id === currentExamId);
+    if (!exam) return;
+    const students = DB.getStudentsForClass(currentExamClassId);
+    const records = DB.loadExamRecords(currentExamClassId);
+    const cls = DB.loadClasses().find(c => c.id === currentExamClassId);
+
+    let thead = '<tr><th class="name-col">Name</th>';
+    exam.examples.forEach(function(ex) {
+        thead += '<th class="pt-col">' + escapeHtml(ex.label || '') + '<br><small>' + ex.maxPoints + ' P</small></th>';
+    });
+    thead += '<th class="sum-col">Summe</th><th class="grade-col">Note</th><th class="ret-col">zur\u00fcck</th><th class="abs-col">abwesend</th></tr>';
+
+    let tbody = '';
+    students.forEach(function(s) {
+        const rec = (records[s.id] && records[s.id][exam.id]) ? records[s.id][exam.id] : { examplePoints: {}, returned: false };
+        const isAbsent = !!rec.absent;
+        let sum = 0;
+        let hasAnyPoints = false;
+        let row = '<tr><td class="name name-col">' + escapeHtml(s.name) + '</td>';
+        exam.examples.forEach(function(ex) {
+            const pts = (!isAbsent && rec.examplePoints && rec.examplePoints[ex.id] != null) ? rec.examplePoints[ex.id] : '';
+            if (pts !== '' && !isNaN(pts)) { sum += parseFloat(pts); hasAnyPoints = true; }
+            row += '<td class="pt-col">' + (pts !== '' ? pts : '&nbsp;') + '</td>';
+        });
+        const g = isAbsent ? 'A' : ((exam.maxPoints > 0 && hasAnyPoints) ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null);
+        row += '<td class="summe">' + (exam.maxPoints > 0 ? sum : '–') + '</td>';
+        row += '<td class="grade note ' + (g ? 'grade-' + g : '') + '">' + (g != null ? g : '–') + '</td>';
+        row += '<td class="ret">' + (rec.returned ? '✓' : '') + '</td>';
+        row += '<td class="abs">' + (isAbsent ? 'A' : '') + '</td>';
+        row += '</tr>';
+        tbody += row;
+    });
+
+    const statsHtml = renderExamStats(currentExamClassId, exam);
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(exam.title) + ' – Druck</title>' +
+    '<style>' +
+    '@page { size: landscape; margin: 1.5cm 1.2cm 1.5cm 1.5cm; }' +
+    'body { font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; font-weight: 300 !important; line-height: 1.15; color: #000; margin: 0; }' +
+    'h2 { font-size: 16px; margin: 0 0 3px 0; font-weight: 300; }' +
+    '.subtitle { font-size: 11px; margin: 0 0 6px 0; color: #555; }' +
+    'table { border-collapse: collapse; width: auto; table-layout: fixed; }' +
+'th, td { border: 1px solid #000; padding: 2px 3px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+'th { background: #e8e8e8; font-weight: 300 !important; font-size: 9px; }' +
+'td.name { text-align: left; font-weight: 300 !important; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+    'td.grade-1 { background: #22c55e; color: #fff; font-weight: normal; }' +
+    'td.grade-2 { background: #fff; color: #22c55e; font-weight: normal; }' +
+    'td.grade-3 { background: #fff; color: #f97316; font-weight: normal; }' +
+    'td.grade-4 { background: #f97316; color: #fff; font-weight: normal; }' +
+    'td.grade-5 { background: #ef4444; color: #fff; font-weight: normal; }' +
+    'td.grade-absent { background: #e5e7eb; color: #374151; font-weight: normal; }' +
+    'td.ret { width: 30px; } td.abs { width: 30px; } td.summe { width: 40px; } td.note { width: 35px; }' +
+'.name-col { width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+    '.sum-col { width: 40px; white-space: nowrap; }' +
+    '.pt-col { width: 30px; white-space: nowrap; }' +
+    '.grade-col { width: 35px; white-space: nowrap; }' +
+    '.ret-col { width: 30px; white-space: nowrap; }' +
+    '.abs-col { width: 30px; white-space: nowrap; }' +
+    '.stat-pill { display: inline-block; padding: 1px 5px; border-radius: 8px; margin-right: 4px; font-size: 10px; font-weight: bold; color: #fff; }' +
+    '.stat-pill.grade-1 { background: #22c55e; } .stat-pill.grade-2 { background: #fff; color: #22c55e; border: 1px solid #22c55e; } .stat-pill.grade-3 { background: #fff; color: #f97316; border: 1px solid #f97316; } .stat-pill.grade-4 { background: #f97316; } .stat-pill.grade-5 { background: #ef4444; }' +
+    '.no-print { display: none; }' +
+    '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }' +
+    '</style></head><body>' +
+    '<h2>' + escapeHtml(exam.title) + '</h2>' +
+    '<p class="subtitle">' + escapeHtml(cls ? cls.name : '') + (exam.date ? ' | ' + formatDateDE(exam.date) : '') + '</p>' +
+    '<table><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>' +
+    '<div class="exam-stats-print" style="margin-top:12px;">' + statsHtml + '</div>' +
+    '<div class="no-print" style="margin-top:10px;"><button onclick="window.print()">\ud83d\udccb Drucken</button> <button onclick="window.close()">\u274c Schlie\u00dfen</button></div>' +
+    '</body></html>';
+
+    const win = window.open('', '_blank', 'width=1400,height=900');
+    if (!win) {
+        alertModal('Popup wurde blockiert. Bitte erlauben Sie Popups f\u00fcr diese Seite.');
+        return;
+    }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.onload = function() {
+        setTimeout(function() { win.print(); }, 400);
+    };
+}
 
 /* ============ PRÜFUNGEN ============ */
 function renderPruefungen(classId) {

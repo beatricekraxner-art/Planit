@@ -501,7 +501,6 @@
             }).catch(function (e) {
                 console.warn('OneDrive-Wiederherstellung fehlgeschlagen, nutze lokalen Pfad:', e);
                 if (window.FilePersist && FilePersist.setWriter) return FilePersist.setWriter(name, text);
-                throw e;
             });
         });
     }
