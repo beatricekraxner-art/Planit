@@ -2884,6 +2884,45 @@ function savePlanEntry(classId, id) {
     let hwNr = '';
     if (isDG) {
         hwNr = '';
+        // Migration: if editing an existing DG entry with changed homeworkSheets,
+        // migrate hw_status data from old key to new key
+        if (id) {
+            const oldEntry = DB.loadTeachingPlan(classId).find(p => p.id === id);
+            const oldSheets = oldEntry ? (oldEntry.homeworkSheets || '').trim() : '';
+            if (oldSheets && oldSheets !== hwSheets) {
+                const oldSheetNames = oldSheets.split(',').map(s => s.trim()).filter(Boolean);
+                const newSheetNames = hwSheets.split(',').map(s => s.trim()).filter(Boolean);
+                const allStatus = DB.loadHwStatus(classId);
+                let changed = false;
+                Object.keys(allStatus).forEach(studentId => {
+                    const studentData = allStatus[studentId];
+                    if (!studentData || !studentData[oldSheets]) return;
+                    const oldCell = studentData[oldSheets];
+                    if (!oldCell || !oldCell.status || typeof oldCell.status !== 'object') return;
+                    // Build new status object by matching sheet names by position
+                    const newStatus = {};
+                    newSheetNames.forEach((newName, idx) => {
+                        const oldName = idx < oldSheetNames.length ? oldSheetNames[idx] : null;
+                        if (oldName && oldCell.status[oldName] !== undefined) {
+                            newStatus[newName] = oldCell.status[oldName];
+                        }
+                    });
+                    // Also try to match by name for sheets that exist in both
+                    newSheetNames.forEach(newName => {
+                        if (newStatus[newName] === undefined && oldCell.status[newName] !== undefined) {
+                            newStatus[newName] = oldCell.status[newName];
+                        }
+                    });
+                    // Create new entry with migrated data
+                    if (!studentData[hwSheets]) studentData[hwSheets] = {};
+                    studentData[hwSheets].status = newStatus;
+                    // Remove old entry
+                    delete studentData[oldSheets];
+                    changed = true;
+                });
+                if (changed) DB.saveHwStatus(classId, allStatus);
+            }
+        }
     } else if (isGZ) {
         hwNr = wsNr;
     } else {
