@@ -3583,10 +3583,9 @@ function setExamAbsent(classId, studentId, examId, absent, inputEl) {
             return;
         }
     }
-    renderGrading();
+function setExamGroup(classId, studentId, examId, group) {
+    DB.setExamGroup(classId, studentId, examId, group);
 }
-
-function hasAnyPointsForRec(rec, exam) {
     if (!rec || !rec.examplePoints || !exam || !exam.examples) return false;
     const validIds = new Set(exam.examples.map(ex => ex.id));
     return exam.examples.some(ex => {
@@ -3614,16 +3613,16 @@ function toggleHwExpired(classId, hwNr, val) {
 }
 
 /* ============ SCHULARBEITEN ============ */
-function examExampleRowHtml(label, pts) {
-    return '<div class="exam-ex-row" style="display:flex;gap:8px;margin-bottom:6px;"><input type="text" class="ex-label" placeholder="Beispiel (z.B. 1)" value="' + escapeHtml(label || '') + '"><input type="number" class="ex-pts" placeholder="Punkte" value="' + (pts != null ? pts : '') + '"><button class="btn btn-secondary" type="button" onclick="this.parentElement.remove()">×</button></div>';
+function examExampleRowHtml(label, pts, id) {
+    return '<div class="exam-ex-row" style="display:flex;gap:8px;margin-bottom:6px;"><input type="hidden" class="ex-id" value="' + escapeHtml(id || '') + '"><input type="text" class="ex-label" placeholder="Beispiel (z.B. 1)" value="' + escapeHtml(label || '') + '"><input type="number" class="ex-pts" placeholder="Punkte" value="' + (pts != null ? pts : '') + '"><button class="btn btn-secondary" type="button" onclick="this.parentElement.remove()">×</button></div>';
 }
 
 function openExamModal(classId, id) {
     let exam = null;
     if (id) exam = DB.loadExams(classId).find(e => e.id === id);
-    let exRows = '';
-    if (exam) exam.examples.forEach(ex => exRows += examExampleRowHtml(ex.label, ex.maxPoints));
-    else exRows = examExampleRowHtml('', 12);
+let exRows = '';
+if (exam) exam.examples.forEach(ex => exRows += examExampleRowHtml(ex.label, ex.maxPoints, ex.id));
+else exRows = examExampleRowHtml('', 12, '');
     let gradeScaleHtml = '';
     const prevExam = id ? null : (DB.loadExams(classId) || []).slice(-1)[0];
     const scale = (exam && exam.gradeScale) ? exam.gradeScale : (prevExam && prevExam.gradeScale) ? prevExam.gradeScale : defaultGradeScale();
@@ -3642,6 +3641,7 @@ function openExamModal(classId, id) {
         '<div class="form-group exam-form">' +
         '<label>Titel</label><input type="text" id="exam-title" value="' + escapeHtml(exam ? exam.title : '') + '">' +
         '<label>Datum (optional, für Semesterfilter)</label><input type="date" id="exam-date" value="' + (exam && exam.date ? escapeHtml(exam.date) : '') + '">' +
+        '<label style="display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;width:100%;font-size:13px;color:var(--text-muted);margin-top:8px;"><input type="checkbox" id="exam-show-group" ' + (exam && exam.showGroup ? 'checked' : '') + '> <span>Gruppe A/B Spalte anzeigen</span></label>' +
         '<label>Beispiele (Aufgaben)</label>' +
         '<div id="exam-examples">' + exRows + '</div>' +
         '<button class="btn btn-secondary" type="button" onclick="addExamExampleRow()">+ Beispiel</button>' +
@@ -3654,7 +3654,7 @@ function openExamModal(classId, id) {
 }
 
 function addExamExampleRow() {
-    document.getElementById('exam-examples').insertAdjacentHTML('beforeend', examExampleRowHtml('', 12));
+    document.getElementById('exam-examples').insertAdjacentHTML('beforeend', examExampleRowHtml('', 12, ''));
 }
 
 function saveExam(classId, id) {
@@ -3664,9 +3664,11 @@ function saveExam(classId, id) {
     if (!title) { alertModal('Titel angeben'); return; }
     const examples = [];
     document.querySelectorAll('#exam-examples .exam-ex-row').forEach(row => {
+        const idInput = row.querySelector('.ex-id');
+        const existingId = idInput ? idInput.value : '';
         const l = row.querySelector('.ex-label').value;
         const p = row.querySelector('.ex-pts').value;
-        if (l || p) examples.push({ id: Date.now().toString() + Math.random().toString().slice(2, 6), label: l, maxPoints: parseFloat(p) || 0 });
+        if (l || p) examples.push({ id: existingId || (Date.now().toString() + Math.random().toString().slice(2, 6)), label: l, maxPoints: parseFloat(p) || 0 });
     });
     const subtotalsEl = document.getElementById('exam-subtotals');
     let subtotals = [];
@@ -3685,10 +3687,11 @@ function saveExam(classId, id) {
         const max = gradeScaleInputsMax.length ? (parseFloat(document.querySelector('.grade-scale-max-input[data-grade="' + grade + '"]').value) || 0) : 0;
         gradeScale.push({ grade: grade, minPoints: min, maxPoints: max });
     });
+    const showGroup = document.getElementById('exam-show-group') ? document.getElementById('exam-show-group').checked : false;
     if (id) {
         const exams = DB.loadExams(classId);
         const ex = exams.find(e => e.id === id);
-        ex.title = title; ex.date = date; ex.examples = examples; ex.maxPoints = examples.reduce((s, e) => s + e.maxPoints, 0); ex.gradeScale = gradeScale; ex.subtotals = subtotals;
+        ex.title = title; ex.date = date; ex.examples = examples; ex.maxPoints = examples.reduce((s, e) => s + e.maxPoints, 0); ex.gradeScale = gradeScale; ex.subtotals = subtotals; ex.showGroup = showGroup;
         DB.saveExams(classId, exams);
     } else {
         DB.addExam(classId, title, examples, date);
@@ -3696,6 +3699,7 @@ function saveExam(classId, id) {
         const ex = exams[exams.length - 1];
         ex.gradeScale = gradeScale;
         ex.subtotals = subtotals;
+        ex.showGroup = showGroup;
         DB.saveExams(classId, exams);
     }
     hideModal();
@@ -3731,7 +3735,7 @@ function renderExamTable(classId, exam) {
     const records = DB.loadExamRecords(classId);
     const subs = (exam.subtotals || []).filter(p => p >= 1 && p < exam.examples.length);
     const subSet = new Set(subs);
-    let html = '<div class="hw-grid-wrap"><table class="grading-table exam-table" id="exam-print-area"><thead><tr><th class="exam-sticky-left name-th">Name</th>';
+    let html = '<div class="hw-grid-wrap"><table class="grading-table exam-table' + (exam.showGroup ? ' exam-has-group' : '') + '" id="exam-print-area"><thead><tr><th class="exam-sticky-left name-th">Name</th>';
     let prevBoundary = 0;
     exam.examples.forEach((ex, i) => {
         html += '<th class="exam-ex-col">' + escapeHtml(ex.label || '') + '<br><small>' + ex.maxPoints + ' P</small></th>';
@@ -3743,7 +3747,9 @@ function renderExamTable(classId, exam) {
             prevBoundary = i + 1;
         }
     });
-    html += '<th class="exam-sum-cell exam-sticky-right">S / ' + exam.maxPoints + '</th><th class="exam-sticky-right exam-grade-col">Note</th><th class="exam-sticky-right">zurück</th><th class="exam-sticky-right">abwesend</th></tr></thead><tbody>';
+    html += '<th class="exam-sum-cell exam-sticky-right">S / ' + exam.maxPoints + '</th><th class="exam-sticky-right exam-grade-col">Note</th>';
+    if (exam.showGroup) html += '<th class="exam-sticky-right exam-group-col">Gr.</th>';
+    html += '<th class="exam-sticky-right">zurück</th><th class="exam-sticky-right">abwesend</th></tr></thead><tbody>';
     students.forEach((s, rowIdx) => {
         const rec = (records[s.id] && records[s.id][exam.id]) ? records[s.id][exam.id] : { examplePoints: {}, returned: false };
         const isAbsent = !!rec.absent;
@@ -3766,6 +3772,7 @@ function renderExamTable(classId, exam) {
         const g = isAbsent ? 'A' : ((exam.maxPoints > 0 && hasAnyPoints) ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null);
         html += '<td class="exam-sum-cell exam-sticky-right"><strong>' + (isAbsent ? '–' : (exam.maxPoints > 0 ? sum : '–')) + '</strong></td>';
         html += '<td class="exam-grade-cell exam-sticky-right ' + (isAbsent ? 'grade-absent' : (gradeClass(g) + ' grade-cell')) + '">' + (g != null ? g : '–') + '</td>';
+        if (exam.showGroup) html += '<td class="exam-group-cell exam-sticky-right"><select class="grade-input exam-group-select" onchange="setExamGroup(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',this.value,this)" ' + (isAbsent ? 'disabled' : '') + '><option value=""' + (rec.group !== 'A' && rec.group !== 'B' ? ' selected' : '') + '>–</option><option value="A"' + (rec.group === 'A' ? ' selected' : '') + '>A</option><option value="B"' + (rec.group === 'B' ? ' selected' : '') + '>B</option></select></td>';
         html += '<td class="exam-return-cell exam-sticky-right"><input type="checkbox" ' + (rec.returned ? 'checked' : '') + ' ' + (isAbsent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',this.checked,this)"></td>';
         html += '<td class="exam-absent-cell exam-sticky-right"><input type="checkbox" ' + (isAbsent ? 'checked' : '') + ' onchange="setExamAbsent(\'' + classId + '\',\'' + s.id + '\',\'' + exam.id + '\',this.checked,this)"></td>';
         html += '</tr>';
@@ -3859,7 +3866,9 @@ function printExam() {
     exam.examples.forEach(function(ex) {
         thead += '<th class="pt-col">' + escapeHtml(ex.label || '') + '<br><small>' + ex.maxPoints + ' P</small></th>';
     });
-    thead += '<th class="sum-col">Summe</th><th class="grade-col">Note</th><th class="ret-col">zur\u00fcck</th><th class="abs-col">abwesend</th></tr>';
+    thead += '<th class="sum-col">Summe</th><th class="grade-col">Note</th>';
+    if (exam.showGroup) thead += '<th class="grp-col">Gr.</th>';
+    thead += '<th class="ret-col">zur\u00fcck</th><th class="abs-col">abwesend</th></tr>';
 
     let tbody = '';
     students.forEach(function(s) {
@@ -3876,6 +3885,7 @@ function printExam() {
         const g = isAbsent ? 'A' : ((exam.maxPoints > 0 && hasAnyPoints) ? pointsToGrade(sum, exam.maxPoints, exam.gradeScale) : null);
         row += '<td class="summe">' + (exam.maxPoints > 0 ? sum : '–') + '</td>';
         row += '<td class="grade note ' + (g ? 'grade-' + g : '') + '">' + (g != null ? g : '–') + '</td>';
+        if (exam.showGroup) row += '<td class="grp">' + (rec.group ? escapeHtml(rec.group) : '') + '</td>';
         row += '<td class="ret">' + (rec.returned ? '✓' : '') + '</td>';
         row += '<td class="abs">' + (isAbsent ? 'A' : '') + '</td>';
         row += '</tr>';
@@ -3899,7 +3909,7 @@ function printExam() {
     'td.grade-4 { background: #f97316; color: #fff; font-weight: normal; }' +
     'td.grade-5 { background: #ef4444; color: #fff; font-weight: normal; }' +
     'td.grade-absent { background: #e5e7eb; color: #374151; font-weight: normal; }' +
-    'td.ret { width: 30px; } td.abs { width: 30px; } td.summe { width: 40px; } td.note { width: 35px; }' +
+    'td.ret { width: 30px; } td.abs { width: 30px; } td.summe { width: 40px; } td.note { width: 35px; } td.grp { width: 30px; }' +
 '.name-col { width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
     '.sum-col { width: 40px; white-space: nowrap; }' +
     '.pt-col { width: 30px; white-space: nowrap; }' +

@@ -3445,6 +3445,19 @@ th.exam-sticky-left.name-th,
     right: 100px !important;
     z-index: 21 !important;
 }
+.exam-has-group thead th.exam-sum-cell.exam-sticky-right {
+    right: 200px !important;
+}
+.exam-has-group thead th.exam-sticky-right.exam-grade-col {
+    right: 150px !important;
+}
+.exam-has-group thead th.exam-sticky-right.exam-group-col {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    right: 100px !important;
+    z-index: 21 !important;
+}
 .exam-table thead th.exam-sticky-right:nth-last-child(2) {
     position: -webkit-sticky !important;
     position: sticky !important;
@@ -3525,6 +3538,7 @@ th.exam-sticky-left.name-th,
     font-size: 13px;
 }
 
+/* Default (no group column): sum right:150, grade right:100, returned right:50, absent right:0 */
 .exam-table .exam-grade-col.exam-sticky-right,
 .exam-table .exam-grade-cell.exam-sticky-right,
 .exam-table thead .exam-grade-col.exam-sticky-right {
@@ -3538,6 +3552,39 @@ th.exam-sticky-left.name-th,
 
 .exam-table .exam-return-cell.exam-sticky-right { right: 50px; }
 .exam-table .exam-absent-cell.exam-sticky-right { right: 0; }
+
+/* With group column: sum right:200, grade right:150, group right:100, returned right:50, absent right:0 */
+.exam-has-group .exam-grade-col.exam-sticky-right,
+.exam-has-group .exam-grade-cell.exam-sticky-right,
+.exam-has-group thead .exam-grade-col.exam-sticky-right {
+    right: 150px !important;
+}
+
+.exam-has-group .exam-sum-cell.exam-sticky-right,
+.exam-has-group thead .exam-sum-cell.exam-sticky-right {
+    right: 200px !important;
+}
+
+.exam-has-group .exam-group-cell.exam-sticky-right { right: 100px !important; }
+.exam-table .exam-group-cell.exam-sticky-right {
+    width: 45px;
+    min-width: 45px;
+    max-width: 45px;
+    background: var(--bg-panel) !important;
+    border-left: none;
+    padding: 4px 2px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+}
+.exam-table .exam-group-cell .exam-group-select {
+    width: 40px;
+    padding: 2px 4px;
+    font-size: 12px;
+    text-align: center;
+}
 
 .exam-table tbody tr:focus-within {
     background: rgba(99, 102, 241, 0.15) !important;
@@ -4501,10 +4548,14 @@ select.grade-input.invalid {
 :root {
     --row-active-bg: rgba(99, 102, 241, 0.18);
     --row-active-name-bg: rgba(99, 102, 241, 0.30);
+    --row-active-sticky-bg: #272a49; /* opaque blend of bg-panel + row-active */
+    --row-active-name-sticky-bg: #2e3250; /* opaque blend of bg-panel + row-active-name */
 }
 [data-theme="light"] {
     --row-active-bg: rgba(59, 130, 246, 0.12);
     --row-active-name-bg: rgba(59, 130, 246, 0.20);
+    --row-active-sticky-bg: #e7f0fd; /* opaque blend of bg-panel + row-active */
+    --row-active-name-sticky-bg: #dce6fd; /* opaque blend of bg-panel + row-active-name */
 }
 
 /* Name ist anklickbar -> Cursor + dezenter Hover-Hinweis */
@@ -4528,12 +4579,12 @@ table tbody tr.row-active > td.exam-sticky-left,
 table tbody tr.row-active > td.hw-sticky-right,
 table tbody tr.row-active > td.hw-sticky-right-last,
 table tbody tr.row-active > td.exam-sticky-right {
-    background-color: var(--row-active-bg) !important;
+    background-color: var(--row-active-sticky-bg) !important;
 }
 /* Namensspalte etwas kräftiger, damit die Zeile auch beim Scrollen auffällt */
 table tbody tr.row-active > td.hw-sticky-left,
 table tbody tr.row-active > td.exam-sticky-left {
-    background-color: var(--row-active-name-bg) !important;
+    background-color: var(--row-active-name-sticky-bg) !important;
 }
 
 /* GZ-Tabelle: eigene, IDspezifische Regeln (höhere Spezifität) */
@@ -4542,7 +4593,7 @@ table tbody tr.row-active > td.exam-sticky-left {
 }
 #gz-grades-table tbody tr.row-active > td.hw-sticky-left,
 #gz-grades-table tbody tr.row-active > td.gz-ws-sep.hw-sticky-left {
-    background-color: var(--row-active-name-bg) !important;
+    background-color: var(--row-active-name-sticky-bg) !important;
 }
 
 /* Tabellen mit eigener ID: deren Sticky-Spalte hat eine eigene
@@ -4554,7 +4605,7 @@ table tbody tr.row-active > td.exam-sticky-left {
 #gz-overview-table tbody tr.row-active > td.hw-sticky-left,
 #pruefungen-table tbody tr.row-active > td.hw-sticky-left,
 #dg-project-table tbody tr.row-active > td.hw-sticky-left {
-    background-color: var(--row-active-name-bg) !important;
+    background-color: var(--row-active-name-sticky-bg) !important;
 }
 
 /* Beim Ausdrucken keine Hervorhebung */
@@ -4577,11 +4628,11 @@ table tbody tr:focus-within > td.exam-sticky-left,
 table tbody tr:focus-within > td.hw-sticky-right,
 table tbody tr:focus-within > td.hw-sticky-right-last,
 table tbody tr:focus-within > td.exam-sticky-right {
-    background-color: var(--row-active-bg) !important;
+    background-color: var(--row-active-sticky-bg) !important;
 }
 table tbody tr:focus-within > td.hw-sticky-left,
 table tbody tr:focus-within > td.exam-sticky-left {
-    background-color: var(--row-active-name-bg) !important;
+    background-color: var(--row-active-name-sticky-bg) !important;
 }
 
 /* GZ-Tabelle: eigene, IDspezifische Regeln (höhere Spezifität) */

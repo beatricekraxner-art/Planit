@@ -360,6 +360,13 @@ const DB = {
         rec[studentId][examId].absent = !!absent;
         this.saveExamRecords(classId, rec);
     },
+    setExamGroup: function(classId, studentId, examId, group) {
+        const rec = this.loadExamRecords(classId);
+        if (!rec[studentId]) rec[studentId] = {};
+        if (!rec[studentId][examId]) rec[studentId][examId] = { examplePoints: {}, returned: false };
+        rec[studentId][examId].group = group || '';
+        this.saveExamRecords(classId, rec);
+    },
     loadPruefungen: function(classId) { return this.load('pruefungen_' + classId, []); },
     savePruefungen: function(classId, data) { this.save('pruefungen_' + classId, data); },
     loadPruefung: function(classId) { return this.load('pruefung_' + classId, {}); },
