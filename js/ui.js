@@ -36,6 +36,12 @@ function gradeColorClass(val) {
 function markInvalidGradeInputs(container) {
     if (!container) return;
     container.querySelectorAll('.grade-input').forEach(inp => {
+        if (inp.classList.contains('ex-pts-input')) return;
+        if (inp.classList.contains('exam-group-select')) return;
+        if (inp.classList.contains('grade-scale-min-input') || inp.classList.contains('grade-scale-max-input')) return;
+        if (inp.classList.contains('gz-grade-select')) return;
+        if (inp.classList.contains('gz-forgot-kind')) return;
+        if (inp.type === 'date') return;
         if (!isValidGrade(inp.value)) inp.classList.add('invalid');
         else inp.classList.remove('invalid');
     });
@@ -2180,6 +2186,11 @@ function validateAllGrades() {
         if (inp.classList.contains('remark-input')) return;
         if (inp.tagName === 'TEXTAREA') return;
         if (inp.classList.contains('ex-pts-input')) return;
+        if (inp.classList.contains('exam-group-select')) return;
+        if (inp.classList.contains('grade-scale-min-input') || inp.classList.contains('grade-scale-max-input')) return;
+        if (inp.classList.contains('gz-grade-select')) return;
+        if (inp.classList.contains('gz-forgot-kind')) return;
+        if (inp.type === 'date') return;
         if (inp.step === '0.05') return;
         if (!isValidGrade(inp.value)) {
             inp.classList.add('invalid');
