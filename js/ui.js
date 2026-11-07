@@ -3628,14 +3628,19 @@ function setExamAbsent(classId, studentId, examId, absent, inputEl) {
             if (returnCell) {
                 returnCell.innerHTML = '<input type="checkbox" ' + (studentRec.returned ? 'checked' : '') + ' ' + (absent ? 'disabled' : '') + ' onchange="setExamReturned(\'' + classId + '\',\'' + studentId + '\',\'' + examId + '\',this.checked,this)">';
             }
-            const statsEl = document.getElementById('exam-stats-' + examId);
+const statsEl = document.getElementById('exam-stats-' + examId);
             if (statsEl && exam) statsEl.innerHTML = renderExamStats(classId, exam);
             return;
         }
     }
+    renderGrading();
+}
+
 function setExamGroup(classId, studentId, examId, group) {
     DB.setExamGroup(classId, studentId, examId, group);
 }
+
+function hasExamPoints(rec, exam) {
     if (!rec || !rec.examplePoints || !exam || !exam.examples) return false;
     const validIds = new Set(exam.examples.map(ex => ex.id));
     return exam.examples.some(ex => {
@@ -4785,6 +4790,7 @@ window.deleteTimetableEntry = deleteTimetableEntry;
 window.updateTimetableEntry = updateTimetableEntry;
 window.editTimetableEntry = editTimetableEntry;
 window.saveExam = saveExam;
+window.setExamGroup = setExamGroup;
 window.deleteExamConfirm = deleteExamConfirm;
 window.setCurrentExam = setCurrentExam;
 window.printExam = printExam;
