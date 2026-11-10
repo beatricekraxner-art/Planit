@@ -211,7 +211,7 @@ select option:disabled {
     align-items: center;
     gap: 12px;
     margin-bottom: 0;
-    background: var(--bg-dark);
+    background: transparent;
     padding: 4px 10px;
     border-radius: 8px;
 }

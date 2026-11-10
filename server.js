@@ -36,7 +36,8 @@ function ordnerAusDatei(datei) {
 
 function mitKennzeichnung(dir) {
     const datei = path.join(dir, ORDNER_DATEI);
-    return fs.existsSync(datei) ? ordnerAusDatei(datei) : null;
+    if (!fs.existsSync(datei)) return null;
+    return ordnerAusDatei(datei);
 }
 
 function ordnerMerken(dataDir) {
@@ -162,9 +163,17 @@ const server = http.createServer((req, res) => {
                 filePath = path.join(appDir, 'index.html');
             }
         }
-        if (fs.existsSync(filePath)) {
+if (fs.existsSync(filePath)) {
             const ext = path.extname(filePath).toLowerCase();
-            let content = fs.readFileSync(filePath);
+            let content;
+            try {
+                content = fs.readFileSync(filePath);
+            } catch (readErr) {
+                console.error('Fehler beim Lesen von ' + filePath + ':', readErr && readErr.message ? readErr.message : readErr);
+                res.writeHead(500, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+                res.end('Internal Server Error');
+                return;
+            }
             // Versionsparameter im HTML an den Aenderungszeitpunkt des Stylesheets
             // binden. Ein festes "?v=62" liefert auf Geraeten mit aelterer
             // server.js aus dem Browser-Cache genau die alte CSS-Datei aus -
@@ -229,7 +238,15 @@ const server = http.createServer((req, res) => {
                 res.end();
                 return;
             }
-            const c = fs.readFileSync(snapPath);
+            let c;
+            try {
+                c = fs.readFileSync(snapPath);
+            } catch (readErr) {
+                console.error('Fehler beim Lesen von ' + snapPath + ':', readErr && readErr.message ? readErr.message : readErr);
+                res.writeHead(500, { 'Access-Control-Allow-Origin': '*', 'Content-Length': 0, 'Connection': 'close' });
+                res.end();
+                return;
+            }
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'Content-Length': c.length, 'Connection': 'close' });
             res.end(c);
             return;
@@ -264,23 +281,31 @@ const server = http.createServer((req, res) => {
         (pathname.indexOf('planit-recovery-') === 0 && pathname.slice(-5) === '.json');
     const safeStatePath = path.join(dataDir, path.basename(pathname));
 
-    if (isStateFile && req.method === 'GET') {
-        if (!fs.existsSync(safeStatePath)) {
-            res.writeHead(404, { 'Access-Control-Allow-Origin': '*', 'Content-Length': 0, 'Connection': 'close' });
-            res.end();
+if (isStateFile && req.method === 'GET') {
+            if (!fs.existsSync(safeStatePath)) {
+                res.writeHead(404, { 'Access-Control-Allow-Origin': '*', 'Content-Length': 0, 'Connection': 'close' });
+                res.end();
+                return;
+            }
+            let content;
+            try {
+                content = fs.readFileSync(safeStatePath);
+            } catch (readErr) {
+                console.error('Fehler beim Lesen von ' + safeStatePath + ':', readErr && readErr.message ? readErr.message : readErr);
+                res.writeHead(500, { 'Access-Control-Allow-Origin': '*', 'Content-Length': 0, 'Connection': 'close' });
+                res.end();
+                return;
+            }
+            res.writeHead(200, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Content-Length': content.length,
+                'Connection': 'close'
+            });
+            res.end(content);
             return;
         }
-        const content = fs.readFileSync(safeStatePath);
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Content-Length': content.length,
-            'Connection': 'close'
-        });
-        res.end(content);
-        return;
-    }
 
     if (isStateFile && (req.method === 'PUT' || req.method === 'DELETE')) {
         if (req.method === 'DELETE') {
