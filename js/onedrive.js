@@ -397,6 +397,12 @@
         // Niemals blind uebernehmen: adoptRemote prueft, ob die Datei wirklich
         // neuer ist, und sichert den lokalen Stand, falls nicht.
         if (window.SyncGuard && !SyncGuard.adoptRemote(text)) return;
+        // Provider auf OneDrive umschalten, damit der Badge "☁️ OneDrive" zeigt
+        // und alle weiteren Speicherungen ueber OneDrive laufen.
+        if (window.OneDrivePersist) window.FilePersist = window.OneDrivePersist;
+        if (window.OD && window.OD.setProvider) window.OD.setProvider('onedrive');
+        if (window.updateProviderBadge) window.updateProviderBadge();
+        if (window.setODStatus) window.setODStatus(true);
         renderDashboard();
         renderClasses();
     }

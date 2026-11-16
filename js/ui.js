@@ -3261,8 +3261,6 @@ function toggleHwCorrected(classId, hwNr, val) {
     const obj = DB.loadHwCorrected(classId);
     if (val) obj[hwNr] = true; else delete obj[hwNr];
     DB.saveHwCorrected(classId, obj);
-    // Die Scrollposition regelt renderGrading(). Ein zusaetzliches Setzen
-    // hier waere eine zweite Korrektur und wuerde dazwischenfunken.
     renderGrading();
 }
 
@@ -3518,16 +3516,68 @@ function updateHwStatusRow(classId, studentId) {
     }
 }
 
+function updateHwFooterRow(classId) {
+    const table = document.querySelector('.hw-detail-table');
+    if (!table) return;
+    const tfoot = table.querySelector('tfoot');
+    if (!tfoot) return;
+    const isDG = isDGClass(classId);
+    const hws = getHwHws(classId);
+    const status = DB.loadHwStatus(classId);
+    const corrected = DB.loadHwCorrected(classId);
+    let html = '<tr><td class="hw-sticky-left"><strong>Summe</strong></td>';
+    if (isDG) {
+        const columns = [];
+        hws.forEach(h => {
+            const sheets = (h.sheets || '').split(',').map(s => s.trim()).filter(Boolean);
+            sheets.forEach(name => {
+                columns.push({ hwNr: h.sheets, sheet: name });
+            });
+        });
+        columns.forEach(col => {
+            let countX = 0, countK = 0;
+            const students = DB.getStudentsForClass(classId);
+            students.forEach(s => {
+                const cell = getDgHwCell(status[s.id], { date: col.hwNr, sheets: col.sheets });
+                const val = getDGHwSheetValue(cell, col.sheet);
+                if (val === '0' || val === 'forgotten') countX++;
+                else if (val === 'k') countK++;
+            });
+            html += '<td class="hw-cell"><small><span class="hw-count-x">x: ' + countX + '</span><br><span class="hw-count-k">k: ' + countK + '</span></small></td>';
+        });
+    } else {
+        const students = DB.getStudentsForClass(classId);
+        hws.forEach(h => {
+            let countX = 0, countK = 0, countAb = 0;
+            const hwKey = String(h.nr);
+            const correctedVal = corrected ? corrected[hwKey] : undefined;
+            const isCorrected = correctedVal === true;
+            students.forEach(s => {
+                const cell = status[s.id] && status[s.id][h.nr] ? status[s.id][h.nr] : {};
+                const val = cell ? cell.status : '';
+                if (isCorrected && val === 'forgotten') countX++;
+                else if (val === 'sick') countK++;
+                else if (val === 'collected') countAb++;
+            });
+            html += '<td class="hw-cell"><small><span class="hw-count-x">x: ' + countX + '</span><br><span class="hw-count-k">k: ' + countK + '</span><br><span class="hw-count-ab">ab: ' + countAb + '</span></small></td>';
+        });
+    }
+    html += '<td class="hw-sticky-right"></td><td class="hw-sticky-right-last"></td></tr>';
+    tfoot.innerHTML = html;
+}
+
 function setHwStatus(classId, studentId, hwNr, status) {
     captureUndo();
     DB.setHwStatus(classId, studentId, hwNr, status, undefined);
     updateHwStatusRow(classId, studentId);
+    updateHwFooterRow(classId);
 }
 
 function setHwCollected(classId, studentId, hwNr, collected) {
     captureUndo();
     DB.setHwStatus(classId, studentId, hwNr, undefined, collected);
     updateHwStatusRow(classId, studentId);
+    updateHwFooterRow(classId);
 }
 
 function setExamExamplePoints(classId, studentId, examId, exampleId, points, inputEl) {
@@ -5009,6 +5059,7 @@ window.setHwSheetStatus = function(classId, studentId, hwNr, sheetName, value) {
     }
     DB.saveHwStatus(classId, all);
     updateDgHwSheetRow(classId, studentId, hwNr, sheetName, value);
+    updateHwFooterRow(classId);
 };
 
 function updateDgHwSheetRow(classId, studentId, hwNr, sheetName, value) {
